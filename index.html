@@ -11,9 +11,10 @@
     <header>
         <div class="logo-zone">
             <span class="logo-saf">SAF Jamnik</span>
-            <span class="badge">Redaktor v1.8</span>
+            <span class="badge">Redaktor v1.8.1</span>
         </div>
         <div class="header-actions">
+            <button type="button" id="btnShowIntro" class="btn-secondary">ℹ️ Jak korzystać?</button>
             <button type="button" id="btnReportIssue" class="btn-secondary">⚠️ Zgłoś problem</button>
         </div>
     </header>
@@ -85,6 +86,7 @@
             <div class="dropzone" id="dropzone">
                 <p>Przeciągnij i upuść zdjęcia tutaj lub <span class="highlight" style="text-decoration: underline; pointer-events: none;">kliknij tutaj, aby wybrać z dysku</span></p>
                 <p style="margin-top: 8px; font-size: 0.8rem; color: var(--text-muted); pointer-events: none;">Obsługiwane formaty: JPG, PNG, TIFF, DNG, WEBP, HEIC, HEIF, GIF, AVIF, BMP</p>
+                <p style="margin-top: 4px; font-size: 0.8rem; color: var(--text-muted); pointer-events: none;">Zalecane proporcje zdjęć: 3:2 lub 2:3 (pion: 4:5). Obrazek wyróżniający MUSI być zdjęciem poziomym w proporcjach 3:2.</p>
             </div>
             <input type="file" id="fileInput" multiple accept=".jpg,.jpeg,.png,.tiff,.tif,.dng,.webp,.heic,.heif,.gif,.avif,.bmp" style="display:none;">
 
@@ -120,7 +122,12 @@
                         <div class="progress-wrap"><div class="progress-bar" id="genProgressBar"></div></div>
                         <p id="genProgressLabel" class="progress-label">Inicjalizacja generowania...</p>
                     </div>
-                    
+
+                    <div id="aiFallback" class="hidden">
+                        <p id="aiFallbackMessage" style="margin-bottom: 15px; color: var(--text-muted);"></p>
+                        <button id="btnCopyFallbackPrompt" class="btn-primary w-100">Kopiuj kompletny prompt dla zewnętrznego AI</button>
+                    </div>
+
                     <div id="aiOutput" class="hidden">
                         <div class="meta-suggestion">
                             <p><strong>Sugerowany Tytuł wpisu:</strong></p>
@@ -129,7 +136,11 @@
                                 <button id="btnCopyTitle" class="btn-secondary">Kopiuj tytuł</button>
                             </div>
                             <p><strong>Sugerowana Data Publikacji (WP):</strong> <span id="sugDate">-</span></p>
-                            <p><strong>Sugerowane Tagi:</strong> <span id="sugTags">-</span></p>
+                            <p><strong>Sugerowane Tagi:</strong></p>
+                            <div class="copy-row">
+                                <input type="text" id="sugTagsInput" readonly placeholder="brak">
+                                <button id="btnCopyTags" class="btn-secondary">Kopiuj tagi</button>
+                            </div>
                             <p><strong>Obrazek wyróżniający:</strong> <span id="sugFeaturedImage">-</span> <span style="color: var(--text-muted); font-size: 0.8rem;">(ustaw go ręcznie jako "Featured Image" w WordPressie - nie jest wpleciony w treść ani galerię)</span></p>
                         </div>
 
@@ -150,6 +161,30 @@
             </div>
         </section>
     </main>
+
+    <div id="introModal" class="modal hidden">
+        <div class="modal-content" style="max-width: 700px;">
+            <h3>👋 Witaj w Redaktorze SAF Jamnik!</h3>
+            <p>Żeby wrzucać wpisy na stronę SAF, nie trzeba być wybitnym pisarzem ani szczególnie poruszać się po sztucznej inteligencji. Wpisz wszystko, co wiesz o wydarzeniu, w wyznaczone pola, a na końcu wklej gotowy artykuł na stronę SAF w WordPressie.</p>
+            <ol style="margin: 12px 0 12px 20px; line-height: 1.7;">
+                <li><strong>Krok 1 - Dane wydarzenia:</strong> opisz, co się działo, gdzie i kiedy. Możesz też wkleić tekst zewnętrznego artykułu o tym wydarzeniu - AI wyciągnie z niego fakty (np. oficjalne nazwy tras koncertowych), których mogli nie znać nasi fotografowie.</li>
+                <li><strong>Krok 2 - Zdjęcia:</strong> wgraj zdjęcia w dowolnym profesjonalnym formacie - aplikacja sama je skompresuje i przygotuje pod stronę. Możesz oznaczyć jedno zdjęcie jako "wyróżniające".</li>
+                <li><strong>Krok 3 - Generowanie:</strong> uruchom AI, a potem skopiuj tytuł, tagi i gotowy kod bloku Gutenberg prosto do edytora kodu wpisu w WordPressie.</li>
+            </ol>
+            <p style="margin-bottom: 10px;">🎥 Poradnik wideo jak obsługiwać Redaktor SAF:</p>
+            <!-- TODO: gdy będzie gotowy film, zamień poniższy placeholder na osadzony iframe, np.:
+            <div style="position:relative; padding-bottom:56.25%; height:0;">
+                <iframe src="https://www.youtube.com/embed/TWOJE_ID_FILMU" style="position:absolute; top:0; left:0; width:100%; height:100%; border:0; border-radius:8px;" allowfullscreen title="Poradnik wideo Redaktor SAF"></iframe>
+            </div>
+            -->
+            <div style="padding: 30px; text-align: center; background: #0c0c0e; border: 1px dashed var(--border); border-radius: 8px; color: var(--text-muted); font-size: 0.85rem;">
+                Film poradnikowy pojawi się tutaj wkrótce.
+            </div>
+            <div class="modal-actions">
+                <button id="btnCloseIntro" class="btn-primary">Rozumiem, zaczynajmy!</button>
+            </div>
+        </div>
+    </div>
 
     <div id="aiModal" class="modal hidden">
         <div class="modal-content">
@@ -195,6 +230,6 @@
 
     <div id="toastContainer" class="toast-container"></div>
 
-    <script type="module" src="js/app.js?v=190"></script>
+    <script type="module" src="js/app.js?v=200"></script>
 </body>
 </html>

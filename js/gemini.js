@@ -132,6 +132,24 @@ ${notes}`;
         return data.candidates[0].content.parts[0].text.trim();
     },
 
+    // Anonimowe zgłoszenie problemu - użytkownik NIE wysyła niczego sam (żadnego mailto:).
+    // Worker (patrz worker/worker.js) przekazuje treść na adres webmastera przez sekret e-mail.
+    async sendIssueReport(category, description) {
+        if (!PROXY_URL || PROXY_URL.includes('TWOJ-USER')) {
+            throw new Error("Serwer zgłoszeń nie jest jeszcze skonfigurowany (patrz worker/worker.js).");
+        }
+        const response = await fetch(PROXY_URL, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ type: 'report', category, description })
+        });
+
+        if (!response.ok) {
+            const errData = await response.json().catch(() => ({}));
+            throw new Error(errData.error?.message || errData.error || response.statusText);
+        }
+    },
+
     async callGemini(apiKey, prompt) {
         let textResult = await this.callGeminiRaw(apiKey, prompt, {
             temperature: 0.85,

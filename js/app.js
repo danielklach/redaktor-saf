@@ -2,6 +2,16 @@ import { Compressor } from './compressor.js';
 import { Gemini } from './gemini.js';
 import { Gutenberg } from './gutenberg.js';
 
+// Domena WordPressa - w ustawieniach Mediów odznaczone jest "Porządkuj wysyłane pliki w
+// katalogi z numerami miesięcy i lat", więc pliki trafiają bezpośrednio do /wp-content/uploads/
+// bez podkatalogów RRRR/MM (patrz renameAllFiles).
+const WP_SITE_URL = "https://jamnik.uwm.edu.pl";
+
+// Obrazek wyróżniający MUSI być poziomym zdjęciem w proporcjach 3:2 (wymóg WordPressa/stylu strony).
+// Tolerancja pokrywa drobne niedokładności edytorów zdjęć (np. 3005x2000 zamiast idealnego 3000x2000).
+const FEATURED_RATIO_TARGET = 3 / 2;
+const RATIO_TOLERANCE = 0.03;
+
 const App = {
     state: {
         currentStep: 1,
@@ -16,9 +26,16 @@ const App = {
         this.bindEvents();
         this.handleCategoryChange();
         this.switchStep(1);
+        if (!localStorage.getItem('saf_intro_seen')) {
+            this.introModal.classList.remove('hidden');
+        }
     },
 
     cacheDOM() {
+        this.btnShowIntro = document.getElementById('btnShowIntro');
+        this.introModal = document.getElementById('introModal');
+        this.btnCloseIntro = document.getElementById('btnCloseIntro');
+
         this.btnReportIssue = document.getElementById('btnReportIssue');
         this.reportModal = document.getElementById('reportModal');
         this.reportCategory = document.getElementById('reportCategory');
@@ -67,15 +84,25 @@ const App = {
         this.aiLoading = document.getElementById('aiLoading');
         this.genProgressBar = document.getElementById('genProgressBar');
         this.genProgressLabel = document.getElementById('genProgressLabel');
+        this.aiFallback = document.getElementById('aiFallback');
+        this.aiFallbackMessage = document.getElementById('aiFallbackMessage');
+        this.btnCopyFallbackPrompt = document.getElementById('btnCopyFallbackPrompt');
         this.aiOutput = document.getElementById('aiOutput');
         this.gutenbergOutput = document.getElementById('gutenbergOutput');
         this.sugTitleInput = document.getElementById('sugTitleInput');
         this.sugDate = document.getElementById('sugDate');
-        this.sugTags = document.getElementById('sugTags');
+        this.sugTagsInput = document.getElementById('sugTagsInput');
+        this.btnCopyTags = document.getElementById('btnCopyTags');
         this.sugFeaturedImage = document.getElementById('sugFeaturedImage');
     },
 
     bindEvents() {
+        this.btnShowIntro.addEventListener('click', () => this.introModal.classList.remove('hidden'));
+        this.btnCloseIntro.addEventListener('click', () => {
+            this.introModal.classList.add('hidden');
+            localStorage.setItem('saf_intro_seen', '1');
+        });
+
         this.btnReportIssue.addEventListener('click', () => this.reportModal.classList.remove('hidden'));
         this.btnCancelReport.addEventListener('click', () => this.reportModal.classList.add('hidden'));
         this.btnSendReport.addEventListener('click', () => this.sendReport());
@@ -130,14 +157,59 @@ const App = {
         this.btnTriggerAI.addEventListener('click', () => this.generateArticle());
         this.btnCopyHtml.addEventListener('click', () => this.copyGutenbergCode());
         this.btnCopyTitle.addEventListener('click', () => this.copyTitle());
+        this.btnCopyTags.addEventListener('click', () => this.copyTags());
+        this.btnCopyFallbackPrompt.addEventListener('click', () => this.copyFallbackPrompt());
         this.btnRegenerate.addEventListener('click', () => { this.aiOutput.classList.add('hidden'); this.finalNotes.focus(); });
     },
 
     downloadPhotosZip() {
+        // Naprawa: obrazek wyróżniający ("00") musi zostać ustawiony PRZED pobraniem paczki,
+        // nawet jeśli użytkownik pobiera ZIP bezpośrednio z Kroku 2, nie wchodząc do Kroku 3.
+        this.ensureFeaturedImage();
         const title = this.evtTitle?.value || "wpis";
         const startDate = this.evtStart.value;
         Compressor.generateZip(title, startDate);
         this.state.zipDownloaded = true;
+    },
+
+    // Sprawdza proporcje oryginalnego zdjęcia (3:2, poziomo) z tolerancją na drobne niedokładności.
+    isRatioClose(actual, target) {
+        return Math.abs(actual - target) / target <= RATIO_TOLERANCE;
+    },
+
+    // Zwraca informacje o proporcjach zdjęcia: czy są znane, czy mieszczą się w zalecanych
+    // wartościach (3:2, 2:3, pion 4:5) i czy kwalifikują się na obrazek wyróżniający (TYLKO poziome 3:2).
+    getRatioInfo(file) {
+        if (!file.width || !file.height) return { known: false, acceptable: true, featuredEligible: false };
+        const ratio = file.width / file.height;
+        const isLandscape32 = this.isRatioClose(ratio, FEATURED_RATIO_TARGET);
+        const isPortrait23 = this.isRatioClose(ratio, 2 / 3);
+        const isPortrait45 = this.isRatioClose(ratio, 4 / 5);
+        return {
+            known: true,
+            acceptable: isLandscape32 || isPortrait23 || isPortrait45,
+            featuredEligible: isLandscape32
+        };
+    },
+
+    canBeFeatured(file) {
+        return this.getRatioInfo(file).featuredEligible;
+    },
+
+    // Jeśli nikt jeszcze nie jest oznaczony jako wyróżniający, losuje jeden z kwalifikujących się
+    // (poziomych, 3:2) plików. Jeśli żaden się nie kwalifikuje, świadomie NIE ustawia nikogo -
+    // lepiej brak obrazka wyróżniającego niż złamanie obowiązkowej reguły proporcji.
+    ensureFeaturedImage() {
+        if (Compressor.processedFiles.length === 0) return;
+        if (Compressor.processedFiles.some(f => f.isFeatured)) return;
+
+        const eligible = Compressor.processedFiles
+            .map((f, i) => ({ f, i }))
+            .filter(({ f }) => this.canBeFeatured(f));
+        if (eligible.length === 0) return;
+
+        const pick = eligible[Math.floor(Math.random() * eligible.length)];
+        this.setFeaturedImage(pick.i);
     },
 
     // Toast notification nienachalny popup na dole ekranu, zamiast systemowego alert() (pkt UI/UX).
@@ -153,18 +225,28 @@ const App = {
         }, 3000);
     },
 
-    sendReport() {
+    // Anonimowe zgłoszenie: użytkownik tylko opisuje problem i klika "Wyślij" - Worker (patrz
+    // js/gemini.js -> sendIssueReport i worker/worker.js) sam przekazuje treść na maila webmastera,
+    // bez żadnej akcji ze strony użytkownika (bez mailto:, bez jego klienta pocztowego).
+    async sendReport() {
         const category = this.reportCategory.value;
         const description = this.reportDescription.value.trim();
         if (!description) {
             alert('Opisz proszę, na czym polega problem.');
             return;
         }
-        const subject = encodeURIComponent(`[Redaktor SAF] Zgłoszenie problemu: ${category}`);
-        const body = encodeURIComponent(`Kategoria: ${category}\n\nOpis problemu:\n${description}\n\n---\nZgłoszenie wysłane z Redaktora SAF Jamnik.`);
-        window.location.href = `mailto:webmaster@klachphoto.com?subject=${subject}&body=${body}`;
-        this.reportModal.classList.add('hidden');
-        this.reportDescription.value = '';
+
+        this.btnSendReport.disabled = true;
+        try {
+            await Gemini.sendIssueReport(category, description);
+            this.reportModal.classList.add('hidden');
+            this.reportDescription.value = '';
+            this.showToast('Dzięki za zgłoszenie, zajmę się tym jak najszybciej!');
+        } catch (error) {
+            alert('Nie udało się wysłać zgłoszenia: ' + error.message);
+        } finally {
+            this.btnSendReport.disabled = false;
+        }
     },
 
     handleCategoryChange() {
@@ -445,7 +527,8 @@ const App = {
         Compressor.processedFiles.forEach(file => {
             const numStr = file.isFeatured ? '00' : String(++seq).padStart(2, '0');
             file.name = `${year}-${month}-${baseSlug}-${numStr}.webp`;
-            file.wpPath = `/wp-content/uploads/${year}/${month}/${file.name}`;
+            // Bez podkatalogów RRRR/MM - patrz komentarz przy WP_SITE_URL.
+            file.wpPath = `${WP_SITE_URL}/wp-content/uploads/${file.name}`;
         });
     },
 
@@ -479,6 +562,12 @@ const App = {
 
             const sizeKB = (file.size/1024).toFixed(1);
             const statusIcon = file.isFeatured ? '⭐' : '✅';
+            const ratioInfo = this.getRatioInfo(file);
+            const ratioWarning = ratioInfo.known && !ratioInfo.acceptable
+                ? `<div style="color: var(--danger); font-size: 0.75rem; margin-top: 2px;">⚠️ Nietypowe proporcje (zalecane 3:2, 2:3 lub pion 4:5)</div>`
+                : '';
+            const featureBtnDisabled = !file.isFeatured && !ratioInfo.featuredEligible;
+            const featureBtnTitle = featureBtnDisabled ? ' title="Obrazek wyróżniający musi być zdjęciem poziomym w proporcjach 3:2"' : '';
 
             item.innerHTML = `
                 <div style="display: flex; align-items: center; gap: 15px;">
@@ -486,10 +575,11 @@ const App = {
                     <div>
                         <span style="font-weight: 500; color: #fff; display: block;">${statusIcon} ${file.name}</span>
                         <span style="color: var(--text-muted); font-size: 0.8rem;">Waga: ${sizeKB} KB</span>
+                        ${ratioWarning}
                     </div>
                 </div>
                 <div style="display: flex; gap: 6px; flex-wrap: wrap;">
-                    <button class="btn-feature${file.isFeatured ? ' active' : ''}" style="padding: 8px 12px; font-size: 0.85rem; border-radius: 4px; border: none; cursor: pointer;">${file.isFeatured ? '⭐ Wyróżniające' : '☆ Ustaw jako wyróżniające'}</button>
+                    <button class="btn-feature${file.isFeatured ? ' active' : ''}"${featureBtnTitle} ${featureBtnDisabled ? 'disabled' : ''} style="padding: 8px 12px; font-size: 0.85rem; border-radius: 4px; border: none; cursor: pointer;">${file.isFeatured ? '⭐ Wyróżniające' : '☆ Ustaw jako wyróżniające'}</button>
                     <button class="btn-up" style="background: #2e2e38; color: #fff; padding: 8px 12px; font-size: 0.85rem; border-radius: 4px; border: none; cursor: pointer;">▲</button>
                     <button class="btn-down" style="background: #2e2e38; color: #fff; padding: 8px 12px; font-size: 0.85rem; border-radius: 4px; border: none; cursor: pointer;">▼</button>
                     <button class="btn-del" style="background: var(--danger); color: white; padding: 8px 12px; font-size: 0.85rem; border-radius: 4px; font-weight: bold; border: none; cursor: pointer;">Usuń</button>
@@ -501,7 +591,7 @@ const App = {
                 if (file.isFeatured) {
                     file.isFeatured = false;
                     this.renderFileList();
-                } else {
+                } else if (this.canBeFeatured(file)) {
                     this.setFeaturedImage(index);
                 }
             });
@@ -543,10 +633,7 @@ const App = {
 
     goToStep3() {
         // Jeśli użytkownik nie wybrał ręcznie obrazka wyróżniającego, wybieramy losowy (pkt "Obrazek wyróżniający").
-        if (Compressor.processedFiles.length > 0 && !Compressor.processedFiles.some(f => f.isFeatured)) {
-            const randomIndex = Math.floor(Math.random() * Compressor.processedFiles.length);
-            this.setFeaturedImage(randomIndex);
-        }
+        this.ensureFeaturedImage();
 
         const cat = this.evtCategory.value;
         let compiledInformation = "";
@@ -575,6 +662,7 @@ const App = {
     async generateArticle() {
         this.aiLoading.classList.remove('hidden');
         this.aiOutput.classList.add('hidden');
+        this.aiFallback.classList.add('hidden');
 
         const progress = this.startProgressSimulation(
             this.genProgressBar,
@@ -608,7 +696,8 @@ const App = {
 
             this.sugTitleInput.value = aiJson.title || '';
             this.sugDate.innerText = pubDate.toLocaleString('pl-PL');
-            this.sugTags.innerText = aiJson.tags ? aiJson.tags.join(', ') : 'brak';
+            // Pkt "łatwe kopiowanie tagów": każdy tag zakończony przecinkiem, gotowy do wklejenia w WordPressie.
+            this.sugTagsInput.value = aiJson.tags && aiJson.tags.length ? aiJson.tags.map(t => `${t},`).join(' ') : '';
 
             // AI decyduje o czytelnej nazwie bazowej plików (pkt "Nazwy plików WebP generowane przez AI") -
             // przemianowujemy wszystkie zdjęcia PRZED wygenerowaniem kodu Gutenberga, żeby ścieżki się zgadzały.
@@ -628,7 +717,12 @@ const App = {
         } catch (error) {
             progress.stop();
             this.aiLoading.classList.add('hidden');
-            alert("Błąd AI: " + error.message);
+            // Fallback: nazwy zdjęć już bazują na tytule z Kroku 1 (patrz renameAllFiles - aiFilenameSlug
+            // jest wtedy dalej puste), więc nic tu nie trzeba dodatkowo naprawiać. Użytkownik dostaje
+            // za to gotowy, samowystarczalny prompt do wklejenia w dowolnym zewnętrznym czacie AI.
+            this._lastPrompt = prompt;
+            this.aiFallbackMessage.textContent = `Nie udało się połączyć z wbudowanym AI (${error.message}). Zdjęcia zachowały nazwy na podstawie nazwy wydarzenia z Kroku 1. Możesz skopiować kompletny prompt poniżej i wkleić go do dowolnego zewnętrznego czatu AI (np. ChatGPT, Claude, Gemini) - wynik będzie odpowiadał temu, co wygenerowałby Redaktor SAF.`;
+            this.aiFallback.classList.remove('hidden');
         }
     },
 
@@ -653,6 +747,38 @@ const App = {
         } catch (e) {
             this.sugTitleInput.select();
             document.execCommand('copy');
+        }
+        this.showToast('Skopiowano do schowka!');
+    },
+
+    // Osobny przycisk kopiujący tagi (każdy zakończony przecinkiem - gotowe do wklejenia w WordPressie)
+    async copyTags() {
+        const text = this.sugTagsInput.value;
+        try {
+            await navigator.clipboard.writeText(text);
+        } catch (e) {
+            this.sugTagsInput.select();
+            document.execCommand('copy');
+        }
+        this.showToast('Skopiowano do schowka!');
+    },
+
+    // Fallback na wypadek awarii wbudowanego AI: kopiuje DOKŁADNIE ten sam prompt, który poszedłby
+    // do Gemini, żeby wynik z dowolnego zewnętrznego czatu AI był jak najbardziej zbliżony.
+    async copyFallbackPrompt() {
+        const text = this._lastPrompt;
+        if (!text) return;
+        try {
+            await navigator.clipboard.writeText(text);
+        } catch (e) {
+            const ta = document.createElement('textarea');
+            ta.value = text;
+            ta.style.position = 'fixed';
+            ta.style.opacity = '0';
+            document.body.appendChild(ta);
+            ta.select();
+            document.execCommand('copy');
+            ta.remove();
         }
         this.showToast('Skopiowano do schowka!');
     }

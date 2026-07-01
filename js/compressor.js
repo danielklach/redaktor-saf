@@ -68,7 +68,7 @@ export const Compressor = {
         this._pending.delete(data.id);
 
         if (data.type === 'done') {
-            pending.resolve({ blob: data.blob, size: data.size });
+            pending.resolve({ blob: data.blob, size: data.size, width: data.originalWidth, height: data.originalHeight });
         } else if (data.type === 'error') {
             pending.reject(new Error(data.message));
         }
@@ -112,8 +112,10 @@ export const Compressor = {
             blob: result.blob,
             name: fileName,
             size: result.size,
+            width: result.width,
+            height: result.height,
             previewUrl: URL.createObjectURL(result.blob),
-            wpPath: `/wp-content/uploads/${year}/${month}/${fileName}`,
+            wpPath: `/wp-content/uploads/${fileName}`,
             isFeatured: false
         };
     },

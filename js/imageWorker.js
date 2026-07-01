@@ -6,17 +6,13 @@
 
 const HARD_LIMIT_BYTES = 204800; // twardy limit wagi: 200 KB
 
-// Kolejne "raty" ratunkowe: zaczynamy od dobrej jakości, a jeśli waga wciąż
-// przekracza limit, schodzimy niżej z rozdzielczością i jakością - aż do skutku.
-const ATTEMPTS = [
-    { maxSide: 1920, quality: 0.65 },
-    { maxSide: 1600, quality: 0.55 },
-    { maxSide: 1400, quality: 0.50 },
-    { maxSide: 1100, quality: 0.42 },
-    { maxSide: 900,  quality: 0.35 },
-    { maxSide: 700,  quality: 0.28 },
-    { maxSide: 500,  quality: 0.20 }
-];
+// Dłuższy bok ZAWSZE ma dokładnie tyle pikseli - niezależnie czy zdjęcie trzeba
+// pomniejszyć, czy powiększyć (patrz wymóg użytkownika: spójny rozmiar na stronie).
+const TARGET_LONG_SIDE = 2500;
+
+// Skoro rozdzielczość jest teraz stała, jedyną dźwignią do zejścia poniżej twardego
+// limitu wagi zostaje jakość kompresji - kolejne "raty ratunkowe" schodzą coraz niżej.
+const QUALITY_ATTEMPTS = [0.65, 0.55, 0.48, 0.40, 0.32, 0.25, 0.18, 0.12, 0.08, 0.05];
 
 const UTIF_URL = 'https://cdn.jsdelivr.net/npm/utif2@4/UTIF.js';
 const LIBHEIF_URL = 'https://cdn.jsdelivr.net/npm/libheif-js@1.19.8/libheif-wasm/libheif-bundle.js';
@@ -142,18 +138,13 @@ async function decodeStandard(file) {
     }
 }
 
-async function encodeAttempt(bitmap, maxSide, quality) {
-    let w = bitmap.width, h = bitmap.height;
-    if (w > h && w > maxSide) { h = Math.round((h * maxSide) / w); w = maxSide; }
-    else if (h >= w && h > maxSide) { w = Math.round((w * maxSide) / h); h = maxSide; }
-
-    const canvas = new OffscreenCanvas(Math.max(1, w), Math.max(1, h));
-    const ctx = canvas.getContext('2d');
-    if (!ctx) throw new Error('OffscreenCanvas 2D nie jest dostępny w tym środowisku.');
-    ctx.drawImage(bitmap, 0, 0, w, h);
-    const blob = await canvas.convertToBlob({ type: 'image/webp', quality });
-    if (!blob) throw new Error('Kodowanie do WebP nie powiodło się.');
-    return blob;
+function computeTargetDims(w, h) {
+    if (w >= h) {
+        const scale = TARGET_LONG_SIDE / w;
+        return { w: TARGET_LONG_SIDE, h: Math.max(1, Math.round(h * scale)) };
+    }
+    const scale = TARGET_LONG_SIDE / h;
+    return { w: Math.max(1, Math.round(w * scale)), h: TARGET_LONG_SIDE };
 }
 
 async function processFile(id, index, file) {
@@ -170,17 +161,33 @@ async function processFile(id, index, file) {
     }
     report(id, index, 'kompresja', 30);
 
+    // Oryginalne proporcje (do sprawdzania reguły 2:3 / 3:2 / 4:5 na głównym wątku) liczymy
+    // z bitmapy PRZED przeskalowaniem - skalowanie do stałego długiego boku zachowuje proporcje.
+    const originalWidth = bitmap.width;
+    const originalHeight = bitmap.height;
+
+    // Rysujemy RAZ na docelowym, stałym rozmiarze (dłuższy bok zawsze 2500px - w górę lub w dół),
+    // a kolejne próby tylko obniżają jakość kompresji na tym samym canvasie, żeż zmieścić się w limicie wagi.
+    const { w, h } = computeTargetDims(originalWidth, originalHeight);
+    const canvas = new OffscreenCanvas(w, h);
+    const ctx = canvas.getContext('2d');
+    if (!ctx) throw new Error('OffscreenCanvas 2D nie jest dostępny w tym środowisku.');
+    ctx.imageSmoothingEnabled = true;
+    ctx.imageSmoothingQuality = 'high';
+    ctx.drawImage(bitmap, 0, 0, w, h);
+    bitmap.close?.();
+
     let finalBlob = null;
-    for (let i = 0; i < ATTEMPTS.length; i++) {
-        const cfg = ATTEMPTS[i];
-        finalBlob = await encodeAttempt(bitmap, cfg.maxSide, cfg.quality);
-        const pct = 30 + Math.round(((i + 1) / ATTEMPTS.length) * 65);
+    for (let i = 0; i < QUALITY_ATTEMPTS.length; i++) {
+        const quality = QUALITY_ATTEMPTS[i];
+        finalBlob = await canvas.convertToBlob({ type: 'image/webp', quality });
+        if (!finalBlob) throw new Error('Kodowanie do WebP nie powiodło się.');
+        const pct = 30 + Math.round(((i + 1) / QUALITY_ATTEMPTS.length) * 65);
         report(id, index, 'kompresja', pct);
         if (finalBlob.size <= HARD_LIMIT_BYTES) break;
     }
 
-    bitmap.close?.();
-    return finalBlob;
+    return { blob: finalBlob, originalWidth, originalHeight };
 }
 
 self.onmessage = async (e) => {
@@ -189,8 +196,8 @@ self.onmessage = async (e) => {
     const { id, index, file } = msg;
 
     try {
-        const finalBlob = await processFile(id, index, file);
-        self.postMessage({ type: 'done', id, index, size: finalBlob.size, blob: finalBlob });
+        const { blob, originalWidth, originalHeight } = await processFile(id, index, file);
+        self.postMessage({ type: 'done', id, index, size: blob.size, blob, originalWidth, originalHeight });
     } catch (err) {
         self.postMessage({ type: 'error', id, index, message: err?.message || String(err) });
     }
