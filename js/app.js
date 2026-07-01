@@ -106,6 +106,13 @@ const App = {
             this.apiKeyInput.placeholder = "Używasz oficjalnego klucza SAF Jamnik";
         }
     },
+	
+	saveApiKey() {
+    const key = this.apiKeyInput.value.trim();
+    if (!key) return alert("Wpisz najpierw klucz API!");
+    localStorage.setItem('saf_gemini_key', key);
+    alert('Klucz zapisany!');
+},
 
     handleCategoryChange() {
         const category = this.evtCategory.value;
