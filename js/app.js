@@ -14,7 +14,7 @@ const App = {
         this.cacheDOM();
         this.bindEvents();
         this.loadApiKey();
-        this.handleCategoryChange(); // Uruchomienie filtra na start
+        this.handleCategoryChange();
     },
 
     cacheDOM() {
@@ -26,6 +26,8 @@ const App = {
         this.evtNotes = document.getElementById('evtNotes');
         this.evtStart = document.getElementById('evtStart');
         this.evtEnd = document.getElementById('evtEnd');
+        this.evtTitle = document.getElementById('evtTitle');
+        this.evtLocation = document.getElementById('evtLocation');
         
         this.dropzone = document.getElementById('dropzone');
         this.fileInput = document.getElementById('fileInput');
@@ -57,10 +59,8 @@ const App = {
         this.saveKeyBtn.addEventListener('click', () => this.saveApiKey());
         this.evtCategory.addEventListener('change', () => this.handleCategoryChange());
         
-        // Automatyczne ustawianie daty zakończenia na podstawie rozpoczęcia (Punkt 1)
         this.evtStart.addEventListener('change', (e) => {
             if (e.target.value) {
-                // Kopiujemy całą datę (RRRR-MM-DD), zostawiając godzinę pustą (00:00)
                 const datePart = e.target.value.split('T')[0];
                 this.evtEnd.value = `${datePart}T00:00`;
             }
@@ -69,7 +69,6 @@ const App = {
         this.btnGoToStep2.addEventListener('click', () => this.handleStep1Submit());
         this.btnBackToStep1.addEventListener('click', () => this.switchStep(1));
         
-        // Poprawione otwieranie okna plików (Punkt 3)
         this.dropzone.addEventListener('click', (e) => {
             e.preventDefault();
             this.fileInput.click();
@@ -93,7 +92,6 @@ const App = {
     },
 
     loadApiKey() {
-        // Wklej tutaj swój przetestowany klucz
         const officialKey = "AQ.Ab8RN6IuYXGYjFNDrkmkYkcACi1plSBa1s1FwJsLuCatQhnK4Q";
         const saved = localStorage.getItem('saf_gemini_key');
         if (saved) { 
@@ -109,7 +107,6 @@ const App = {
         alert('Klucz API zapisany lokalnie!');
     },
 
-    // Obsługa dynamicznych pól w zależności od kategorii (Punkt 2)
     handleCategoryChange() {
         const category = this.evtCategory.value;
         if (category === 'kultura' || category === 'sport') {
@@ -120,10 +117,10 @@ const App = {
             this.dynamicFields.classList.add('hidden');
             if (category === 'zapowiedzi') {
                 this.notesLabel.innerHTML = "<strong>Co dokładnie zapowiadasz, kiedy i gdzie to będzie?</strong>";
-                this.evtNotes.placeholder = "Opisz planowane wydarzenie, datę, godzinę, miejsce, czy wstęp jest wolny itp...";
+                this.evtNotes.placeholder = "Opisz planowane wydarzenie, datę, godzinę, miejsce...";
             } else if (category === 'zycie') {
                 this.notesLabel.innerHTML = "<strong>Opisz co się działo w agencji / jakie są ustalenia:</strong>";
-                this.evtNotes.placeholder = "Co robiliście, kto brał udział, jakie zapadły decyzje lub jaki sprzęt testowaliście...";
+                this.evtNotes.placeholder = "Co robiliście, kto brał udział, jakie zapadły decyzje...";
             }
         }
     },
@@ -139,7 +136,7 @@ const App = {
 
     handleStep1Submit() {
         const cat = this.evtCategory.value;
-        const title = document.getElementById('evtTitle')?.value || "Wpis SAF";
+        const title = this.evtTitle?.value || "Wpis SAF";
         
         this.aiQuestionText.innerText = Gemini.getInterviewQuestion(cat, title);
         this.aiAnswerText.value = "";
@@ -149,9 +146,11 @@ const App = {
     closeModal(saveData) {
         if (saveData && this.aiAnswerText.value.trim() !== "") {
             this.state.interviewAnswers = this.aiAnswerText.value.trim();
+        } else {
+            this.state.interviewAnswers = "";
         }
         this.aiModal.classList.add('hidden');
-        this.switchStep(2); // Przejście do kroku 2 (Punkt 4)
+        this.switchStep(2);
     },
 
     async handleFiles(files) {
@@ -160,7 +159,7 @@ const App = {
         this.fileStatus.innerHTML = "<p>Trwa kompresja obrazów do WebP...</p>";
         
         Compressor.processedFiles = [];
-        const title = document.getElementById('evtTitle')?.value || "saf-wpis";
+        const title = this.evtTitle?.value || "saf-wpis";
         const startDate = this.evtStart.value;
 
         for (let i = 0; i < this.state.filesToProcess.length; i++) {
@@ -178,8 +177,23 @@ const App = {
     },
 
     goToStep3() {
-        const baseNotes = this.evtNotes.value;
-        this.finalNotes.value = baseNotes + (this.state.interviewAnswers ? `\n\n[Dodatkowe szczegóły z wywiadu]: ${this.state.interviewAnswers}` : "");
+        const cat = this.evtCategory.value;
+        let compiledInformation = "";
+
+        // Zbieranie wszystkich danych w jeden czytelny blok tekstowy (Punkt 1)
+        if (cat === 'kultura' || cat === 'sport') {
+            compiledInformation += `Wydarzenie: ${this.evtTitle.value || 'Brak nazwy'}\n`;
+            compiledInformation += `Miejsce: ${this.evtLocation.value || 'Brak miejsca'}\n`;
+            compiledInformation += `Czas: od ${this.evtStart.value || '?'} do ${this.evtEnd.value || '?'}\n\n`;
+        }
+        
+        compiledInformation += `Główne notatki autora:\n${this.evtNotes.value}\n`;
+        
+        if (this.state.interviewAnswers) {
+            compiledInformation += `\nDodatkowe szczegóły uzyskane z wywiadu:\n${this.state.interviewAnswers}`;
+        }
+
+        this.finalNotes.value = compiledInformation;
         this.switchStep(3);
     },
 
@@ -191,7 +205,7 @@ const App = {
         this.aiOutput.classList.add('hidden');
 
         const cat = this.evtCategory.value;
-        const notes = this.finalNotes.value;
+        const notes = this.finalNotes.value; // AI bierze tekst WYŁĄCZNIE stąd
         const prompt = Gemini.getPromptTemplate(cat, notes);
 
         try {
@@ -222,7 +236,7 @@ const App = {
     copyToClipboard() {
         this.gutenbergOutput.select();
         document.execCommand('copy');
-        alert('Skopiowano kod bloku WordPress! Możesz wkleić go w edytorze WP.');
+        alert('Skopiowano kod bloku WordPress!');
     }
 };
 

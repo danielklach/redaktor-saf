@@ -11,7 +11,7 @@
     <header>
         <div class="logo-zone">
             <span class="logo-saf">SAF Jamnik</span>
-            <span class="badge">Redaktor v1.1</span>
+            <span class="badge">Redaktor v1.2</span>
         </div>
         <div class="api-zone">
             <input type="password" id="apiKeyInput" placeholder="Klucz Gemini API...">
@@ -64,10 +64,10 @@
                     </div>
                 </div>
 
-                <!-- Sekcja Notatek (Zawsze widoczna, zmienia się placeholder) -->
+                <!-- Sekcja Notatek (Główne źródło wiedzy) -->
                 <div class="form-group">
                     <label for="evtNotes" id="notesLabel">Twoje surowe notatki / spostrzeżenia:</label>
-                    <textarea id="evtNotes" rows="12" placeholder="Wpisz tu wszystko co pamiętasz... Kto grał, jaka była atmosfera, czy spadł deszcz, ile było ludzi, specyfika oświetlenia itp."></textarea>
+                    <textarea id="evtNotes" rows="12" placeholder="Wpisz tu wszystko co pamiętasz... Kto grał, jaka była atmosfera..."></textarea>
                 </div>
             </div>
             
@@ -81,11 +81,9 @@
             <h2>Wgranie i Kompresja Zdjęć</h2>
             <p class="info-text">Zdjęcia zostaną przekonwertowane do formatu <strong>WebP</strong> (maks. 2500px na dłuższym boku, waga ok. 100-250 KB).</p>
             
-            <!-- Poprawiona strefa klikania i upuszczania -->
             <div class="dropzone" id="dropzone">
                 <p>Przeciągnij i upuść zdjęcia tutaj lub <span class="highlight" style="text-decoration: underline; pointer-events: none;">kliknij tutaj, aby wybrać z dysku</span></p>
             </div>
-            <!-- Ukryty, ale działający techniczny przycisk pliku -->
             <input type="file" id="fileInput" multiple accept="image/*" style="display:none;">
 
             <div id="fileStatus" class="file-status"></div>
@@ -97,16 +95,16 @@
             </div>
         </section>
 
-        <!-- KROK 3: Podsumowanie i Wynik -->
+        <!-- KROK 3: Wynik końcowy -->
         <section id="step3" class="step-section">
             <h2>Generowanie Artykułu przez AI</h2>
             
             <div class="grid-2col">
                 <div class="review-zone">
-                    <h3>Weryfikacja danych wyjściowych</h3>
-                    <label for="finalNotes">Możesz zmodyfikować notatki przed wysłaniem do AI:</label>
-                    <textarea id="finalNotes" rows="12"></textarea>
-                    <button id="btnTriggerAI" class="btn-primary w-100">Uruchom Magię AI (Gemini 1.5 Flash)</button>
+                    <h3>Ostateczne Notatki do AI</h3>
+                    <p class="info-text" style="margin-bottom: 10px;">Poniżej znajdują się połączone informacje z formularza i wywiadu. To stąd AI czerpie wiedzę:</p>
+                    <textarea id="finalNotes" rows="14"></textarea>
+                    <button id="btnTriggerAI" class="btn-primary w-100" style="margin-top: 15px;">Uruchom Magię AI (Gemini 1.5 Flash)</button>
                 </div>
 
                 <div class="result-zone">
@@ -145,7 +143,6 @@
         </div>
     </div>
 
-    <!-- Załadowanie logiki na samym końcu, gdy cały HTML już istnieje -->
     <script type="module" src="js/app.js"></script>
 </body>
 </html>
