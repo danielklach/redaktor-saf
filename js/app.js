@@ -68,10 +68,16 @@ const App = {
         this.btnRegenerate.addEventListener('click', () => { this.aiOutput.classList.add('hidden'); this.finalNotes.focus(); });
     },
 
-    loadApiKey() {
-        const saved = localStorage.getItem('saf_gemini_key');
-        if (saved) { this.apiKeyInput.value = saved; }
-    },
+loadApiKey() {
+    const officialKey = "AQ.Ab8RN6IuYXGYjFNDrkmkYkcACi1plSBa1s1FwJsLuCatQhnK4Q";
+    const saved = localStorage.getItem('saf_gemini_key');
+    if (saved) { 
+        this.apiKeyInput.value = saved; 
+    } else {
+        this.apiKeyInput.value = officialKey;
+        this.apiKeyInput.placeholder = "Używasz oficjalnego klucza SAF Jamnik";
+    }
+},
 
     saveApiKey() {
         localStorage.setItem('saf_gemini_key', this.apiKeyInput.value);
