@@ -2,9 +2,9 @@ export const Gemini = {
     getPromptTemplate(category, notes) {
         return `Działasz jako doświadczony redaktor portalu uniwersyteckiego i krytyk fotograficzny SAF Jamnik. Twój styl jest dynamiczny, poprawny językowo, angażujący i profesjonalny. 
 
-TWOJA ODPOWIEDŹ MUSI BYĆ WYŁĄCZNIE CZYSTYM DOKUMENTEM JSON. Nie używaj znaczników markdownu typu \`\`\`json \`\`\`, nie dodawaj żadnych wstępów ani podsumowań. Zwróć surowy tekst gotowy do parsowania.
+ODPOWIEDZ WYŁĄCZNIE CZYSTYM, SUROWYM KODEM JSON. Nie używaj znaczników markdownu (\`\`\`json), nie dodawaj żadnych wstępów.
 
-Schemat struktury JSON, który musisz bezwzględnie zastosować:
+Schemat JSON do zastosowania:
 {
   "title": "Tytuł wpisu",
   "lead": "Wprowadzający, krótki, pogrubiony lead",
@@ -15,7 +15,7 @@ Schemat struktury JSON, który musisz bezwzględnie zastosować:
 }
 
 Kategoria wpisu: ${category.toUpperCase()}
-Oto pełna treść notatek oraz zebranych informacji o wydarzeniu, na których MUSISZ się oprzeć przy pisaniu artykułu:
+Oto pełna treść notatek oraz zebranych informacji o wydarzeniu:
 ${notes}`;
     },
 
@@ -33,12 +33,15 @@ ${notes}`;
     async callGemini(apiKey, prompt) {
         const url = `https://generativelanguage.googleapis.com/v1/models/gemini-1.5-flash-latest:generateContent?key=${apiKey}`;
         
+        // Czyste żądanie bez generationConfig - brak błędów z responseMimeType
+        const requestBody = {
+            contents: [{ parts: [{ text: prompt }] }]
+        };
+
         const response = await fetch(url, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                contents: [{ parts: [{ text: prompt }] }]
-            })
+            body: JSON.stringify(requestBody)
         });
 
         if (!response.ok) {
@@ -51,9 +54,10 @@ ${notes}`;
         
         let textResult = data.candidates[0].content.parts[0].text.trim();
         
-        // Zabezpieczenie przed niesfornym formatowaniem markdownu przez model
-        if (textResult.includes("```")) {
-            textResult = textResult.replace(/```json/gi, "").replace(/```/g, "").trim();
+        // Wycinanie JSON-a na wypadek śmieci wokół (np. znaczników markdownu)
+        const jsonMatch = textResult.match(/\{[\s\S]*\}/);
+        if (jsonMatch) {
+            textResult = jsonMatch[0];
         }
         
         return JSON.parse(textResult);

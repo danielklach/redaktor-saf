@@ -36,17 +36,11 @@ export const Compressor = {
                     const ctx = canvas.getContext('2d');
                     ctx.drawImage(img, 0, 0, width, height);
 
-                    const dateObj = new Date(eventDateStr || Date.now());
-                    const year = dateObj.getFullYear();
-                    const month = String(dateObj.getMonth() + 1).padStart(2, '0');
-                    const safeTitle = Compressor.sanitizeString(eventTitle || 'wydarzenie');
-                    const numStr = String(targetIndex + 1).padStart(2, '0');
-                    const fileName = `${year}-${month}-${safeTitle}-${numStr}.webp`;
-
-                    // INTELIGENTNA PĘTLA KOMPRESJI DO MAX 200 KB (Punkt 3)
-                    let quality = 0.85;
+                    const maxSizeBytes = 200 * 1024; // 200 KB
+                    let quality = 0.80;
+                    let currentWidth = width;
+                    let currentHeight = height;
                     let finalBlob = null;
-                    const maxSizeBytes = 200 * 1024; // Dokładnie 204800 bajtów
 
                     const compress = () => {
                         return new Promise((resBlob) => {
@@ -55,12 +49,30 @@ export const Compressor = {
                     };
 
                     finalBlob = await compress();
-                    
-                    // Jeśli plik przekracza 200kb, stopniowo zmniejszamy jakość
-                    while (finalBlob.size > maxSizeBytes && quality > 0.15) {
-                        quality -= 0.08;
+
+                    // Agresywna pętla: jeśli plik > 200 KB
+                    while (finalBlob.size > maxSizeBytes) {
+                        quality -= 0.15; // Drastycznie zjedź z jakości
+                        
+                        // Jeśli jakość jest już bardzo niska, a waga nadal za duża (np. ogromna ilość szumu), tnij rozdzielczość
+                        if (quality <= 0.20) {
+                            currentWidth = Math.round(currentWidth * 0.85);
+                            currentHeight = Math.round(currentHeight * 0.85);
+                            canvas.width = currentWidth;
+                            canvas.height = currentHeight;
+                            ctx.drawImage(img, 0, 0, currentWidth, currentHeight);
+                            quality = 0.70; // Zresetuj jakość dla nowej, mniejszej rozdzielczości
+                        }
+                        
                         finalBlob = await compress();
                     }
+
+                    const dateObj = new Date(eventDateStr || Date.now());
+                    const year = dateObj.getFullYear();
+                    const month = String(dateObj.getMonth() + 1).padStart(2, '0');
+                    const safeTitle = Compressor.sanitizeString(eventTitle || 'wydarzenie');
+                    const numStr = String(targetIndex + 1).padStart(2, '0');
+                    const fileName = `${year}-${month}-${safeTitle}-${numStr}.webp`;
 
                     resolve({
                         blob: finalBlob,

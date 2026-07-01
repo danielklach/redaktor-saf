@@ -14,6 +14,7 @@ const App = {
         this.bindEvents();
         this.loadApiKey();
         this.handleCategoryChange();
+        this.switchStep(1); // Twarde wymuszenie widoku pierwszego kroku
     },
 
     cacheDOM() {
@@ -106,16 +107,10 @@ const App = {
         }
     },
 
-    saveApiKey() {
-        localStorage.setItem('saf_gemini_key', this.apiKeyInput.value);
-        alert('Klucz API zapisany lokalnie!');
-    },
-
-    // Dynamiczne i unikalne placeholders dla każdej z kategorii (Punkt 1)
     handleCategoryChange() {
         const category = this.evtCategory.value;
         if (category === 'kultura' || category === 'sport' || category === 'nauka') {
-            this.dynamicFields.classList.remove('hidden');
+            this.dynamicFields.style.display = 'block';
             this.notesLabel.innerHTML = "Twoje surowe notatki / spostrzeżenia:";
             this.evtNotes.placeholder = "Kto uczestniczył, jaka była atmosfera, co przykuło uwagę fotografów...";
             
@@ -127,7 +122,7 @@ const App = {
                 this.evtTitle.placeholder = "np. Liga Wydziałów...";
             }
         } else {
-            this.dynamicFields.classList.add('hidden');
+            this.dynamicFields.style.display = 'none';
             if (category === 'zapowiedzi') {
                 this.notesLabel.innerHTML = "<strong>Co dokładnie zapowiadasz, kiedy i gdzie to będzie?</strong>";
                 this.evtNotes.placeholder = "Opisz planowane wydarzenie, datę, godzinę, miejsce...";
@@ -138,19 +133,46 @@ const App = {
         }
     },
 
+    // Twarde ukrywanie wszystkich sekcji poza docelową (Punkt 4)
     switchStep(stepNum) {
         this.state.currentStep = stepNum;
-        document.querySelectorAll('.step-section').forEach(s => s.classList.remove('active'));
+        
+        document.querySelectorAll('.step-section').forEach(s => {
+            s.style.display = 'none';
+            s.classList.remove('active');
+        });
+        
         document.querySelectorAll('.step').forEach(s => s.classList.remove('active'));
         
-        document.getElementById(`step${stepNum}`).classList.add('active');
-        document.querySelector(`.step[data-step="${stepNum}"]`).classList.add('active');
+        const targetSection = document.getElementById(`step${stepNum}`);
+        if (targetSection) {
+            targetSection.style.display = 'block';
+            targetSection.classList.add('active');
+        }
+        
+        const targetIndicator = document.querySelector(`.step[data-step="${stepNum}"]`);
+        if (targetIndicator) {
+            targetIndicator.classList.add('active');
+        }
     },
 
+    // Walidacja pól formularza przed przejściem dalej (Punkt 3)
     handleStep1Submit() {
         const cat = this.evtCategory.value;
-        const title = this.evtTitle?.value || "Wpis SAF";
         
+        if (cat === 'kultura' || cat === 'sport' || cat === 'nauka') {
+            if (!this.evtTitle.value || !this.evtLocation.value || !this.evtStart.value || !this.evtEnd.value || !this.evtNotes.value.trim()) {
+                alert("Aby przejść dalej, musisz wypełnić wszystkie pola: Nazwę, Miejsce, Daty i Notatki!");
+                return;
+            }
+        } else {
+            if (!this.evtNotes.value.trim()) {
+                alert("Aby przejść dalej, musisz wypełnić pole notatek!");
+                return;
+            }
+        }
+
+        const title = this.evtTitle?.value || "Wpis SAF";
         this.aiQuestionText.innerText = Gemini.getInterviewQuestion(cat, title);
         this.aiAnswerText.value = "";
         this.aiModal.classList.remove('hidden');
@@ -163,7 +185,7 @@ const App = {
             this.state.interviewAnswers = "";
         }
         this.aiModal.classList.add('hidden');
-        this.switchStep(2); // Skok do sekcji zdjęć po wywiadzie
+        this.switchStep(2);
         this.renderFileList();
     },
 
@@ -171,11 +193,10 @@ const App = {
         if(!files || files.length === 0) return;
         const incomingFiles = Array.from(files);
         
-        // Błyskawiczny, natychmiastowy loader przed ciężką pracą skryptu (Punkt 2)
         this.fileStatus.innerHTML = `
             <div style="display: flex; align-items: center; gap: 12px; padding: 15px; background: #1c1c22; border-radius: 6px; border: 1px solid var(--border);">
                 <div class="spinner" style="width: 20px; height: 20px; border: 3px solid var(--border); border-top: 3px solid var(--primary); border-radius: 50%; animation: spin 1s linear infinite;"></div>
-                <span>Optymalizacja i sprawdzanie limitu wagi dla ${incomingFiles.length} zdjęć...</span>
+                <span>Agresywna kompresja ${incomingFiles.length} zdjęć (wymuszanie maks. 200 KB)...</span>
             </div>
             <style>@keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }</style>
         `;
@@ -202,7 +223,7 @@ const App = {
         this.renderFileList();
     },
 
-    // Silnik listy zdjęć: Miniatury, Usuwanie i Zamiana miejscami (Punkt 2 i 4)
+    // Generowanie widoku listy ze strzałkami GÓRA/DÓŁ (Punkt 1)
     renderFileList() {
         this.fileStatus.innerHTML = "";
         
@@ -228,22 +249,25 @@ const App = {
             const item = document.createElement('div');
             item.style.cssText = "display: flex; align-items: center; justify-content: space-between; padding: 10px; background: #1c1c22; margin-bottom: 8px; border-radius: 6px; border: 1px solid var(--border);";
             
+            // Kolorowanie wagi na czerwono, jeśli (z jakiegoś technicznego cudu) przekroczy 200KB
+            const sizeKB = (file.size/1024).toFixed(1);
+            const sizeColor = file.size > 204800 ? "var(--danger)" : "var(--text-muted)";
+
             item.innerHTML = `
                 <div style="display: flex; align-items: center; gap: 15px;">
                     <img src="${file.previewUrl}" style="width: 55px; height: 55px; object-fit: cover; border-radius: 4px; border: 1px solid #3e3e4a;">
                     <div>
                         <span style="font-weight: 500; color: #fff; display: block;">✅ ${file.name}</span>
-                        <span style="color: var(--text-muted); font-size: 0.8rem;">Rozmiar: ${(file.size/1024).toFixed(1)} KB (Max 200 KB)</span>
+                        <span style="color: ${sizeColor}; font-size: 0.8rem;">Waga: ${sizeKB} KB</span>
                     </div>
                 </div>
                 <div style="display: flex; gap: 6px;">
-                    <button class="btn-up" style="background: #2e2e38; color: #fff; padding: 5px 10px; font-size: 0.75rem; border-radius: 4px;">▲ Góra</button>
-                    <button class="btn-down" style="background: #2e2e38; color: #fff; padding: 5px 10px; font-size: 0.75rem; border-radius: 4px;">▼ Dół</button>
-                    <button class="btn-del" style="background: var(--danger); color: white; padding: 5px 10px; font-size: 0.75rem; border-radius: 4px; font-weight: bold;">Usuń</button>
+                    <button class="btn-up" style="background: #2e2e38; color: #fff; padding: 8px 12px; font-size: 0.85rem; border-radius: 4px; border: none; cursor: pointer;">▲</button>
+                    <button class="btn-down" style="background: #2e2e38; color: #fff; padding: 8px 12px; font-size: 0.85rem; border-radius: 4px; border: none; cursor: pointer;">▼</button>
+                    <button class="btn-del" style="background: var(--danger); color: white; padding: 8px 12px; font-size: 0.85rem; border-radius: 4px; font-weight: bold; border: none; cursor: pointer;">Usuń</button>
                 </div>
             `;
             
-            // Zmiana kolejności: Przesunięcie w górę
             item.querySelector('.btn-up').addEventListener('click', (e) => {
                 e.preventDefault();
                 if (index > 0) {
@@ -254,7 +278,6 @@ const App = {
                 }
             });
 
-            // Zmiana kolejności: Przesunięcie w dół
             item.querySelector('.btn-down').addEventListener('click', (e) => {
                 e.preventDefault();
                 if (index < Compressor.processedFiles.length - 1) {
@@ -265,7 +288,6 @@ const App = {
                 }
             });
 
-            // Usuwanie pliku
             item.querySelector('.btn-del').addEventListener('click', (e) => {
                 e.preventDefault();
                 Compressor.processedFiles.splice(index, 1);
