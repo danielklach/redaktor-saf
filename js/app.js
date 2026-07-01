@@ -13,6 +13,33 @@ const WP_SITE_URL = "https://jamnik.uwm.edu.pl";
 const FEATURED_RATIO_TARGET = 3 / 2;
 const RATIO_TOLERANCE = 0.03;
 
+// Zdarzenie beforeinstallprompt trzeba przechwycić NA POZIOMIE MODUŁU (nie wewnątrz App.init,
+// które odpala się dopiero na DOMContentLoaded) - przeglądarka może je wysłać w dowolnym
+// momencie ładowania strony i dostajemy tylko jedną szansę, żeby je złapać i zablokować
+// domyślne zachowanie (e.preventDefault()).
+let deferredInstallPrompt = null;
+// Zabezpieczenie na wypadek, gdyby zdarzenie przyszło ZANIM App.init() zdążyło uruchomić
+// cacheDOM() (np. bardzo wolne parsowanie strony) - wtedy this.installBanner jeszcze nie
+// istnieje. Odkładamy obsługę do końca init() zamiast ryzykować błąd w konsoli.
+let installPromptPending = false;
+
+window.addEventListener('beforeinstallprompt', (e) => {
+    e.preventDefault();
+    deferredInstallPrompt = e;
+    if (App.installBanner) {
+        App.onInstallPromptAvailable();
+    } else {
+        installPromptPending = true;
+    }
+});
+
+// Po realnej instalacji nie ma już czego proponować - czyścimy zmienną, żeby żaden kolejny
+// klik (np. ponowne otwarcie instrukcji) nie próbował odpalać już nieaktualnego promptu.
+window.addEventListener('appinstalled', () => {
+    deferredInstallPrompt = null;
+    App.onAppInstalled();
+});
+
 const App = {
     state: {
         currentStep: 1,
@@ -26,6 +53,10 @@ const App = {
         this.handleCategoryChange();
         this.switchStep(1);
         this.initFileSystemSave();
+        if (installPromptPending) {
+            installPromptPending = false;
+            this.onInstallPromptAvailable();
+        }
         if (!localStorage.getItem('saf_intro_seen')) {
             this.introModal.classList.remove('hidden');
         }
@@ -37,6 +68,10 @@ const App = {
         this.btnShowIntro = document.getElementById('btnShowIntro');
         this.introModal = document.getElementById('introModal');
         this.btnCloseIntro = document.getElementById('btnCloseIntro');
+
+        this.installBanner = document.getElementById('installBanner');
+        this.btnInstallApp = document.getElementById('btnInstallApp');
+        this.btnDismissInstall = document.getElementById('btnDismissInstall');
 
         this.btnReportIssue = document.getElementById('btnReportIssue');
         this.reportModal = document.getElementById('reportModal');
@@ -119,6 +154,17 @@ const App = {
         this.btnCloseIntro.addEventListener('click', () => {
             this.introModal.classList.add('hidden');
             localStorage.setItem('saf_intro_seen', '1');
+            // Pierwsza interakcja użytkownika ze stroną (zamknięcie instrukcji) - najlepszy,
+            // najmniej inwazyjny moment, żeby zaproponować instalację (patrz triggerInstallPrompt).
+            this.triggerInstallPrompt();
+        });
+
+        this.btnInstallApp.addEventListener('click', () => this.triggerInstallPrompt());
+        this.btnDismissInstall.addEventListener('click', () => {
+            this.installBanner.classList.add('hidden');
+            // Tylko na bieżącą sesję przeglądarki - przy kolejnej wizycie (jeśli nadal
+            // niezainstalowana) popup może się pojawić ponownie, ale nie spamuje w kółko.
+            sessionStorage.setItem('saf_install_dismissed', '1');
         });
 
         this.btnReportIssue.addEventListener('click', () => {
@@ -203,6 +249,50 @@ const App = {
         const title = this.evtTitle?.value || "wpis";
         const startDate = this.evtStart.value;
         Compressor.generateZip(title, startDate);
+    },
+
+    // Wywoływane z listenera beforeinstallprompt (patrz góra pliku) w chwili, gdy przeglądarka
+    // faktycznie jest gotowa zaproponować instalację. Najpierw próbujemy pokazać okno OD RAZU -
+    // w praktyce niemal każda przeglądarka i tak to zablokuje bez gestu użytkownika (rzuci
+    // wyjątkiem), więc triggerInstallPrompt() bezpiecznie łapie błąd, a my pokazujemy widoczny
+    // popup, który da nam ten gest przy pierwszym kliknięciu (albo zamknięciu instrukcji startowej).
+    async onInstallPromptAvailable() {
+        // Już zainstalowana (PWA na pulpicie/telefonie) albo "Dodaj do ekranu głównego" na iOS -
+        // nie ma sensu niczego proponować.
+        if (window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone) {
+            return;
+        }
+
+        const shownImmediately = await this.triggerInstallPrompt();
+        if (shownImmediately) return;
+
+        if (sessionStorage.getItem('saf_install_dismissed')) return;
+        this.installBanner.classList.remove('hidden');
+    },
+
+    // Współdzielone przez popup instalacji ORAZ przycisk zamykający instrukcję startową -
+    // niezależnie skąd wywołane, bezpiecznie działa też w przeglądarkach bez wsparcia dla PWA
+    // (deferredInstallPrompt jest wtedy po prostu null, więc metoda nic nie robi i niczego nie rzuca).
+    async triggerInstallPrompt() {
+        if (!deferredInstallPrompt) return false;
+        try {
+            await deferredInstallPrompt.prompt();
+            const choice = await deferredInstallPrompt.userChoice;
+            console.log('[PWA] Wybór użytkownika w oknie instalacji:', choice.outcome);
+            deferredInstallPrompt = null; // zdarzenie jednorazowe - zużyte po udanym pokazaniu okna
+            this.installBanner.classList.add('hidden');
+            return true;
+        } catch (err) {
+            // Najczęstsza przyczyna: prompt() wywołany bez gestu użytkownika (np. próba tuż po
+            // załadowaniu strony) - to nie błąd aplikacji, po prostu czekamy na kliknięcie.
+            console.warn('[PWA] Okno instalacji nie mogło się pokazać:', err.message);
+            return false;
+        }
+    },
+
+    onAppInstalled() {
+        this.installBanner?.classList.add('hidden');
+        this.showToast('Aplikacja została zainstalowana! 🎉');
     },
 
     // File System Access API pozwala zapisać zdjęcia BEZPOŚREDNIO na dysk, bez ZIP-a i bez

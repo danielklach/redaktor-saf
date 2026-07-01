@@ -135,11 +135,14 @@ input[type="datetime-local"]::-webkit-calendar-picker-indicator {
 .w-100 { width: 100%; }
 
 /* Wspólne style na klasach (nie na elemencie "button"), żeby przycisk-link <a class="btn-secondary">
-   (np. "Strefa Członka" w nagłówku) wyglądał IDENTYCZNIE jak zwykłe przyciski <button>. */
+   (np. "Strefa Członka" w nagłówku) wyglądał IDENTYCZNIE jak zwykłe przyciski <button>.
+   line-height MUSI być jawnie ustawiony: <a> dziedziczy line-height:1.5 z <body>, a <button> ma
+   domyślnie inną wartość z arkusza przeglądarki - bez tego "Strefa Członka" wychodziła wyższa
+   niż pozostałe przyciski, mimo identycznego paddingu i font-size. */
 button, .btn-primary, .btn-secondary, .btn-success, .btn-download {
     padding: 10px 20px; font-weight: 600; border-radius: 6px; cursor: pointer; border: none;
     transition: transform 0.15s ease, box-shadow 0.15s ease, background 0.15s ease;
-    display: inline-block;
+    display: inline-block; line-height: 1.2; vertical-align: middle; box-sizing: border-box;
 }
 .btn-primary { background: var(--primary); color: #000; }
 .btn-primary:hover { background: var(--primary-hover); }
@@ -230,5 +233,34 @@ button:disabled { background: #2e2e38; color: var(--text-muted); cursor: not-all
     transition: opacity 0.25s ease, transform 0.25s ease;
 }
 .toast.show { opacity: 1; transform: translateY(0); }
+
+/* Bardzo widoczny popup instalacji PWA (patrz js/app.js - beforeinstallprompt) */
+.install-banner {
+    position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%);
+    z-index: 1500; display: flex; align-items: center; gap: 14px;
+    background: var(--card-bg); border: 2px solid var(--primary); border-radius: 12px;
+    padding: 16px 18px; box-shadow: 0 10px 40px rgba(0,0,0,0.5);
+    max-width: 480px; width: calc(100% - 32px);
+    animation: installBannerIn 0.3s ease;
+}
+@keyframes installBannerIn {
+    from { opacity: 0; transform: translateX(-50%) translateY(20px); }
+    to { opacity: 1; transform: translateX(-50%) translateY(0); }
+}
+.install-banner-icon { font-size: 2rem; flex-shrink: 0; line-height: 1; }
+.install-banner-text { flex: 1; display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.install-banner-text strong { color: #fff; font-size: 0.95rem; }
+.install-banner-text span { color: var(--text-muted); font-size: 0.8rem; }
+.install-banner-close {
+    background: transparent; padding: 4px 8px; font-size: 1.1rem; color: var(--text-muted);
+    box-shadow: none;
+}
+.install-banner-close:hover { color: #fff; background: transparent; transform: none; box-shadow: none; }
+
+@media (max-width: 640px) {
+    .install-banner { bottom: 10px; flex-wrap: wrap; }
+    .install-banner-text { flex-basis: 100%; order: 1; }
+    .install-banner-close { position: absolute; top: 8px; right: 8px; }
+}
 
 @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }

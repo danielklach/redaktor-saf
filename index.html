@@ -29,7 +29,7 @@
             <img src="assets/redaktor-saf-emblem.svg" alt="Redaktor SAFi" class="logo-emblem">
             <span class="logo-text">
                 <span class="logo-line">Redaktor</span>
-                <span class="logo-line">SAFi <span class="logo-version">ver. 1.8.5</span></span>
+                <span class="logo-line">SAFi <span class="logo-version">ver. 1.8.6</span></span>
             </span>
         </a>
         <div class="header-actions">
@@ -170,6 +170,7 @@
                         </div>
 
                         <p class="info-text">📌 Zanim wkleisz poniższy kod do WordPressa, jeszcze raz przeczytaj go uważnie od początku do końca - AI mogło popełnić błąd rzeczowy, literówkę lub napisać coś w nienaturalny sposób.</p>
+                        <p class="info-text">🧩 Kolejność w WordPressie: 1) przełącz edytor wpisu na <strong>"Edytor kodu"</strong> (menu ⋮), 2) dopiero wtedy wklej poniższy kod, 3) wróć do <strong>"Edytora wizualnego"</strong>, żeby zobaczyć i przeczytać gotowy wpis.</p>
 
                         <label for="gutenbergOutput">Kod do wklejenia do Edytora Kodu WordPress (Gutenberg):</label>
                         <textarea id="gutenbergOutput" rows="12" readonly></textarea>
@@ -212,6 +213,11 @@
                 <li><strong>Krok 1 - Dane wydarzenia:</strong> opisz, co się działo, gdzie i kiedy. Możesz też wkleić tekst zewnętrznego artykułu o tym wydarzeniu - AI wyciągnie z niego fakty (np. oficjalne nazwy tras koncertowych), których mogli nie znać nasi fotografowie.</li>
                 <li><strong>Krok 2 - Zdjęcia:</strong> wgraj zdjęcia w dowolnym profesjonalnym formacie - aplikacja sama je skompresuje i przygotuje pod stronę. Możesz oznaczyć jedno zdjęcie jako "wyróżniające".</li>
                 <li><strong>Krok 3 - Generowanie:</strong> uruchom AI, pobierz paczkę ZIP ze zdjęciami, a potem skopiuj tytuł, tagi i gotowy kod bloku Gutenberg prosto do edytora kodu wpisu w WordPressie. <strong>Zawsze przeczytaj wygenerowaną treść, zanim ją opublikujesz</strong> - AI to tylko maszyna i czasem się myli.</li>
+            </ol>
+            <p style="margin-bottom: 10px;">🧩 Jak wkleić gotowy kod do WordPressa:</p>
+            <ol style="margin: 0 0 12px 20px; line-height: 1.7;">
+                <li>W edytorze wpisu WordPress kliknij menu (⋮) w prawym górnym rogu i wybierz <strong>"Edytor kodu"</strong> (Code editor) - dopiero wtedy wklej skopiowany kod.</li>
+                <li>Wróć tym samym menu do <strong>"Edytora wizualnego"</strong> (Visual editor), żeby zobaczyć wpis tak, jak wyświetli się na stronie, i przeczytać go jeszcze raz.</li>
             </ol>
             <p style="margin-bottom: 10px;">🎥 Poradnik wideo jak obsługiwać Redaktor SAF:</p>
             <!-- TODO: gdy będzie gotowy film, zamień poniższy placeholder na osadzony iframe, np.:
@@ -277,7 +283,19 @@
 
     <div id="toastContainer" class="toast-container"></div>
 
-    <script type="module" src="js/app.js?v=240"></script>
+    <!-- Bardzo widoczny popup instalacji PWA - pojawia się, gdy przeglądarka faktycznie
+         zaproponuje instalację (zdarzenie beforeinstallprompt, patrz js/app.js). -->
+    <div id="installBanner" class="install-banner hidden">
+        <span class="install-banner-icon">📲</span>
+        <div class="install-banner-text">
+            <strong>Zainstaluj Redaktor SAFi</strong>
+            <span>Szybszy dostęp z ekranu głównego i działanie jak natywna aplikacja.</span>
+        </div>
+        <button id="btnInstallApp" class="btn-primary">Zainstaluj</button>
+        <button id="btnDismissInstall" class="install-banner-close" aria-label="Zamknij" title="Zamknij">✕</button>
+    </div>
+
+    <script type="module" src="js/app.js?v=250"></script>
 
     <!-- Rejestracja Service Workera (PWA) - celowo osobny, zwykły skrypt (nie moduł aplikacji),
          żeby infrastruktura PWA działała niezależnie od ewentualnego błędu w js/app.js. -->
