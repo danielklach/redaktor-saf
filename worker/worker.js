@@ -1,5 +1,11 @@
 const ALLOWED_ORIGIN = "https://danielklach.github.io";
 
+// Modele Gemini do wypróbowania w kolejności - gdy Google wycofa/zmieni pierwszy z nich, Worker
+// automatycznie spróbuje kolejnego, zamiast od razu zwracać błąd. Zwiększa to szansę, że aplikacja
+// przetrwa aktualizację modelu bez zmiany kodu - ale gdy pojawi się nowszy model, i tak warto
+// dopisać go na początku tej listy (jedno miejsce w całym projekcie do zmiany).
+const GEMINI_MODELS = ["gemini-3.5-flash", "gemini-2.5-flash", "gemini-2.0-flash", "gemini-1.5-flash"];
+
 // Adres, na który trafiają anonimowe zgłoszenia usterek z przycisku "Zgłoś problem".
 const REPORT_TO_EMAIL = "webmaster@klachphoto.com";
 // Resend (resend.com) pozwala wysyłać z tego adresu bez weryfikacji własnej domeny - do zmiany
@@ -42,37 +48,62 @@ export default {
             return jsonResponse({ error: "Worker nie ma skonfigurowanego sekretu GEMINI_API_KEY" }, 500);
         }
 
-        const geminiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash:generateContent?key=${apiKey}`;
-
         try {
-            const geminiRes = await fetch(geminiUrl, {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({
-                    contents: [{ parts: [{ text: prompt }] }],
-                    ...(generationConfig ? { generationConfig } : {})
-                })
-            });
-
-            const data = await geminiRes.json();
-
-            if (!geminiRes.ok) {
-                let message = data.error?.message || "Błąd Gemini API";
-                // Ten konkretny błąd Google (403/PERMISSION_DENIED) oznacza, że klucz w sekrecie
-                // GEMINI_API_KEY jest nieprawidłowy, nieaktywny, albo ma ustawione "Website restrictions"
-                // (które blokują wywołania spoza przeglądarki - a Worker woła Gemini z serwera).
-                if (data.error?.status === "PERMISSION_DENIED" || /unregistered callers/i.test(message)) {
-                    message += " [Sprawdź: 1) czy GEMINI_API_KEY w ustawieniach Workera to prawdziwy klucz z aistudio.google.com/apikey (zaczyna się od 'AIzaSy'), 2) czy w Google AI Studio / Cloud Console ten klucz NIE ma ustawionych 'Website restrictions' - serwer Workera nie wysyła nagłówka Referer, więc taki klucz zostanie odrzucony.]";
-                }
-                return jsonResponse({ error: message }, geminiRes.status);
-            }
-
-            return jsonResponse(data, 200);
+            return await callGeminiWithFallback(prompt, generationConfig, apiKey);
         } catch (err) {
             return jsonResponse({ error: "Nie udało się połączyć z Gemini API: " + err.message }, 502);
         }
     }
 };
+
+// Próbuje kolejnych modeli z GEMINI_MODELS. Do następnego przechodzi TYLKO, jeśli błąd wygląda na
+// "ten model już nie istnieje/nie jest wspierany" (404 albo komunikat o nieznanym modelu) - każdy
+// inny błąd (zły klucz, przekroczony limit itp.) powtórzyłby się identycznie dla każdego modelu,
+// więc nie ma sensu marnować na to czasu i zwracamy go od razu.
+async function callGeminiWithFallback(prompt, generationConfig, apiKey) {
+    let lastResponse = null;
+
+    for (let i = 0; i < GEMINI_MODELS.length; i++) {
+        const model = GEMINI_MODELS[i];
+        const geminiUrl = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
+
+        const geminiRes = await fetch(geminiUrl, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+                contents: [{ parts: [{ text: prompt }] }],
+                ...(generationConfig ? { generationConfig } : {})
+            })
+        });
+
+        const data = await geminiRes.json();
+
+        if (geminiRes.ok) {
+            return jsonResponse(data, 200);
+        }
+
+        lastResponse = { data, status: geminiRes.status };
+
+        const message = data.error?.message || "";
+        const isModelIssue = geminiRes.status === 404 || /not found|is not supported|not available/i.test(message);
+        const hasNextModel = i < GEMINI_MODELS.length - 1;
+        if (isModelIssue && hasNextModel) {
+            continue; // ten konkretny model już nie działa - próbujemy następnego z listy
+        }
+        break;
+    }
+
+    let message = lastResponse.data.error?.message || "Błąd Gemini API";
+    // Ten konkretny błąd Google (403/PERMISSION_DENIED) oznacza, że klucz w sekrecie
+    // GEMINI_API_KEY jest nieprawidłowy, nieaktywny, albo ma ustawione "Website restrictions"
+    // (które blokują wywołania spoza przeglądarki - a Worker woła Gemini z serwera).
+    if (lastResponse.data.error?.status === "PERMISSION_DENIED" || /unregistered callers/i.test(message)) {
+        message += " [Sprawdź: 1) czy GEMINI_API_KEY w ustawieniach Workera to prawdziwy klucz z aistudio.google.com/apikey (zaczyna się od 'AIzaSy'), 2) czy w Google AI Studio / Cloud Console ten klucz NIE ma ustawionych 'Website restrictions' - serwer Workera nie wysyła nagłówka Referer, więc taki klucz zostanie odrzucony.]";
+    } else if (lastResponse.status === 404 || /not found|is not supported|not available/i.test(message)) {
+        message += " [Wygląda na to, że WSZYSTKIE modele z listy GEMINI_MODELS w worker.js przestały działać - dopisz na początku tej listy aktualną nazwę modelu z ai.google.dev/gemini-api/docs/models.]";
+    }
+    return jsonResponse({ error: message }, lastResponse.status);
+}
 
 // Wysyła zgłoszenie usterki na maila webmastera przez Resend (resend.com).
 // Wymaga sekretu RESEND_API_KEY ustawionego w Cloudflare (tak samo jak GEMINI_API_KEY) -

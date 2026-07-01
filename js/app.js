@@ -16,11 +16,7 @@ const App = {
     state: {
         currentStep: 1,
         interviewAnswers: "",
-        aiFilenameSlug: null,
-        // Migawka nazw plików z chwili ostatniego pobrania ZIP-a - służy do wykrycia, czy nazwy
-        // zdjęć zmieniły się od tego czasu (np. AI dopisało własny slug), żeby link w wygenerowanym
-        // artykule nigdy nie wskazywał na inną nazwę pliku niż ta w faktycznie pobranej paczce.
-        zipSnapshot: null
+        aiFilenameSlug: null
     },
 
     init() {
@@ -51,6 +47,9 @@ const App = {
         this.toastContainer = document.getElementById('toastContainer');
 
         this.evtCategory = document.getElementById('evtCategory');
+        this.step1CategoryHint = document.getElementById('step1CategoryHint');
+        this.step1FormBody = document.getElementById('step1FormBody');
+        this.step1Grid = document.getElementById('step1Grid');
         this.dynamicFields = document.getElementById('dynamicFields');
         this.notesLabel = document.getElementById('notesLabel');
         this.evtNotes = document.getElementById('evtNotes');
@@ -69,11 +68,9 @@ const App = {
 
         this.btnGoToStep2 = document.getElementById('btnGoToStep2');
         this.btnBackToStep1 = document.getElementById('btnBackToStep1');
-        this.btnDownloadPhotos = document.getElementById('btnDownloadPhotos');
         this.btnGoToStep3 = document.getElementById('btnGoToStep3');
         this.btnBackToStep2 = document.getElementById('btnBackToStep2');
         this.btnDownloadPhotosStep3 = document.getElementById('btnDownloadPhotosStep3');
-        this.zipFreshnessWarning = document.getElementById('zipFreshnessWarning');
         this.btnTriggerAI = document.getElementById('btnTriggerAI');
         this.btnCopyHtml = document.getElementById('btnCopyHtml');
         this.btnCopyTitle = document.getElementById('btnCopyTitle');
@@ -160,7 +157,6 @@ const App = {
             this.handleFiles(e.dataTransfer.files);
         });
 
-        this.btnDownloadPhotos.addEventListener('click', () => this.downloadPhotosZip());
         this.btnDownloadPhotosStep3.addEventListener('click', () => this.downloadPhotosZip());
 
         this.btnGoToStep3.addEventListener('click', () => {
@@ -168,13 +164,6 @@ const App = {
             if (!hasFeaturedCandidate) {
                 alert('Żadne z wgranych zdjęć nie nadaje się na obrazek wyróżniający - musi być zdjęciem POZIOMYM w proporcjach 3:2. Dodaj przynajmniej jedno takie zdjęcie, zanim przejdziesz dalej.');
                 return;
-            }
-            if (!this.isZipFresh()) {
-                const message = this.state.zipSnapshot === null
-                    ? 'Nie pobrałeś jeszcze paczki ZIP ze zdjęciami. Zalecamy pobranie kopii zapasowej przed przejściem dalej.\n\nCzy mimo to chcesz kontynuować?'
-                    : 'Lista zdjęć zmieniła się od czasu ostatniego pobrania paczki ZIP (np. przez zmianę kolejności). Pobierz ją ponownie po wygenerowaniu artykułu, żeby nazwy plików zgadzały się z linkami w treści.\n\nCzy mimo to chcesz kontynuować?';
-                const proceed = confirm(message);
-                if (!proceed) return;
             }
             this.goToStep3();
         });
@@ -194,38 +183,15 @@ const App = {
         this.btnRegenerate.addEventListener('click', () => { this.aiOutput.classList.add('hidden'); this.finalNotes.focus(); });
     },
 
+    // Jedyne miejsce pobierania zdjęć jest w Kroku 3 (po ewentualnym przemianowaniu przez AI),
+    // dzięki czemu nazwy w paczce ZAWSZE zgadzają się z linkami w wygenerowanym artykule -
+    // nie trzeba już niczego pilnować ani ostrzegać, wystarczy usunąć wcześniejszą możliwość pobrania w Kroku 2.
     downloadPhotosZip() {
-        // Naprawa: obrazek wyróżniający ("00") musi zostać ustawiony PRZED pobraniem paczki,
-        // nawet jeśli użytkownik pobiera ZIP bezpośrednio z Kroku 2, nie wchodząc do Kroku 3.
         this.ensureFeaturedImage();
         this.renameAllFiles();
         const title = this.evtTitle?.value || "wpis";
         const startDate = this.evtStart.value;
         Compressor.generateZip(title, startDate);
-        this.state.zipSnapshot = this.getFilenamesSnapshot();
-        this.updateZipFreshnessWarning();
-    },
-
-    // BŁĄD Z PRODUKCJI: gdy AI (Krok 3) nadaje zdjęciom nowy slug, nazwy plików się zmieniają -
-    // jeśli użytkownik pobrał ZIP WCZEŚNIEJ (np. w Kroku 2), paczka zawiera STARE nazwy, a wygenerowany
-    // artykuł odwołuje się już do NOWYCH - zdjęcia nie wyświetlają się na stronie. Zamiast prostego
-    // "czy w ogóle pobrano ZIP", porównujemy migawkę aktualnych nazw z migawką z chwili pobrania.
-    getFilenamesSnapshot() {
-        return Compressor.processedFiles.map(f => f.name).join('|');
-    },
-
-    isZipFresh() {
-        return this.state.zipSnapshot !== null && this.state.zipSnapshot === this.getFilenamesSnapshot();
-    },
-
-    // Widoczne, trwałe ostrzeżenie w Kroku 3 (w przeciwieństwie do toasta - nie znika po 3 sekundach),
-    // żeby użytkownik na pewno zauważył, że musi ponownie pobrać paczkę PO wygenerowaniu artykułu.
-    updateZipFreshnessWarning() {
-        if (this.isZipFresh()) {
-            this.zipFreshnessWarning.classList.add('hidden');
-        } else {
-            this.zipFreshnessWarning.classList.remove('hidden');
-        }
     },
 
     // Sprawdza proporcje oryginalnego zdjęcia (3:2, poziomo) z tolerancją na drobne niedokładności.
@@ -307,16 +273,30 @@ const App = {
 
     handleCategoryChange() {
         const category = this.evtCategory.value;
+
+        // Dopóki kategoria nie jest wybrana, reszta formularza jest ukryta - inaczej pusty
+        // "dynamicFields" psuł siatkę 2-kolumnową i wyglądał na niedokończony (patrz też niżej).
+        if (!category) {
+            this.step1FormBody.classList.add('hidden');
+            this.step1CategoryHint.classList.remove('hidden');
+            return;
+        }
+        this.step1FormBody.classList.remove('hidden');
+        this.step1CategoryHint.classList.add('hidden');
+
         if (category === 'kultura' || category === 'sport' || category === 'nauka') {
             this.dynamicFields.style.display = 'block';
+            this.step1Grid.classList.remove('single-col');
             this.notesLabel.innerHTML = "Twoje surowe notatki / spostrzeżenia:";
             this.evtNotes.placeholder = "Kto brał udział, jaka była atmosfera wydarzenia i co szczególnie przykuło uwagę naszych fotografów...";
-            
-            if (category === 'kultura') { this.evtTitle.placeholder = "np. Koncert Myslovitz…"; } 
-            else if (category === 'nauka') { this.evtTitle.placeholder = "np. MSKN..."; } 
+
+            if (category === 'kultura') { this.evtTitle.placeholder = "np. Koncert Myslovitz…"; }
+            else if (category === 'nauka') { this.evtTitle.placeholder = "np. MSKN..."; }
             else if (category === 'sport') { this.evtTitle.placeholder = "np. Liga Wydziałów..."; }
         } else {
             this.dynamicFields.style.display = 'none';
+            // Bez pól tytuł/miejsce/daty druga kolumna (notatki) zajmuje całą szerokość siatki.
+            this.step1Grid.classList.add('single-col');
             if (category === 'zapowiedzi') {
                 this.notesLabel.innerHTML = "<strong>Co dokładnie zapowiadasz, kiedy i gdzie to będzie?</strong>";
                 this.evtNotes.placeholder = "Opisz szczegółowo zapowiadane wydarzenie: co się wydarzy, kiedy dokładnie i gdzie...";
@@ -517,7 +497,6 @@ const App = {
         // więc główny wątek się nie zawiesza niezależnie od tego, jak ciężki jest plik.
         this.dropzone.classList.add('disabled');
         this.fileInput.disabled = true;
-        this.btnDownloadPhotos.disabled = true;
         this.btnGoToStep3.disabled = true;
         this.uploadProgressWrap.classList.remove('hidden');
         this.uploadProgressLabel.classList.remove('hidden');
@@ -614,7 +593,6 @@ const App = {
 
         if (Compressor.processedFiles.length === 0) {
             this.fileStatus.innerHTML = "<p style='text-align:center; padding: 20px; color: var(--text-muted); border: 1px dashed var(--border); border-radius: 6px;'>Brak dodanych zdjęć. Przeciągnij pliki wyżej, aby je dodać.</p>";
-            this.btnDownloadPhotos.disabled = true;
             this.btnGoToStep3.disabled = true;
             return;
         }
@@ -691,7 +669,6 @@ const App = {
             this.fileStatus.appendChild(item);
         });
 
-        this.btnDownloadPhotos.disabled = false;
         this.btnGoToStep3.disabled = false;
     },
 
@@ -768,9 +745,6 @@ const App = {
                 this.state.aiFilenameSlug = aiJson.filenameSlug || aiJson.title;
                 this.renameAllFiles();
             }
-            // Nazwy mogły się właśnie zmienić (nowy slug od AI) - jeśli ZIP był pobrany wcześniej
-            // z INNYMI nazwami, ostrzeżenie poniżej natychmiast poinformuje o konieczności ponownego pobrania.
-            this.updateZipFreshnessWarning();
 
             const featured = Compressor.processedFiles.find(f => f.isFeatured);
             this.sugFeaturedImage.textContent = featured ? featured.name : 'brak';
