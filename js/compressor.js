@@ -17,7 +17,7 @@ export const Compressor = {
             reader.onload = (event) => {
                 const img = new Image();
                 img.src = event.target.result;
-                img.onload = () => {
+                img.onload = async () => {
                     const canvas = document.createElement('canvas');
                     let width = img.width;
                     let height = img.height;
@@ -36,25 +36,39 @@ export const Compressor = {
                     const ctx = canvas.getContext('2d');
                     ctx.drawImage(img, 0, 0, width, height);
 
-                    canvas.toBlob((blob) => {
-                        if (!blob) return reject(new Error("Błąd zapisu canvas"));
-                        
-                        const dateObj = new Date(eventDateStr || Date.now());
-                        const year = dateObj.getFullYear();
-                        const month = String(dateObj.getMonth() + 1).padStart(2, '0');
-                        const safeTitle = Compressor.sanitizeString(eventTitle || 'wydarzenie');
-                        
-                        const numStr = String(targetIndex + 1).padStart(2, '0');
-                        const fileName = `${year}-${month}-${safeTitle}-${numStr}.webp`;
+                    const dateObj = new Date(eventDateStr || Date.now());
+                    const year = dateObj.getFullYear();
+                    const month = String(dateObj.getMonth() + 1).padStart(2, '0');
+                    const safeTitle = Compressor.sanitizeString(eventTitle || 'wydarzenie');
+                    const numStr = String(targetIndex + 1).padStart(2, '0');
+                    const fileName = `${year}-${month}-${safeTitle}-${numStr}.webp`;
 
-                        resolve({
-                            blob: blob,
-                            name: fileName,
-                            size: blob.size,
-                            previewUrl: event.target.result,
-                            wpPath: `/wp-content/uploads/${year}/${month}/${fileName}`
+                    // INTELIGENTNA PĘTLA KOMPRESJI DO MAX 200 KB (Punkt 3)
+                    let quality = 0.85;
+                    let finalBlob = null;
+                    const maxSizeBytes = 200 * 1024; // Dokładnie 204800 bajtów
+
+                    const compress = () => {
+                        return new Promise((resBlob) => {
+                            canvas.toBlob((b) => resBlob(b), 'image/webp', quality);
                         });
-                    }, 'image/webp', 0.73);
+                    };
+
+                    finalBlob = await compress();
+                    
+                    // Jeśli plik przekracza 200kb, stopniowo zmniejszamy jakość
+                    while (finalBlob.size > maxSizeBytes && quality > 0.15) {
+                        quality -= 0.08;
+                        finalBlob = await compress();
+                    }
+
+                    resolve({
+                        blob: finalBlob,
+                        name: fileName,
+                        size: finalBlob.size,
+                        previewUrl: event.target.result,
+                        wpPath: `/wp-content/uploads/${year}/${month}/${fileName}`
+                    });
                 };
             };
             reader.onerror = error => reject(error);
@@ -72,13 +86,12 @@ export const Compressor = {
         const year = dateObj.getFullYear();
         const month = String(dateObj.getMonth() + 1).padStart(2, '0');
         const safeTitle = this.sanitizeString(eventTitle || 'wydarzenie');
-        const zipName = `${year}-${month}-${safeTitle}.zip`;
-
+        
         const content = await zip.generateAsync({ type: "blob" });
         const url = window.URL.createObjectURL(content);
         const a = document.createElement('a');
         a.href = url;
-        a.download = zipName;
+        a.download = `${year}-${month}-${safeTitle}.zip`;
         a.click();
     }
 };

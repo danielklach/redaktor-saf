@@ -111,7 +111,7 @@ const App = {
         alert('Klucz API zapisany lokalnie!');
     },
 
-    // Punkt 1: Różne dynamiczne placeholders w zależności od wybranej kategorii
+    // Dynamiczne i unikalne placeholders dla każdej z kategorii (Punkt 1)
     handleCategoryChange() {
         const category = this.evtCategory.value;
         if (category === 'kultura' || category === 'sport' || category === 'nauka') {
@@ -163,19 +163,19 @@ const App = {
             this.state.interviewAnswers = "";
         }
         this.aiModal.classList.add('hidden');
-        this.switchStep(2);
-        this.renderFileList(); // Odświeżenie widoku na start kroku 2
+        this.switchStep(2); // Skok do sekcji zdjęć po wywiadzie
+        this.renderFileList();
     },
 
     async handleFiles(files) {
         if(!files || files.length === 0) return;
         const incomingFiles = Array.from(files);
         
-        // Punkt 2: Błyskawiczny, synchroniczny wtrysk kółka ładowania w ułamku sekundy
+        // Błyskawiczny, natychmiastowy loader przed ciężką pracą skryptu (Punkt 2)
         this.fileStatus.innerHTML = `
-            <div id="immediate-spinner" style="display: flex; align-items: center; gap: 12px; padding: 15px; background: #1c1c22; border-radius: 6px; border: 1px solid var(--border); margin-top: 15px;">
+            <div style="display: flex; align-items: center; gap: 12px; padding: 15px; background: #1c1c22; border-radius: 6px; border: 1px solid var(--border);">
                 <div class="spinner" style="width: 20px; height: 20px; border: 3px solid var(--border); border-top: 3px solid var(--primary); border-radius: 50%; animation: spin 1s linear infinite;"></div>
-                <span>Trwa optymalizacja i generowanie miniaturek dla ${incomingFiles.length} zdjęć...</span>
+                <span>Optymalizacja i sprawdzanie limitu wagi dla ${incomingFiles.length} zdjęć...</span>
             </div>
             <style>@keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }</style>
         `;
@@ -186,30 +186,28 @@ const App = {
         const title = this.evtTitle?.value || "saf-wpis";
         const startDate = this.evtStart.value;
 
-        // Pozwól przeglądarce narysować kółko ładowania na ekranie przed obciążeniem procesora
-        await new Promise(resolve => setTimeout(resolve, 50));
+        await new Promise(resolve => setTimeout(resolve, 30));
 
-        // Punkt 4: Zdjęcia są DOPISYWANE do tablicy, stare nie znikają
         for (let i = 0; i < incomingFiles.length; i++) {
             try {
                 const nextIndex = Compressor.processedFiles.length;
                 const res = await Compressor.processImage(incomingFiles[i], nextIndex, title, startDate);
                 Compressor.processedFiles.push(res);
             } catch (err) {
-                console.error("Błąd przetwarzania:", err);
+                console.error(err);
             }
         }
 
-        this.fileInput.value = ""; // Czyszczenie technicznego pola wyboru plików
-        this.renderFileList(); // Przeładuj widok listy wraz z miniaturkami i opcją usuwania
+        this.fileInput.value = "";
+        this.renderFileList();
     },
 
-    // Punkt 4: Kompletny silnik zarządzania listą plików z miniaturami i przyciskiem USUŃ
+    // Silnik listy zdjęć: Miniatury, Usuwanie i Zamiana miejscami (Punkt 2 i 4)
     renderFileList() {
         this.fileStatus.innerHTML = "";
         
         if (Compressor.processedFiles.length === 0) {
-            this.fileStatus.innerHTML = "<p class='info-text' style='text-align:center; padding: 20px; color: var(--text-muted);'>Brak dodanych zdjęć. Przeciągnij pliki lub kliknij strefę powyżej.</p>";
+            this.fileStatus.innerHTML = "<p style='text-align:center; padding: 20px; color: var(--text-muted);'>Brak dodanych zdjęć.</p>";
             this.btnDownloadPhotos.disabled = true;
             this.btnGoToStep3.disabled = true;
             return;
@@ -222,32 +220,56 @@ const App = {
         const month = String(dateObj.getMonth() + 1).padStart(2, '0');
         const safeTitle = Compressor.sanitizeString(title);
 
-        // Przebudowanie nazw od nowa (żeby zachować ciągłość numeryczną po usunięciu środkowego pliku)
         Compressor.processedFiles.forEach((file, index) => {
             const numStr = String(index + 1).padStart(2, '0');
             file.name = `${year}-${month}-${safeTitle}-${numStr}.webp`;
             file.wpPath = `/wp-content/uploads/${year}/${month}/${file.name}`;
 
             const item = document.createElement('div');
-            item.className = "file-item";
             item.style.cssText = "display: flex; align-items: center; justify-content: space-between; padding: 10px; background: #1c1c22; margin-bottom: 8px; border-radius: 6px; border: 1px solid var(--border);";
             
-            // Renderowanie HTML z miniaturką zdjęcia obok nazwy
             item.innerHTML = `
                 <div style="display: flex; align-items: center; gap: 15px;">
-                    <img src="${file.previewUrl}" style="width: 50px; height: 50px; object-fit: cover; border-radius: 4px; border: 1px solid #3e3e4a;">
-                    <span style="font-weight: 500; color: #fff;">✅ ${file.name}</span>
-                    <span style="color: var(--text-muted); font-size: 0.85rem;">(${(file.size/1024).toFixed(1)} KB)</span>
+                    <img src="${file.previewUrl}" style="width: 55px; height: 55px; object-fit: cover; border-radius: 4px; border: 1px solid #3e3e4a;">
+                    <div>
+                        <span style="font-weight: 500; color: #fff; display: block;">✅ ${file.name}</span>
+                        <span style="color: var(--text-muted); font-size: 0.8rem;">Rozmiar: ${(file.size/1024).toFixed(1)} KB (Max 200 KB)</span>
+                    </div>
                 </div>
-                <button class="btn-delete-item" style="background: var(--danger); color: white; padding: 6px 12px; font-size: 0.8rem; border-radius: 4px; font-weight: bold; cursor: pointer; border: none;">Usuń</button>
+                <div style="display: flex; gap: 6px;">
+                    <button class="btn-up" style="background: #2e2e38; color: #fff; padding: 5px 10px; font-size: 0.75rem; border-radius: 4px;">▲ Góra</button>
+                    <button class="btn-down" style="background: #2e2e38; color: #fff; padding: 5px 10px; font-size: 0.75rem; border-radius: 4px;">▼ Dół</button>
+                    <button class="btn-del" style="background: var(--danger); color: white; padding: 5px 10px; font-size: 0.75rem; border-radius: 4px; font-weight: bold;">Usuń</button>
+                </div>
             `;
             
-            // Obsługa kliknięcia "Usuń" dla pojedynczego ujęcia
-            item.querySelector('.btn-delete-item').addEventListener('click', (e) => {
+            // Zmiana kolejności: Przesunięcie w górę
+            item.querySelector('.btn-up').addEventListener('click', (e) => {
                 e.preventDefault();
-                e.stopPropagation();
-                Compressor.processedFiles.splice(index, 1); // Usuń zdjęcie z pamięci podręcznej
-                this.renderFileList(); // Przerysuj listę na nowo
+                if (index > 0) {
+                    const temp = Compressor.processedFiles[index];
+                    Compressor.processedFiles[index] = Compressor.processedFiles[index - 1];
+                    Compressor.processedFiles[index - 1] = temp;
+                    this.renderFileList();
+                }
+            });
+
+            // Zmiana kolejności: Przesunięcie w dół
+            item.querySelector('.btn-down').addEventListener('click', (e) => {
+                e.preventDefault();
+                if (index < Compressor.processedFiles.length - 1) {
+                    const temp = Compressor.processedFiles[index];
+                    Compressor.processedFiles[index] = Compressor.processedFiles[index + 1];
+                    Compressor.processedFiles[index + 1] = temp;
+                    this.renderFileList();
+                }
+            });
+
+            // Usuwanie pliku
+            item.querySelector('.btn-del').addEventListener('click', (e) => {
+                e.preventDefault();
+                Compressor.processedFiles.splice(index, 1);
+                this.renderFileList();
             });
 
             this.fileStatus.appendChild(item);

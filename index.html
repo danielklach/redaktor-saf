@@ -11,7 +11,7 @@
     <header>
         <div class="logo-zone">
             <span class="logo-saf">SAF Jamnik</span>
-            <span class="badge">Redaktor v1.4</span>
+            <span class="badge">Redaktor v1.5</span>
         </div>
         <div class="api-zone">
             <input type="password" id="apiKeyInput" placeholder="Klucz Gemini API...">
@@ -20,7 +20,6 @@
     </header>
 
     <main class="container">
-        <!-- Pasek Postępu -->
         <div class="steps-indicator">
             <div class="step active" data-step="1">1. Dane wydarzenia</div>
             <div class="step" data-step="2">2. Kompresja zdjęć</div>
@@ -29,7 +28,6 @@
 
         <hr>
 
-        <!-- KROK 1: Formularz i AI Wywiad -->
         <section id="step1" class="step-section active">
             <h2>Szczegóły Artykułu</h2>
             
@@ -45,7 +43,6 @@
             </div>
 
             <div class="grid-2col">
-                <!-- Sekcja pól dynamicznych (Kultura / Nauka / Sport) -->
                 <div class="form-group" id="dynamicFields">
                     <label for="evtTitle">Nazwa wydarzenia:</label>
                     <input type="text" id="evtTitle" placeholder="np. Koncert Myslovitz…">
@@ -65,7 +62,6 @@
                     </div>
                 </div>
 
-                <!-- Sekcja Notatek -->
                 <div class="form-group">
                     <label for="evtNotes" id="notesLabel">Twoje surowe notatki / spostrzeżenia:</label>
                     <textarea id="evtNotes" rows="12" placeholder="Wpisz tu wszystko co pamiętasz..."></textarea>
@@ -77,17 +73,15 @@
             </div>
         </section>
 
-        <!-- KROK 2: Zdjęcia i Kompresja -->
         <section id="step2" class="step-section">
             <h2>Wgranie i Kompresja Zdjęć</h2>
-            <p class="info-text"><strong>Wrzuć tu zdjęcia w dowolnym formacie i rozmiarze i pobierz wersje zoptymalizowane pod stronę internetową.</strong></p>
+            <p class="info-text" style="margin-bottom: 15px; color: var(--text-muted);">Wrzuć tu zdjęcia w dowolnym formacie i rozmiarze, aby przygotować wersje zoptymalizowane pod stronę.</p>
             
             <div class="dropzone" id="dropzone">
                 <p>Przeciągnij i upuść zdjęcia tutaj lub <span class="highlight" style="text-decoration: underline; pointer-events: none;">kliknij tutaj, aby wybrać z dysku</span></p>
             </div>
             <input type="file" id="fileInput" multiple accept="image/*" style="display:none;">
 
-            <!-- Tu będą generować się pliki z miniaturkami i opcją usuwania -->
             <div id="fileStatus" class="file-status"></div>
 
             <div class="actions">
@@ -97,14 +91,13 @@
             </div>
         </section>
 
-        <!-- KROK 3: Wynik końcowy -->
         <section id="step3" class="step-section">
             <h2>Generowanie Artykułu przez AI</h2>
             
             <div class="grid-2col">
                 <div class="review-zone">
                     <h3>Ostateczne Notatki do AI</h3>
-                    <p class="info-text" style="margin-bottom: 10px;">Poniżej znajdują się połączone informacje z formularza i wywiadu. To stąd AI czerpie wiedzę:</p>
+                    <p class="info-text" style="margin-bottom: 10px;">To jest jedyne źródło wiedzy dla sztucznej inteligencji:</p>
                     <textarea id="finalNotes" rows="14"></textarea>
                     <button id="btnTriggerAI" class="btn-primary w-100" style="margin-top: 15px;">Uruchom Magię AI (Gemini 1.5 Flash)</button>
                 </div>
@@ -132,7 +125,6 @@
         </section>
     </main>
 
-    <!-- POPUP / MODAL: Wywiad AI -->
     <div id="aiModal" class="modal hidden">
         <div class="modal-content">
             <h3>🤖 Agent Redakcyjny SAF pyta o szczegóły...</h3>
@@ -140,7 +132,7 @@
             <textarea id="aiAnswerText" rows="4" placeholder="Wpisz odpowiedź na pytanie Asystenta..."></textarea>
             <div class="modal-actions">
                 <button id="btnSkipModal" class="btn-secondary">Pomiń</button>
-                <button id="btnSubmitModal" class="btn-primary">Zatwierdź i dodaj do notatek</button>
+                <button id="btnSubmitModal" class="btn-primary">Zatwierdź i przejdź dalej</button>
             </div>
         </div>
     </div>

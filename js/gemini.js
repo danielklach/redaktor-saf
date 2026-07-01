@@ -1,22 +1,28 @@
 export const Gemini = {
     getPromptTemplate(category, notes) {
-        const base = `Działasz jako doświadczony redaktor portalu uniwersyteckiego i krytyk fotograficzny SAF Jamnik. Twój styl jest dynamiczny, poprawny językowo, angażujący i profesjonalny. Odpowiedź MUSI być czystym dokumentem JSON, ściśle według poniższego schematu (nie używaj znaczników \`\`\`json ani żadnego wstępu, oddaj tylko czysty tekst JSON):\n{\n  "title": "Tytuł wpisu",\n  "lead": "Wprowadzający, pogrubiony lead",\n  "paragraphs": [\n    {"heading": "Opcjonalny nagłówek sekcji", "text": "Treść akapitu"}\n  ],\n  "tags": ["tag1", "tag2"]\n}\n\nOto pełna treść notatek oraz zebranych informacji o wydarzeniu, na których MUSISZ się oprzeć:\n${notes}\n`;
+        return `Działasz jako doświadczony redaktor portalu uniwersyteckiego i krytyk fotograficzny SAF Jamnik. Twój styl jest dynamiczny, poprawny językowo, angażujący i profesjonalny. 
 
-        const prompts = {
-            kultura: base + `Kategoria: Kultura. Głównie koncerty, występy, spektakle. Skup się na energii wykonawców, reakcji publiki, klimacie oświetlenia scenicznego i emocjach uchwyconych w kadrze.`,
-            nauka: base + `Kategoria: Nauka. Głównie konferencje naukowe, sympozja, wystąpienia, seminaria. Skup się na merytoryce, prelegentach, technologiach, znaczeniu naukowym i profesjonalnym, eksperckim klimacie wydarzenia uniwersyteckiego.`,
-            sport: base + `Kategoria: Sport. Mecze, zawodowi, mistrzostwa. Skup się na dynamice akcji, rywalizacji, dramaturgii momentu i zamrożeniu ruchu na zdjęciach agencji.`,
-            zapowiedzi: base + `Kategoria: Zapowiedzi. Tekst musi mieć charakter informacyjny, zapraszający, z jasną strukturą i wezwaniem do akcji.`,
-            zycie: base + `Kategoria: Z życia agencji. Ton wewnętrzny, integracyjny, pokazujący pasję, kulisy pracy fotografów i atmosferę wewnątrz teamu.`
-        };
+TWOJA ODPOWIEDŹ MUSI BYĆ WYŁĄCZNIE CZYSTYM DOKUMENTEM JSON. Nie używaj znaczników markdownu typu \`\`\`json \`\`\`, nie dodawaj żadnych wstępów ani podsumowań. Zwróć surowy tekst gotowy do parsowania.
 
-        return prompts[category] || prompts.kultura;
+Schemat struktury JSON, który musisz bezwzględnie zastosować:
+{
+  "title": "Tytuł wpisu",
+  "lead": "Wprowadzający, krótki, pogrubiony lead",
+  "paragraphs": [
+    {"heading": "Opcjonalny nagłówek sekcji", "text": "Treść akapitu tekstowego"}
+  ],
+  "tags": ["tag1", "tag2"]
+}
+
+Kategoria wpisu: ${category.toUpperCase()}
+Oto pełna treść notatek oraz zebranych informacji o wydarzeniu, na których MUSISZ się oprzeć przy pisaniu artykułu:
+${notes}`;
     },
 
     getInterviewQuestion(category, title) {
         const questions = {
             kultura: `Jaki zespół wywołał największy szał pod sceną, jak radziliście sobie z trudnym oświetleniem i jaki utwór był kulminacją wieczoru?`,
-            nauka: `Kto był głównym prelegentem, jaka tematyka wzbudziła największe zainteresowanie i czy pojawiły się jakieś wyjątkowe osobistości lub pokazy?`,
+            nauka: `Kto był głównym prelegentem, jaka tematyka wzbudziła największe zainteresowanie i czy pojawiły się jakieś wyjątkowe pokazy?`,
             sport: `Jaki był ostateczny wynik, która akcja zdecydowała o zwycięstwie i jakie emocje towarzyszyły kibicom na trybunach?`,
             zapowiedzi: `Czy wstęp na wydarzenie jest wolny/biletowany, dla kogo jest ono przeznaczone i jakie unikalne atrakcje zaplanowano dla uczestników?`,
             zycie: `Kto brał udział w akcji z ramienia agencji, jaki nietypowy sprzęt testowaliście i czego nowego się nauczyliście podczas tych działań?`
@@ -27,36 +33,29 @@ export const Gemini = {
     async callGemini(apiKey, prompt) {
         const url = `https://generativelanguage.googleapis.com/v1/models/gemini-1.5-flash-latest:generateContent?key=${apiKey}`;
         
-        const requestBody = {
-            contents: [{ 
-                parts: [{ text: prompt }] 
-            }],
-            generationConfig: {
-                response_mime_type: "application/json" // POPRAWIONE NA SNAKE_CASE DLA REST API
-            }
-        };
-
         const response = await fetch(url, {
             method: 'POST',
-            headers: { 
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify(requestBody)
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                contents: [{ parts: [{ text: prompt }] }]
+            })
         });
 
         if (!response.ok) {
             const errData = await response.json().catch(() => ({}));
-            const errMsg = errData.error?.message || response.statusText;
-            throw new Error(errMsg);
+            throw new Error(errData.error?.message || response.statusText);
         }
         
         const data = await response.json();
-        
-        if (!data.candidates || data.candidates.length === 0) {
-            throw new Error("Brak odpowiedzi od modelu AI.");
-        }
+        if (!data.candidates || data.candidates.length === 0) throw new Error("Brak odpowiedzi od modelu AI.");
         
         let textResult = data.candidates[0].content.parts[0].text.trim();
+        
+        // Zabezpieczenie przed niesfornym formatowaniem markdownu przez model
+        if (textResult.includes("```")) {
+            textResult = textResult.replace(/```json/gi, "").replace(/```/g, "").trim();
+        }
+        
         return JSON.parse(textResult);
     }
 };
