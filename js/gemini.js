@@ -23,19 +23,24 @@ export const Gemini = {
     },
 
     async callGemini(apiKey, prompt) {
-        // Poprawiony, oficjalny adres URL dla najnowszej specyfikacji Google API v1beta
         const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`;
         
+        // Dodana poprawna, ścisła konfiguracja wymagana przez Google do zwrotu JSON
+        const requestBody = {
+            contents: [{ 
+                parts: [{ text: prompt }] 
+            }],
+            generationConfig: {
+                responseMimeType: "application/json"
+            }
+        };
+
         const response = await fetch(url, {
             method: 'POST',
             headers: { 
                 'Content-Type': 'application/json'
             },
-            body: JSON.stringify({
-                contents: [{ 
-                    parts: [{ text: prompt }] 
-                }]
-            })
+            body: JSON.stringify(requestBody)
         });
 
         if (!response.ok) {
@@ -52,11 +57,7 @@ export const Gemini = {
         
         let textResult = data.candidates[0].content.parts[0].text.trim();
         
-        // Czyszczenie kodu na wypadek, gdyby model mimo zakazu dodał znaczniki markdownu ```json
-        if (textResult.startsWith("```")) {
-            textResult = textResult.replace(/^```json\s*/i, "").replace(/\s*```$/, "");
-        }
-        
+        // Bezpieczne parsowanie wyniku
         return JSON.parse(textResult);
     }
 };
