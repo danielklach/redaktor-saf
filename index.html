@@ -11,9 +11,10 @@
     <header>
         <div class="logo-zone">
             <span class="logo-saf">SAF Jamnik</span>
-            <span class="badge">Redaktor v1.8.1</span>
+            <span class="badge">Redaktor v1.8.2</span>
         </div>
         <div class="header-actions">
+            <a href="https://jamnik.uwm.edu.pl/strefa-czlonka/" target="_blank" rel="noopener noreferrer" class="btn-secondary">🔑 Strefa Członka</a>
             <button type="button" id="btnShowIntro" class="btn-secondary">ℹ️ Jak korzystać?</button>
             <button type="button" id="btnReportIssue" class="btn-secondary">⚠️ Zgłoś problem</button>
         </div>
@@ -21,9 +22,9 @@
 
     <main class="container">
         <div class="steps-indicator">
-            <div class="step active" data-step="1">1. Dane wydarzenia</div>
-            <div class="step" data-step="2">2. Kompresja zdjęć</div>
-            <div class="step" data-step="3">3. Generowanie wpisu</div>
+            <div class="step active" data-step="1"><span class="step-num">1</span><span class="step-label">Dane wydarzenia</span></div>
+            <div class="step" data-step="2"><span class="step-num">2</span><span class="step-label">Kompresja zdjęć</span></div>
+            <div class="step" data-step="3"><span class="step-num">3</span><span class="step-label">Generowanie wpisu</span></div>
         </div>
 
         <hr>
@@ -225,11 +226,16 @@
                 <button id="btnCancelReport" class="btn-secondary">Anuluj</button>
                 <button id="btnSendReport" class="btn-primary">Wyślij</button>
             </div>
+
+            <p style="text-align: center; margin-top: 14px;">
+                <a href="#" id="btnReportFallback" style="font-size: 0.75rem; color: var(--text-muted); text-decoration: underline;">Formularz usterki nie działa?</a>
+            </p>
+            <p id="reportFallbackEmail" class="hidden" style="text-align: center; margin-top: 6px; font-size: 0.85rem;">Napisz bezpośrednio na: <strong>webmaster@klachphoto.com</strong></p>
         </div>
     </div>
 
     <div id="toastContainer" class="toast-container"></div>
 
-    <script type="module" src="js/app.js?v=200"></script>
+    <script type="module" src="js/app.js?v=210"></script>
 </body>
 </html>

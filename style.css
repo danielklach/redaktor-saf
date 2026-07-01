@@ -28,18 +28,48 @@ header {
     border-bottom: 1px solid var(--border);
     flex-wrap: wrap;
     gap: 12px;
+    position: sticky;
+    top: 0;
+    z-index: 500;
+    backdrop-filter: blur(6px);
 }
 
 .logo-saf { font-weight: 800; font-size: 1.2rem; color: var(--primary); text-transform: uppercase; letter-spacing: 1px; }
 .badge { background: #2a2a35; padding: 3px 8px; font-size: 0.75rem; border-radius: 4px; margin-left: 10px; color: var(--text-muted); }
 
-.header-actions { display: flex; align-items: center; gap: 10px; }
+.header-actions { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.header-actions a.btn-secondary { text-decoration: none; display: inline-flex; align-items: center; }
 
 .container { max-width: 1200px; margin: 30px auto; padding: 0 20px; }
 
-.steps-indicator { display: flex; justify-content: space-between; margin-bottom: 25px; }
-.step { flex: 1; text-align: center; padding: 12px; background: var(--card-bg); color: var(--text-muted); font-weight: 600; border: 1px solid var(--border); }
-.step.active { background: var(--primary); color: #000; border-color: var(--primary); }
+.steps-indicator { display: flex; justify-content: space-between; gap: 8px; margin-bottom: 25px; }
+.step {
+    flex: 1; display: flex; flex-direction: column; align-items: center; gap: 6px;
+    text-align: center; padding: 14px 8px; background: var(--card-bg); color: var(--text-muted);
+    font-weight: 600; border: 1px solid var(--border); border-radius: 8px; transition: 0.2s;
+}
+.step-num {
+    width: 26px; height: 26px; flex-shrink: 0; border-radius: 50%; background: #2a2a35;
+    display: flex; align-items: center; justify-content: center; font-size: 0.85rem; color: var(--text-color);
+}
+.step-label { font-size: 0.85rem; }
+.step.active { background: linear-gradient(135deg, var(--primary), var(--primary-hover)); color: #000; border-color: var(--primary); }
+.step.active .step-num { background: rgba(0,0,0,0.2); color: #000; }
+
+/* Responsywność: nagłówek i kroki przenoszą się w bardziej zwarty układ na wąskich ekranach */
+@media (max-width: 640px) {
+    header { padding: 12px 16px; }
+    .header-actions { width: 100%; }
+    .header-actions a.btn-secondary, .header-actions button { flex: 1 1 auto; font-size: 0.78rem; padding: 8px 10px; text-align: center; justify-content: center; }
+
+    .steps-indicator { gap: 6px; }
+    .step { flex-direction: row; padding: 8px 6px; border-radius: 6px; }
+    .step-label { font-size: 0.68rem; line-height: 1.2; }
+    .step-num { width: 20px; height: 20px; font-size: 0.7rem; }
+
+    .container { margin: 16px auto; padding: 0 12px; }
+    h2 { font-size: 1.3rem; }
+}
 
 hr { border: 0; height: 1px; background: var(--border); margin: 30px 0; }
 
@@ -51,6 +81,11 @@ h3 { margin-bottom: 15px; font-size: 1.1rem; color: var(--primary); }
 .step-section.active { display: block !important; }
 
 .grid-2col { display: grid; grid-template-columns: 1fr 1fr; gap: 30px; }
+
+/* Poniżej tabletu bloki "obok siebie" (dane wydarzenia/notatki, notatki AI/wynik) stają się jedną kolumną */
+@media (max-width: 860px) {
+    .grid-2col { grid-template-columns: 1fr; gap: 20px; }
+}
 
 .form-group label { display: block; margin-top: 15px; margin-bottom: 5px; font-weight: 600; font-size: 0.9rem; }
 input[type="text"], input[type="password"], input[type="datetime-local"], select, textarea {
@@ -67,16 +102,20 @@ input[type="datetime-local"]::-webkit-calendar-picker-indicator {
 .dropzone {
     border: 2px dashed var(--border); background: var(--card-bg); padding: 40px; text-align: center; border-radius: 8px; cursor: pointer; transition: 0.2s;
 }
-.dropzone:hover { border-color: var(--primary); background: #202026; }
+.dropzone:hover { border-color: var(--primary); background: #202026; box-shadow: 0 0 0 4px rgba(245, 158, 11, 0.08); }
 .dropzone.disabled { opacity: 0.5; pointer-events: none; cursor: not-allowed; }
 .highlight { color: var(--primary); font-weight: 600; }
 
+@media (max-width: 640px) {
+    .dropzone { padding: 24px 16px; }
+}
+
 .file-status { margin-top: 20px; max-height: 450px; overflow-y: auto; background: #0c0c0e; padding: 15px; border-radius: 6px; }
 
-.actions { display: flex; gap: 15px; margin-top: 30px; justify-content: flex-end; }
+.actions { display: flex; gap: 15px; margin-top: 30px; justify-content: flex-end; flex-wrap: wrap; }
 .w-100 { width: 100%; }
 
-button { padding: 10px 20px; font-weight: 600; border-radius: 6px; cursor: pointer; border: none; transition: 0.2s; }
+button { padding: 10px 20px; font-weight: 600; border-radius: 6px; cursor: pointer; border: none; transition: transform 0.15s ease, box-shadow 0.15s ease, background 0.15s ease; }
 .btn-primary { background: var(--primary); color: #000; }
 .btn-primary:hover { background: var(--primary-hover); }
 .btn-secondary { background: #2e2e38; color: var(--text-color); }
@@ -84,11 +123,24 @@ button { padding: 10px 20px; font-weight: 600; border-radius: 6px; cursor: point
 .btn-success { background: var(--success); color: #fff; }
 .btn-success:hover { opacity: 0.9; }
 
+button:not(:disabled):hover { transform: translateY(-1px); box-shadow: 0 4px 12px rgba(0,0,0,0.3); }
+button:not(:disabled):active { transform: translateY(0); box-shadow: none; }
 button:disabled { background: #2e2e38; color: var(--text-muted); cursor: not-allowed; }
 
-.modal { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.8); display: flex; align-items: center; justify-content: center; z-index: 1000; }
-.modal-content { background: var(--card-bg); padding: 30px; border-radius: 8px; max-width: 560px; width: 90%; border: 1px solid var(--border); max-height: 85vh; overflow-y: auto; }
-.modal-actions { display: flex; justify-content: flex-end; gap: 10px; margin-top: 20px; }
+@media (max-width: 640px) {
+    .actions { justify-content: stretch; }
+    .actions button { flex: 1 1 auto; }
+}
+
+.modal { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.8); display: flex; align-items: center; justify-content: center; z-index: 1000; padding: 16px; }
+.modal-content { background: var(--card-bg); padding: 30px; border-radius: 12px; max-width: 560px; width: 100%; border: 1px solid var(--border); max-height: 85vh; overflow-y: auto; box-shadow: 0 20px 60px rgba(0,0,0,0.5); }
+.modal-actions { display: flex; justify-content: flex-end; gap: 10px; margin-top: 20px; flex-wrap: wrap; }
+
+@media (max-width: 640px) {
+    .modal-content { padding: 20px; }
+    .modal-actions { justify-content: stretch; }
+    .modal-actions button { flex: 1 1 auto; }
+}
 
 .hidden { display: none !important; }
 

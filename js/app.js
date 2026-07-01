@@ -42,6 +42,8 @@ const App = {
         this.reportDescription = document.getElementById('reportDescription');
         this.btnCancelReport = document.getElementById('btnCancelReport');
         this.btnSendReport = document.getElementById('btnSendReport');
+        this.btnReportFallback = document.getElementById('btnReportFallback');
+        this.reportFallbackEmail = document.getElementById('reportFallbackEmail');
         this.toastContainer = document.getElementById('toastContainer');
 
         this.evtCategory = document.getElementById('evtCategory');
@@ -103,16 +105,27 @@ const App = {
             localStorage.setItem('saf_intro_seen', '1');
         });
 
-        this.btnReportIssue.addEventListener('click', () => this.reportModal.classList.remove('hidden'));
+        this.btnReportIssue.addEventListener('click', () => {
+            this.reportModal.classList.remove('hidden');
+            this.reportFallbackEmail.classList.add('hidden');
+        });
         this.btnCancelReport.addEventListener('click', () => this.reportModal.classList.add('hidden'));
         this.btnSendReport.addEventListener('click', () => this.sendReport());
+        // Na wszelki wypadek, gdyby padł też sam formularz zgłoszeń - pokazuje maila jako zwykły
+        // tekst do ręcznego skopiowania (celowo NIE mailto:, żeby zawsze działało niezależnie od klienta pocztowego).
+        this.btnReportFallback.addEventListener('click', (e) => {
+            e.preventDefault();
+            this.reportFallbackEmail.classList.toggle('hidden');
+        });
 
         this.evtCategory.addEventListener('change', () => this.handleCategoryChange());
-        
+
         this.evtStart.addEventListener('change', (e) => {
             if (e.target.value) {
-                const datePart = e.target.value.split('T')[0];
-                this.evtEnd.value = `${datePart}T00:00`;
+                // Domyślnie ustawiamy koniec RÓWNY początkowi (nie 00:00 tego samego dnia) -
+                // 00:00 bywało wcześniejsze niż wieczorne wydarzenia i fałszywie wywoływało
+                // walidację "data zakończenia wcześniejsza niż rozpoczęcia" (patrz handleStep1Submit).
+                this.evtEnd.value = e.target.value;
             }
         });
 
@@ -140,6 +153,11 @@ const App = {
         this.btnDownloadPhotosStep3.addEventListener('click', () => this.downloadPhotosZip());
 
         this.btnGoToStep3.addEventListener('click', () => {
+            const hasFeaturedCandidate = Compressor.processedFiles.some(f => f.isFeatured || this.canBeFeatured(f));
+            if (!hasFeaturedCandidate) {
+                alert('Żadne z wgranych zdjęć nie nadaje się na obrazek wyróżniający - musi być zdjęciem POZIOMYM w proporcjach 3:2. Dodaj przynajmniej jedno takie zdjęcie, zanim przejdziesz dalej.');
+                return;
+            }
             if (!this.state.zipDownloaded) {
                 const proceed = confirm('Nie pobrałeś jeszcze paczki ZIP ze zdjęciami. Zalecamy pobranie kopii zapasowej przed przejściem dalej.\n\nCzy mimo to chcesz kontynuować?');
                 if (!proceed) return;
@@ -362,6 +380,10 @@ const App = {
         if (cat === 'kultura' || cat === 'sport' || cat === 'nauka') {
             if (!title || !loc || !start || !end || !notes) {
                 alert("BŁĄD: Musisz najpierw wypełnić WSZYSTKIE pola, aby przejść do wgrywania zdjęć.");
+                return;
+            }
+            if (new Date(end) < new Date(start)) {
+                alert("BŁĄD: Data zakończenia wydarzenia nie może być wcześniejsza niż data rozpoczęcia. Popraw daty i spróbuj ponownie.");
                 return;
             }
         } else {

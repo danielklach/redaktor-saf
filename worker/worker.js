@@ -107,7 +107,14 @@ async function handleIssueReport(body, env) {
 
         if (!resendRes.ok) {
             const errData = await resendRes.json().catch(() => ({}));
-            return jsonResponse({ error: errData.message || "Nie udało się wysłać zgłoszenia" }, resendRes.status);
+            let message = errData.message || "Nie udało się wysłać zgłoszenia";
+            // Najczęstsza przyczyna awarii tego formularza: adres "onboarding@resend.dev" (bez
+            // zweryfikowanej własnej domeny w Resend) wolno używać WYŁĄCZNIE do wysyłki na e-mail,
+            // którym założono konto Resend - do innych odbiorców trzeba zweryfikować własną domenę.
+            if (resendRes.status === 403 && /own email address/i.test(message)) {
+                message += " [Naprawa: 1) zweryfikuj własną domenę na resend.com/domains i zmień stałą REPORT_FROM_EMAIL w worker.js na adres z tej domeny, ALBO 2) upewnij się, że konto Resend jest zarejestrowane na dokładnie ten sam adres co REPORT_TO_EMAIL (" + REPORT_TO_EMAIL + ").]";
+            }
+            return jsonResponse({ error: message }, resendRes.status);
         }
 
         return jsonResponse({ ok: true }, 200);

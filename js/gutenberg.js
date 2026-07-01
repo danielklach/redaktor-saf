@@ -18,8 +18,20 @@ export const Gutenberg = {
         output += `<!-- /wp:generateblocks/text -->\n\n`;
 
         const bodyParagraphs = aiData.paragraphs || [];
+        const totalParas = bodyParagraphs.length;
 
-        bodyParagraphs.forEach((item) => {
+        // Rozkładamy zdjęcia RÓWNOMIERNIE między akapitami (nigdy stłoczone na początku), a nie
+        // dosłownie po każdym z nich - najwyżej połowa akapitów (max 4) dostaje zdjęcie od razu.
+        // Reszta, jeśli zostanie, trafia do galerii na końcu wpisu. Zdjęcie zawsze ląduje PO całym
+        // akapicie (nagłówek + tekst), nigdy między śródtytułem a jego treścią.
+        const maxInterleave = totalParas === 0 ? 0 : Math.min(images.length, Math.max(1, Math.ceil(totalParas / 2)), 4);
+        const interleaveAfterPara = new Set();
+        for (let i = 0; i < maxInterleave; i++) {
+            const pos = Math.min(totalParas - 1, Math.floor(((i + 1) * totalParas) / (maxInterleave + 1)));
+            interleaveAfterPara.add(pos);
+        }
+
+        bodyParagraphs.forEach((item, paraIdx) => {
             // Śródtytuł jako blok generateblocks/text z tagName "h5"
             if (item.heading) {
                 output += `<!-- wp:generateblocks/text {"uniqueId":"${this.randomId()}","tagName":"h5"} -->\n`;
@@ -34,8 +46,7 @@ export const Gutenberg = {
                 output += `<!-- /wp:paragraph -->\n\n`;
             }
 
-            // Pojedyncze zdjęcie wplecione w treść (maks. 3 - reszta trafia do galerii na końcu)
-            if (imgIndex < images.length && imgIndex < 3) {
+            if (interleaveAfterPara.has(paraIdx) && imgIndex < images.length) {
                 const img = images[imgIndex];
                 output += `<!-- wp:image {"sizeSlug":"full","linkDestination":"none"} -->\n`;
                 output += `<figure class="wp-block-image size-full"><img src="${img.wpPath}" alt=""/></figure>\n`;
