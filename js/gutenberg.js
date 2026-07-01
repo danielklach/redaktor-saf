@@ -1,39 +1,40 @@
 export const Gutenberg = {
-    // Generuje losowy 8-znakowy identyfikator hex, tak jak w przykładowych blokach WP (np. "e002b2ba")
-    randomId() {
-        return Array.from({ length: 8 }, () => Math.floor(Math.random() * 16).toString(16)).join('');
+    generateId() {
+        return Math.random().toString(36).substring(2, 10);
     },
 
     generateBlockCode(aiData, processedImages) {
         let output = "";
-        const images = [...processedImages];
-        let imgIndex = 0;
 
-        // 1. LEAD jako blok generateblocks/text z tagName "h6" (zgodnie z przykładem)
-        output += `<!-- wp:generateblocks/text {"uniqueId":"${this.randomId()}","tagName":"h6"} -->\n`;
-        output += `<h6 class="gb-text">${aiData.lead || ''}</h6>\n`;
+        // 1. Lead blokowany w H6 (zgodnie z przykładem wp:generateblocks/text)
+        const leadId = this.generateId();
+        output += `<!-- wp:generateblocks/text {"uniqueId":"${leadId}","tagName":"h6"} -->\n`;
+        output += `<h6 class="gb-text">${aiData.lead}</h6>\n`;
         output += `<!-- /wp:generateblocks/text -->\n\n`;
 
+        let imgIndex = 0;
         const bodyParagraphs = aiData.paragraphs || [];
 
+        // Przeplatanie akapitów i pojedynczych zdjęć
         bodyParagraphs.forEach((item) => {
-            // Śródtytuł jako blok generateblocks/text z tagName "h5"
+            // Dodanie śródtytułu jako H5
             if (item.heading) {
-                output += `<!-- wp:generateblocks/text {"uniqueId":"${this.randomId()}","tagName":"h5"} -->\n`;
+                const headingId = this.generateId();
+                output += `<!-- wp:generateblocks/text {"uniqueId":"${headingId}","tagName":"h5"} -->\n`;
                 output += `<h5 class="gb-text">${item.heading}</h5>\n`;
                 output += `<!-- /wp:generateblocks/text -->\n\n`;
             }
 
-            // Akapit jako standardowy blok wp:paragraph
+            // Dodanie akapitu tekstu
             if (item.text) {
                 output += `<!-- wp:paragraph -->\n`;
                 output += `<p>${item.text}</p>\n`;
                 output += `<!-- /wp:paragraph -->\n\n`;
             }
 
-            // Pojedyncze zdjęcie wplecione w treść (maks. 3 - reszta trafia do galerii na końcu)
-            if (imgIndex < images.length && imgIndex < 3) {
-                const img = images[imgIndex];
+            // Wplecenie pojedynczego zdjęcia
+            if (imgIndex < processedImages.length && imgIndex < 3) {
+                const img = processedImages[imgIndex];
                 output += `<!-- wp:image {"sizeSlug":"full","linkDestination":"none"} -->\n`;
                 output += `<figure class="wp-block-image size-full"><img src="${img.wpPath}" alt=""/></figure>\n`;
                 output += `<!-- /wp:image -->\n\n`;
@@ -41,16 +42,16 @@ export const Gutenberg = {
             }
         });
 
-        // 2. Galeria końcowa dla pozostałych zdjęć (identyczna konstrukcja jak w przykładzie)
-        if (imgIndex < images.length) {
+        // 3. Galeria końcowa dla pozostałych zdjęć
+        if (imgIndex < processedImages.length) {
             output += `<!-- wp:gallery {"columns":2,"randomOrder":true,"linkTo":"none"} -->\n`;
-            output += `<figure class="wp-block-gallery has-nested-images columns-2 is-cropped">`;
-
-            while (imgIndex < images.length) {
-                const img = images[imgIndex];
+            output += `<figure class="wp-block-gallery has-nested-images columns-2 is-cropped">\n`;
+            
+            while (imgIndex < processedImages.length) {
+                const img = processedImages[imgIndex];
                 output += `<!-- wp:image {"sizeSlug":"large","linkDestination":"none"} -->\n`;
                 output += `<figure class="wp-block-image size-large"><img src="${img.wpPath}" alt=""/></figure>\n`;
-                output += `<!-- /wp:image -->\n\n`;
+                output += `<!-- /wp:image -->\n`;
                 imgIndex++;
             }
 
@@ -58,6 +59,6 @@ export const Gutenberg = {
             output += `<!-- /wp:gallery -->\n`;
         }
 
-        return output.trim();
+        return output;
     }
 };
