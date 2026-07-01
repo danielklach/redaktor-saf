@@ -327,6 +327,7 @@ const App = {
 
         const title = this.evtTitle?.value || "saf-wpis";
         const startDate = this.evtStart.value;
+        const skipped = [];
 
         for (let i = 0; i < incomingFiles.length; i++) {
             try {
@@ -335,6 +336,10 @@ const App = {
                 Compressor.processedFiles.push(res);
             } catch (err) {
                 console.error(err);
+                // Naprawa: wcześniej błąd trafiał TYLKO do konsoli, więc pominięty plik
+                // znikał bez żadnej informacji dla użytkownika. Teraz zbieramy komunikaty
+                // i pokazujemy je zbiorczo na końcu (patrz alert() poniżej).
+                skipped.push(err?.message || incomingFiles[i].name);
             }
 
             const done = i + 1;
@@ -347,6 +352,10 @@ const App = {
         this.uploadProgressLabel.classList.add('hidden');
         this.fileInput.value = "";
         this.renderFileList();
+
+        if (skipped.length > 0) {
+            alert(`Nie udało się przetworzyć ${skipped.length} z ${total} plików:\n\n- ${skipped.join('\n- ')}`);
+        }
     },
 
     renderFileList() {

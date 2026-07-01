@@ -22,7 +22,10 @@ export default {
             return jsonResponse({ error: "Brak pola 'prompt' w żądaniu" }, 400);
         }
 
-        const apiKey = env.GEMINI_API_KEY;
+        // .trim() jako siatka bezpieczeństwa: jeśli sekret w Cloudflare został wklejony
+        // z niewidoczną spacją/nowym wierszem na końcu, Google i tak odrzuci taki klucz
+        // z tym samym, mylącym komunikatem o "unregistered callers".
+        const apiKey = (env.GEMINI_API_KEY || "").trim();
         if (!apiKey) {
             return jsonResponse({ error: "Worker nie ma skonfigurowanego sekretu GEMINI_API_KEY" }, 500);
         }
@@ -42,7 +45,14 @@ export default {
             const data = await geminiRes.json();
 
             if (!geminiRes.ok) {
-                return jsonResponse({ error: data.error?.message || "Błąd Gemini API" }, geminiRes.status);
+                let message = data.error?.message || "Błąd Gemini API";
+                // Ten konkretny błąd Google (403/PERMISSION_DENIED) oznacza, że klucz w sekrecie
+                // GEMINI_API_KEY jest nieprawidłowy, nieaktywny, albo ma ustawione "Website restrictions"
+                // (które blokują wywołania spoza przeglądarki - a Worker woła Gemini z serwera).
+                if (data.error?.status === "PERMISSION_DENIED" || /unregistered callers/i.test(message)) {
+                    message += " [Sprawdź: 1) czy GEMINI_API_KEY w ustawieniach Workera to prawdziwy klucz z aistudio.google.com/apikey (zaczyna się od 'AIzaSy'), 2) czy w Google AI Studio / Cloud Console ten klucz NIE ma ustawionych 'Website restrictions' - serwer Workera nie wysyła nagłówka Referer, więc taki klucz zostanie odrzucony.]";
+                }
+                return jsonResponse({ error: message }, geminiRes.status);
             }
 
             return jsonResponse(data, 200);
