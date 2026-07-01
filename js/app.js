@@ -84,14 +84,20 @@ const App = {
         
         this.dropzone.addEventListener('click', (e) => {
             e.preventDefault();
+            if (this._processingFiles) return;
             this.fileInput.click();
         });
-        
+
         this.fileInput.addEventListener('change', (e) => this.handleFiles(e.target.files));
-        
-        this.dropzone.addEventListener('dragover', (e) => { e.preventDefault(); this.dropzone.style.borderColor = 'var(--primary)'; });
+
+        this.dropzone.addEventListener('dragover', (e) => { e.preventDefault(); if (!this._processingFiles) this.dropzone.style.borderColor = 'var(--primary)'; });
         this.dropzone.addEventListener('dragleave', () => { this.dropzone.style.borderColor = 'var(--border)'; });
-        this.dropzone.addEventListener('drop', (e) => { e.preventDefault(); this.handleFiles(e.dataTransfer.files); });
+        this.dropzone.addEventListener('drop', (e) => {
+            e.preventDefault();
+            this.dropzone.style.borderColor = 'var(--border)';
+            if (this._processingFiles) return;
+            this.handleFiles(e.dataTransfer.files);
+        });
 
         this.btnDownloadPhotos.addEventListener('click', () => {
             const title = this.evtTitle?.value || "wpis";
@@ -309,48 +315,86 @@ const App = {
 
     async handleFiles(files) {
         if (!files || files.length === 0) return;
+        if (this._processingFiles) return; // ochrona przed nakładającymi się wgraniami
         const incomingFiles = Array.from(files);
-        const total = incomingFiles.length;
 
-        // Pkt 4: pasek postępu jest już obecny w DOM (nie tworzymy go dynamicznie),
-        // więc pokazuje się natychmiast po odsłonięciu klasy "hidden".
+        // Walidacja formatu NATYCHMIAST, zanim cokolwiek innego się wydarzy - użytkownik
+        // od razu widzi, które pliki są odrzucone i dlaczego.
+        const valid = [];
+        const rejected = [];
+        incomingFiles.forEach(f => {
+            if (Compressor.isSupportedFormat(f)) valid.push(f);
+            else rejected.push(f.name);
+        });
+
+        if (rejected.length > 0) {
+            alert(`Błędny format pliku - pominięto ${rejected.length} ${rejected.length === 1 ? 'plik' : 'plików'}:\n\n- ${rejected.join('\n- ')}\n\nObsługiwane formaty: JPG, PNG, TIFF, DNG, WEBP, HEIC, HEIF, GIF, AVIF, BMP.`);
+        }
+
+        if (valid.length === 0) {
+            this.fileInput.value = "";
+            return;
+        }
+
+        const total = valid.length;
+        this._processingFiles = true;
+
+        // Błyskawiczny loader: blokujemy przyciski i pokazujemy pasek postępu OD RAZU.
+        // Całe dekodowanie i kompresja dzieją się w Web Workerach (js/imageWorker.js),
+        // więc główny wątek się nie zawiesza niezależnie od tego, jak ciężki jest plik.
+        this.dropzone.classList.add('disabled');
+        this.fileInput.disabled = true;
+        this.btnDownloadPhotos.disabled = true;
+        this.btnGoToStep3.disabled = true;
         this.uploadProgressWrap.classList.remove('hidden');
         this.uploadProgressLabel.classList.remove('hidden');
         this.uploadProgressBar.style.width = '0%';
         this.uploadProgressLabel.textContent = `Przygotowywanie ${total} ${total === 1 ? 'zdjęcia' : 'zdjęć'}...`;
 
-        this.btnDownloadPhotos.disabled = true;
-        this.btnGoToStep3.disabled = true;
-
-        // Wymuszenie natychmiastowego przerysowania strony PRZED ciężką pracą (naprawia zawieszkę z pkt 4)
-        await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+        // Wymuszenie natychmiastowego przerysowania strony PRZED zleceniem pracy workerom.
+        await new Promise(resolve => requestAnimationFrame(resolve));
 
         const title = this.evtTitle?.value || "saf-wpis";
         const startDate = this.evtStart.value;
         const skipped = [];
 
-        for (let i = 0; i < incomingFiles.length; i++) {
-            try {
-                const nextIndex = Compressor.processedFiles.length;
-                const res = await Compressor.processImage(incomingFiles[i], nextIndex, title, startDate);
-                Compressor.processedFiles.push(res);
-            } catch (err) {
-                console.error(err);
-                // Naprawa: wcześniej błąd trafiał TYLKO do konsoli, więc pominięty plik
-                // znikał bez żadnej informacji dla użytkownika. Teraz zbieramy komunikaty
-                // i pokazujemy je zbiorczo na końcu (patrz alert() poniżej).
-                skipped.push(err?.message || incomingFiles[i].name);
-            }
-
-            const done = i + 1;
-            const pct = Math.round((done / total) * 100);
+        const fileProgress = new Array(total).fill(0);
+        const updateOverallProgress = () => {
+            const sum = fileProgress.reduce((a, b) => a + b, 0);
+            const pct = Math.round(sum / total);
             this.uploadProgressBar.style.width = pct + '%';
-            this.uploadProgressLabel.textContent = `Przetworzono ${done} z ${total} zdjęć (${pct}%)...`;
-        }
+            this.uploadProgressLabel.textContent = `Przetwarzanie ${total} ${total === 1 ? 'zdjęcia' : 'zdjęć'}... (${pct}%)`;
+        };
+
+        const tasks = valid.map((file, i) => {
+            const nextIndex = Compressor.processedFiles.length + i;
+            return Compressor.processImage(file, nextIndex, title, startDate, (stage, pct) => {
+                fileProgress[i] = pct;
+                updateOverallProgress();
+            }).then(res => {
+                fileProgress[i] = 100;
+                updateOverallProgress();
+                return { ok: true, res };
+            }).catch(err => {
+                console.error(err);
+                fileProgress[i] = 100;
+                updateOverallProgress();
+                return { ok: false, error: err?.message || file.name };
+            });
+        });
+
+        const results = await Promise.all(tasks);
+        results.forEach(r => {
+            if (r.ok) Compressor.processedFiles.push(r.res);
+            else skipped.push(r.error);
+        });
 
         this.uploadProgressWrap.classList.add('hidden');
         this.uploadProgressLabel.classList.add('hidden');
+        this.dropzone.classList.remove('disabled');
+        this.fileInput.disabled = false;
         this.fileInput.value = "";
+        this._processingFiles = false;
         this.renderFileList();
 
         if (skipped.length > 0) {
@@ -422,7 +466,8 @@ const App = {
 
             item.querySelector('.btn-del').addEventListener('click', (e) => {
                 e.preventDefault();
-                Compressor.processedFiles.splice(index, 1);
+                const [removed] = Compressor.processedFiles.splice(index, 1);
+                if (removed?.previewUrl) URL.revokeObjectURL(removed.previewUrl);
                 this.renderFileList();
             });
 

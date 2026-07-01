@@ -11,7 +11,7 @@
     <header>
         <div class="logo-zone">
             <span class="logo-saf">SAF Jamnik</span>
-            <span class="badge">Redaktor v1.7.2</span>
+            <span class="badge">Redaktor v1.7.3.1</span>
         </div>
         <div class="api-zone">
             <div class="input-with-toggle">
@@ -97,8 +97,9 @@
             
             <div class="dropzone" id="dropzone">
                 <p>Przeciągnij i upuść zdjęcia tutaj lub <span class="highlight" style="text-decoration: underline; pointer-events: none;">kliknij tutaj, aby wybrać z dysku</span></p>
+                <p style="margin-top: 8px; font-size: 0.8rem; color: var(--text-muted); pointer-events: none;">Obsługiwane formaty: JPG, PNG, TIFF, DNG, WEBP, HEIC, HEIF, GIF, AVIF, BMP</p>
             </div>
-            <input type="file" id="fileInput" multiple accept="image/*" style="display:none;">
+            <input type="file" id="fileInput" multiple accept=".jpg,.jpeg,.png,.tiff,.tif,.dng,.webp,.heic,.heif,.gif,.avif,.bmp" style="display:none;">
 
             <!-- Pkt 4: pasek postępu jest STAŁYM elementem DOM (nie tworzonym dynamicznie),
                  dzięki czemu pojawia się natychmiast po dodaniu zdjęć, bez "zawieszki". -->
@@ -174,6 +175,6 @@
         </div>
     </div>
 
-    <script type="module" src="js/app.js?v=162"></script>
+    <script type="module" src="js/app.js?v=180"></script>
 </body>
 </html>

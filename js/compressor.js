@@ -1,5 +1,26 @@
+// Cała ciężka praca (dekodowanie plików + kompresja) odbywa się w puli Web Workerów
+// (patrz js/imageWorker.js). Dzięki temu główny wątek NIGDY nie jest blokowany -
+// nawet przy dużych plikach TIFF/DNG/HEIC, UI zostaje responsywne, a pasek postępu
+// pokazuje realny, a nie symulowany postęp.
 export const Compressor = {
     processedFiles: [],
+
+    // Profesjonalne formaty obsługiwane przez aplikację. Wszystko inne = natychmiastowy błąd.
+    ALLOWED_EXTENSIONS: ['jpg', 'jpeg', 'png', 'tiff', 'tif', 'dng', 'webp', 'heic', 'gif', 'avif', 'heif', 'bmp'],
+
+    _workers: [],
+    _rrIndex: 0,
+    _pending: new Map(),
+    _msgSeq: 0,
+
+    getExtension(fileName) {
+        const m = /\.([a-z0-9]+)$/i.exec(fileName || '');
+        return m ? m[1].toLowerCase() : '';
+    },
+
+    isSupportedFormat(file) {
+        return this.ALLOWED_EXTENSIONS.includes(this.getExtension(file?.name));
+    },
 
     sanitizeString(str) {
         return str.toLowerCase()
@@ -10,91 +31,90 @@ export const Compressor = {
             .replace(/[\s_]+/g, '-');
     },
 
-    processImage(file, targetIndex, eventTitle, eventDateStr) {
+    _ensureWorkerPool() {
+        if (this._workers.length) return;
+        const n = Math.max(1, Math.min(4, navigator.hardwareConcurrency || 2));
+        for (let i = 0; i < n; i++) this._spawnWorker(i);
+    },
+
+    _spawnWorker(slot) {
+        const worker = new Worker(new URL('./imageWorker.js', import.meta.url));
+        worker.onmessage = (e) => this._onWorkerMessage(e.data);
+        worker.onerror = () => {
+            // Awaria wątku (np. błąd sieci przy pobieraniu biblioteki TIFF/HEIC) nie może
+            // zawiesić kolejki na zawsze - odrzucamy wszystko, co było na nim w toku, i odtwarzamy wątek.
+            for (const [id, pending] of this._pending) {
+                if (pending.workerSlot !== slot) continue;
+                clearTimeout(pending.timeoutId);
+                this._pending.delete(id);
+                pending.reject(new Error('Wewnętrzny błąd wątku przetwarzania obrazów.'));
+            }
+            this._spawnWorker(slot);
+        };
+        this._workers[slot] = worker;
+        return worker;
+    },
+
+    _onWorkerMessage(data) {
+        const pending = this._pending.get(data.id);
+        if (!pending) return;
+
+        if (data.type === 'progress') {
+            pending.onProgress?.(data.stage, data.pct);
+            return;
+        }
+
+        clearTimeout(pending.timeoutId);
+        this._pending.delete(data.id);
+
+        if (data.type === 'done') {
+            pending.resolve({ blob: data.blob, size: data.size });
+        } else if (data.type === 'error') {
+            pending.reject(new Error(data.message));
+        }
+    },
+
+    // Zleca dekodowanie + kompresję jednemu z workerów w puli. Zwraca gotowy, nazwany plik.
+    processImage(file, targetIndex, eventTitle, eventDateStr, onProgress) {
+        this._ensureWorkerPool();
+        const id = ++this._msgSeq;
+        const workerSlot = this._rrIndex;
+        this._rrIndex = (this._rrIndex + 1) % this._workers.length;
+        const worker = this._workers[workerSlot];
+
         return new Promise((resolve, reject) => {
-            // NAPRAWA ZAWIESZKI: pliki, które przeglądarka nie umie zdekodować w <img> (najczęściej
-            // HEIC/HEIF z iPhone'a, ale też RAW z aparatu, PDF-y czy inne pliki wrzucone przez drag&drop -
-            // atrybut accept="image/*" NIE filtruje przeciąganych plików) wcześniej nie miały żadnej
-            // obsługi błędu ani limitu czasu. Efekt: "img.onload" nigdy się nie odpalał i CAŁA kolejka
-            // stała w miejscu w nieskończoność, bez żadnego komunikatu. Poniżej: wczesne odrzucenie
-            // nieobsługiwanych formatów + reject przy błędzie + twardy limit czasu jako siatka bezpieczeństwa.
-            const isHeic = /\.(heic|heif)$/i.test(file.name) || /heic|heif/i.test(file.type || '');
-            if (isHeic) {
-                reject(new Error(`"${file.name}" to format HEIC/HEIF (typowy dla iPhone'a) - przeglądarki na komputerze nie umieją go podglądać. Przekonwertuj plik na JPG i wgraj ponownie.`));
-                return;
-            }
-            if (file.type && !file.type.startsWith('image/')) {
-                reject(new Error(`"${file.name}" nie jest rozpoznawany jako obraz (typ: ${file.type}) i został pominięty.`));
-                return;
-            }
-
-            let settled = false;
             const timeoutId = setTimeout(() => {
-                if (settled) return;
-                settled = true;
-                reject(new Error(`"${file.name}" przetwarzał się dłużej niż 20 sekund i został pominięty (prawdopodobnie nieobsługiwany lub uszkodzony plik).`));
-            }, 20000);
-            const settle = (fn, arg) => {
-                if (settled) return;
-                settled = true;
-                clearTimeout(timeoutId);
-                fn(arg);
-            };
+                this._pending.delete(id);
+                reject(new Error(`"${file.name}" przetwarzał się dłużej niż 45 sekund i został pominięty (prawdopodobnie nieobsługiwany lub uszkodzony plik).`));
+            }, 45000);
 
-            const reader = new FileReader();
-            reader.onerror = () => settle(reject, new Error(`Nie udało się wczytać pliku "${file.name}".`));
-            reader.onload = (event) => {
-                const img = new Image();
-                img.onerror = () => settle(reject, new Error(`"${file.name}" nie jest prawidłowym lub wspieranym plikiem obrazu.`));
-                img.onload = async () => {
-                    try {
-                        const compress = (maxSide, quality) => {
-                            return new Promise((resBlob, rejBlob) => {
-                                const canvas = document.createElement('canvas');
-                                let w = img.width, h = img.height;
+            this._pending.set(id, {
+                workerSlot,
+                timeoutId,
+                onProgress,
+                resolve: (result) => resolve(this._nameResult(result, targetIndex, eventTitle, eventDateStr)),
+                reject
+            });
 
-                                if (w > h && w > maxSide) { h = Math.round((h * maxSide) / w); w = maxSide; }
-                                else if (h > w && h > maxSide) { w = Math.round((w * maxSide) / h); h = maxSide; }
-
-                                canvas.width = w; canvas.height = h;
-                                const ctx = canvas.getContext('2d');
-                                if (!ctx) { rejBlob(new Error('Canvas 2D nie jest dostępny w tej przeglądarce.')); return; }
-                                ctx.drawImage(img, 0, 0, w, h);
-                                canvas.toBlob((b) => b ? resBlob(b) : rejBlob(new Error('Kodowanie do WebP nie powiodło się.')), 'image/webp', quality);
-                            });
-                        };
-
-                        // Strategia błyskawiczna 2-fazowa (Limit twardy: 200KB = 204800 bajtów)
-                        // Faza 1: Szerokość do 1920px, jakość 0.65 (Zwykle waga wynosi około 120-170KB)
-                        let finalBlob = await compress(1920, 0.65);
-
-                        // Faza ratunkowa (tylko jeśli zdjęcie jest wybitnie zaszumione lub szczegółowe)
-                        if (finalBlob.size > 204800) {
-                            finalBlob = await compress(1400, 0.50);
-                        }
-
-                        const dateObj = new Date(eventDateStr || Date.now());
-                        const year = dateObj.getFullYear();
-                        const month = String(dateObj.getMonth() + 1).padStart(2, '0');
-                        const safeTitle = Compressor.sanitizeString(eventTitle || 'wydarzenie');
-                        const numStr = String(targetIndex + 1).padStart(2, '0');
-                        const fileName = `${year}-${month}-${safeTitle}-${numStr}.webp`;
-
-                        settle(resolve, {
-                            blob: finalBlob,
-                            name: fileName,
-                            size: finalBlob.size,
-                            previewUrl: event.target.result,
-                            wpPath: `/wp-content/uploads/${year}/${month}/${fileName}`
-                        });
-                    } catch (err) {
-                        settle(reject, err);
-                    }
-                };
-                img.src = event.target.result;
-            };
-            reader.readAsDataURL(file);
+            worker.postMessage({ type: 'process', id, index: targetIndex, file });
         });
+    },
+
+    _nameResult(result, targetIndex, eventTitle, eventDateStr) {
+        const dateObj = new Date(eventDateStr || Date.now());
+        const year = dateObj.getFullYear();
+        const month = String(dateObj.getMonth() + 1).padStart(2, '0');
+        const safeTitle = this.sanitizeString(eventTitle || 'wydarzenie');
+        const numStr = String(targetIndex + 1).padStart(2, '0');
+        const fileName = `${year}-${month}-${safeTitle}-${numStr}.webp`;
+
+        return {
+            blob: result.blob,
+            name: fileName,
+            size: result.size,
+            previewUrl: URL.createObjectURL(result.blob),
+            wpPath: `/wp-content/uploads/${year}/${month}/${fileName}`
+        };
     },
 
     async generateZip(eventTitle, eventDateStr) {
@@ -103,12 +123,12 @@ export const Compressor = {
         this.processedFiles.forEach(file => {
             zip.file(file.name, file.blob);
         });
-        
+
         const dateObj = new Date(eventDateStr || Date.now());
         const year = dateObj.getFullYear();
         const month = String(dateObj.getMonth() + 1).padStart(2, '0');
         const safeTitle = this.sanitizeString(eventTitle || 'wydarzenie');
-        
+
         const content = await zip.generateAsync({ type: "blob" });
         const url = window.URL.createObjectURL(content);
         const a = document.createElement('a');
