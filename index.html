@@ -3,16 +3,22 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Redaktor SAF Jamnik - Kreator Wpisów</title>
+    <title>Redaktor SAFi - Kreator Wpisów SAF Jamnik</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Quicksand:wght@600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="style.css">
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
 </head>
 <body>
     <header>
-        <div class="logo-zone">
-            <span class="logo-saf">SAF Jamnik</span>
-            <span class="badge">Redaktor v1.8.2</span>
-        </div>
+        <a href="./" id="logoHome" class="logo-zone" title="Odśwież stronę">
+            <img src="assets/redaktor-saf-emblem.svg" alt="Redaktor SAFi" class="logo-emblem">
+            <span class="logo-text">
+                <span class="logo-line">Redaktor</span>
+                <span class="logo-line">SAFi <span class="logo-version">ver. 1.8.3</span></span>
+            </span>
+        </a>
         <div class="header-actions">
             <a href="https://jamnik.uwm.edu.pl/strefa-czlonka/" target="_blank" rel="noopener noreferrer" class="btn-secondary">🔑 Strefa Członka</a>
             <button type="button" id="btnShowIntro" class="btn-secondary">ℹ️ Jak korzystać?</button>
@@ -35,6 +41,7 @@
             <div class="form-group" style="margin-bottom: 25px;">
                 <label for="evtCategory"><strong>Najpierw wybierz kategorię wpisu:</strong></label>
                 <select id="evtCategory">
+                    <option value="" disabled selected>-- wybierz kategorię --</option>
                     <option value="kultura">Kultura</option>
                     <option value="nauka">Nauka</option>
                     <option value="sport">Sport</option>
@@ -65,14 +72,14 @@
 
                 <div class="form-group">
                     <label for="evtNotes" id="notesLabel">Twoje surowe notatki / spostrzeżenia:</label>
-                    <textarea id="evtNotes" rows="12" placeholder="Wpisz tu wszystko co pamiętasz..."></textarea>
+                    <textarea id="evtNotes" rows="12" placeholder="Opisz przebieg wydarzenia oraz najważniejsze szczegóły, które powinny znaleźć się w artykule..."></textarea>
                 </div>
             </div>
 
             <div class="form-group" style="margin-top: 20px;">
                 <label for="evtExternalArticle">Wklej treść zewnętrznego artykułu (opcjonalnie):</label>
-                <p class="info-text" style="margin-bottom: 8px; color: var(--text-muted); font-size: 0.85rem;">Jeśli inny portal (np. olsztyn.com.pl) już opisał to wydarzenie, wklej tu jego treść - AI wykorzysta ją WYŁĄCZNIE jako źródło faktów (poprawne nazwiska, oficjalne nazwy tras koncertowych itp.), a nie jako wzór stylu czy treści do skopiowania.</p>
-                <textarea id="evtExternalArticle" rows="8" placeholder="Wklej tutaj skopiowany tekst zewnętrznego artykułu..."></textarea>
+                <p class="info-text">Jeśli inny portal (np. olsztyn.com.pl) już opisał to wydarzenie, wklej tu jego treść - AI wykorzysta ją WYŁĄCZNIE jako źródło faktów (poprawne nazwiska, oficjalne nazwy tras koncertowych itp.), a nie jako wzór stylu czy treści do skopiowania.</p>
+                <textarea id="evtExternalArticle" rows="8" placeholder="Wklej tutaj pełną treść zewnętrznego artykułu opisującego to wydarzenie (opcjonalnie)..."></textarea>
             </div>
 
             <div class="actions">
@@ -82,7 +89,7 @@
 
         <section id="step2" class="step-section">
             <h2>Wgranie i Kompresja Zdjęć</h2>
-            <p class="info-text" style="margin-bottom: 15px; color: var(--text-muted);">Wrzuć tu zdjęcia w dowolnym formacie i rozmiarze, aby przygotować wersje zoptymalizowane pod stronę.</p>
+            <p class="info-text">Wrzuć zdjęcia z wydarzenia w dowolnym profesjonalnym formacie i rozmiarze - aplikacja automatycznie przygotuje wersje zoptymalizowane pod stronę.</p>
             
             <div class="dropzone" id="dropzone">
                 <p>Przeciągnij i upuść zdjęcia tutaj lub <span class="highlight" style="text-decoration: underline; pointer-events: none;">kliknij tutaj, aby wybrać z dysku</span></p>
@@ -111,7 +118,7 @@
             <div class="grid-2col">
                 <div class="review-zone">
                     <h3>Ostateczne Notatki do AI</h3>
-                    <p class="info-text" style="margin-bottom: 10px;">To jest jedyne źródło wiedzy dla sztucznej inteligencji:</p>
+                    <p class="info-text">To jest jedyne źródło wiedzy dla sztucznej inteligencji - w razie potrzeby możesz je tu jeszcze poprawić:</p>
                     <textarea id="finalNotes" rows="14"></textarea>
                     <button id="btnTriggerAI" class="btn-primary w-100" style="margin-top: 15px;">Uruchom Magię AI (Gemini 3.5 Flash)</button>
                 </div>
@@ -155,6 +162,8 @@
                     </div>
                 </div>
             </div>
+
+            <p id="zipFreshnessWarning" class="hidden" style="color: var(--danger); font-weight: 600; margin-top: 15px;">⚠️ Nazwy plików zmieniły się od ostatniego pobrania paczki ZIP - pobierz ją ponownie, żeby zdjęcia w artykule faktycznie się wyświetliły na stronie!</p>
 
             <div class="actions">
                 <button id="btnBackToStep2" class="btn-secondary">&larr; Wstecz</button>
@@ -219,7 +228,7 @@
                 </select>
 
                 <label for="reportDescription">Opisz problem:</label>
-                <textarea id="reportDescription" rows="6" placeholder="Co się stało? Co próbowałeś/aś zrobić?"></textarea>
+                <textarea id="reportDescription" rows="6" placeholder="Opisz dokładnie, co się stało oraz jakie czynności wykonywałeś/aś tuż przed wystąpieniem problemu..."></textarea>
             </div>
 
             <div class="modal-actions">
@@ -236,6 +245,6 @@
 
     <div id="toastContainer" class="toast-container"></div>
 
-    <script type="module" src="js/app.js?v=210"></script>
+    <script type="module" src="js/app.js?v=220"></script>
 </body>
 </html>

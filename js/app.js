@@ -16,9 +16,11 @@ const App = {
     state: {
         currentStep: 1,
         interviewAnswers: "",
-        aiData: null,
         aiFilenameSlug: null,
-        zipDownloaded: false
+        // Migawka nazw plików z chwili ostatniego pobrania ZIP-a - służy do wykrycia, czy nazwy
+        // zdjęć zmieniły się od tego czasu (np. AI dopisało własny slug), żeby link w wygenerowanym
+        // artykule nigdy nie wskazywał na inną nazwę pliku niż ta w faktycznie pobranej paczce.
+        zipSnapshot: null
     },
 
     init() {
@@ -32,6 +34,8 @@ const App = {
     },
 
     cacheDOM() {
+        this.logoHome = document.getElementById('logoHome');
+
         this.btnShowIntro = document.getElementById('btnShowIntro');
         this.introModal = document.getElementById('introModal');
         this.btnCloseIntro = document.getElementById('btnCloseIntro');
@@ -69,6 +73,7 @@ const App = {
         this.btnGoToStep3 = document.getElementById('btnGoToStep3');
         this.btnBackToStep2 = document.getElementById('btnBackToStep2');
         this.btnDownloadPhotosStep3 = document.getElementById('btnDownloadPhotosStep3');
+        this.zipFreshnessWarning = document.getElementById('zipFreshnessWarning');
         this.btnTriggerAI = document.getElementById('btnTriggerAI');
         this.btnCopyHtml = document.getElementById('btnCopyHtml');
         this.btnCopyTitle = document.getElementById('btnCopyTitle');
@@ -99,6 +104,12 @@ const App = {
     },
 
     bindEvents() {
+        // Klik na logo/nazwę w nagłówku odświeża stronę (wraca do stanu początkowego, Krok 1).
+        this.logoHome.addEventListener('click', (e) => {
+            e.preventDefault();
+            location.reload();
+        });
+
         this.btnShowIntro.addEventListener('click', () => this.introModal.classList.remove('hidden'));
         this.btnCloseIntro.addEventListener('click', () => {
             this.introModal.classList.add('hidden');
@@ -158,8 +169,11 @@ const App = {
                 alert('Żadne z wgranych zdjęć nie nadaje się na obrazek wyróżniający - musi być zdjęciem POZIOMYM w proporcjach 3:2. Dodaj przynajmniej jedno takie zdjęcie, zanim przejdziesz dalej.');
                 return;
             }
-            if (!this.state.zipDownloaded) {
-                const proceed = confirm('Nie pobrałeś jeszcze paczki ZIP ze zdjęciami. Zalecamy pobranie kopii zapasowej przed przejściem dalej.\n\nCzy mimo to chcesz kontynuować?');
+            if (!this.isZipFresh()) {
+                const message = this.state.zipSnapshot === null
+                    ? 'Nie pobrałeś jeszcze paczki ZIP ze zdjęciami. Zalecamy pobranie kopii zapasowej przed przejściem dalej.\n\nCzy mimo to chcesz kontynuować?'
+                    : 'Lista zdjęć zmieniła się od czasu ostatniego pobrania paczki ZIP (np. przez zmianę kolejności). Pobierz ją ponownie po wygenerowaniu artykułu, żeby nazwy plików zgadzały się z linkami w treści.\n\nCzy mimo to chcesz kontynuować?';
+                const proceed = confirm(message);
                 if (!proceed) return;
             }
             this.goToStep3();
@@ -184,10 +198,34 @@ const App = {
         // Naprawa: obrazek wyróżniający ("00") musi zostać ustawiony PRZED pobraniem paczki,
         // nawet jeśli użytkownik pobiera ZIP bezpośrednio z Kroku 2, nie wchodząc do Kroku 3.
         this.ensureFeaturedImage();
+        this.renameAllFiles();
         const title = this.evtTitle?.value || "wpis";
         const startDate = this.evtStart.value;
         Compressor.generateZip(title, startDate);
-        this.state.zipDownloaded = true;
+        this.state.zipSnapshot = this.getFilenamesSnapshot();
+        this.updateZipFreshnessWarning();
+    },
+
+    // BŁĄD Z PRODUKCJI: gdy AI (Krok 3) nadaje zdjęciom nowy slug, nazwy plików się zmieniają -
+    // jeśli użytkownik pobrał ZIP WCZEŚNIEJ (np. w Kroku 2), paczka zawiera STARE nazwy, a wygenerowany
+    // artykuł odwołuje się już do NOWYCH - zdjęcia nie wyświetlają się na stronie. Zamiast prostego
+    // "czy w ogóle pobrano ZIP", porównujemy migawkę aktualnych nazw z migawką z chwili pobrania.
+    getFilenamesSnapshot() {
+        return Compressor.processedFiles.map(f => f.name).join('|');
+    },
+
+    isZipFresh() {
+        return this.state.zipSnapshot !== null && this.state.zipSnapshot === this.getFilenamesSnapshot();
+    },
+
+    // Widoczne, trwałe ostrzeżenie w Kroku 3 (w przeciwieństwie do toasta - nie znika po 3 sekundach),
+    // żeby użytkownik na pewno zauważył, że musi ponownie pobrać paczkę PO wygenerowaniu artykułu.
+    updateZipFreshnessWarning() {
+        if (this.isZipFresh()) {
+            this.zipFreshnessWarning.classList.add('hidden');
+        } else {
+            this.zipFreshnessWarning.classList.remove('hidden');
+        }
     },
 
     // Sprawdza proporcje oryginalnego zdjęcia (3:2, poziomo) z tolerancją na drobne niedokładności.
@@ -272,7 +310,7 @@ const App = {
         if (category === 'kultura' || category === 'sport' || category === 'nauka') {
             this.dynamicFields.style.display = 'block';
             this.notesLabel.innerHTML = "Twoje surowe notatki / spostrzeżenia:";
-            this.evtNotes.placeholder = "Kto uczestniczył, jaka była atmosfera, co przykuło uwagę fotografów...";
+            this.evtNotes.placeholder = "Kto brał udział, jaka była atmosfera wydarzenia i co szczególnie przykuło uwagę naszych fotografów...";
             
             if (category === 'kultura') { this.evtTitle.placeholder = "np. Koncert Myslovitz…"; } 
             else if (category === 'nauka') { this.evtTitle.placeholder = "np. MSKN..."; } 
@@ -281,10 +319,10 @@ const App = {
             this.dynamicFields.style.display = 'none';
             if (category === 'zapowiedzi') {
                 this.notesLabel.innerHTML = "<strong>Co dokładnie zapowiadasz, kiedy i gdzie to będzie?</strong>";
-                this.evtNotes.placeholder = "Opisz planowane wydarzenie, datę, godzinę, miejsce...";
+                this.evtNotes.placeholder = "Opisz szczegółowo zapowiadane wydarzenie: co się wydarzy, kiedy dokładnie i gdzie...";
             } else if (category === 'zycie') {
                 this.notesLabel.innerHTML = "<strong>Opisz co się działo w agencji / jakie są ustalenia:</strong>";
-                this.evtNotes.placeholder = "Co robiliście, kto brał udział, jakie zapadły decyzje...";
+                this.evtNotes.placeholder = "Opisz przebieg spotkania lub wydarzenia w agencji: kto brał udział i jakie zapadły ustalenia...";
             }
         }
     },
@@ -377,6 +415,11 @@ const App = {
         const end = this.evtEnd?.value || "";
         const notes = this.evtNotes.value.trim();
 
+        if (!cat) {
+            alert("BŁĄD: Musisz najpierw wybrać kategorię wpisu z listy.");
+            return;
+        }
+
         if (cat === 'kultura' || cat === 'sport' || cat === 'nauka') {
             if (!title || !loc || !start || !end || !notes) {
                 alert("BŁĄD: Musisz najpierw wypełnić WSZYSTKIE pola, aby przejść do wgrywania zdjęć.");
@@ -411,7 +454,7 @@ const App = {
         );
 
         try {
-            const questions = await Gemini.askForMissingDetails('', cat, title, loc, start, end, notes);
+            const questions = await Gemini.askForMissingDetails(cat, title, loc, start, end, notes);
             progress.finish("Gotowe!");
             this.renderQuestions(questions);
         } catch (error) {
@@ -515,7 +558,7 @@ const App = {
 
         const results = await Promise.all(tasks);
         results.forEach(r => {
-            if (r.ok) { Compressor.processedFiles.push(r.res); this.state.zipDownloaded = false; }
+            if (r.ok) Compressor.processedFiles.push(r.res);
             else skipped.push(r.error);
         });
 
@@ -642,7 +685,6 @@ const App = {
                 e.preventDefault();
                 const [removed] = Compressor.processedFiles.splice(index, 1);
                 if (removed?.previewUrl) URL.revokeObjectURL(removed.previewUrl);
-                this.state.zipDownloaded = false;
                 this.renderFileList();
             });
 
@@ -705,8 +747,7 @@ const App = {
         const prompt = Gemini.getPromptTemplate(cat, notes);
 
         try {
-            const aiJson = await Gemini.callGemini('', prompt);
-            this.state.aiData = aiJson;
+            const aiJson = await Gemini.callGemini(prompt);
             progress.finish("Gotowe!");
 
             const endVal = this.evtEnd.value;
@@ -727,6 +768,9 @@ const App = {
                 this.state.aiFilenameSlug = aiJson.filenameSlug || aiJson.title;
                 this.renameAllFiles();
             }
+            // Nazwy mogły się właśnie zmienić (nowy slug od AI) - jeśli ZIP był pobrany wcześniej
+            // z INNYMI nazwami, ostrzeżenie poniżej natychmiast poinformuje o konieczności ponownego pobrania.
+            this.updateZipFreshnessWarning();
 
             const featured = Compressor.processedFiles.find(f => f.isFeatured);
             this.sugFeaturedImage.textContent = featured ? featured.name : 'brak';

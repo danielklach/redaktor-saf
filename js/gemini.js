@@ -31,7 +31,7 @@ const AGENCY_LIFE_TAGS = [
 export const Gemini = {
     // Dynamiczny wywiad AI na podstawie wpisanych danych - zwraca TABLICĘ pytań (JSON),
     // żeby dało się je łatwo i niezawodnie ponumerować w interfejsie (pkt 2).
-    async askForMissingDetails(apiKey, category, title, location, start, end, notes) {
+    async askForMissingDetails(category, title, location, start, end, notes) {
         const prompt = `${AGENCY_CONTEXT}
 
 Jesteś dociekliwym redaktorem naczelnym SAF Jamnik. Twój fotoreporter właśnie wrócił z wydarzenia i wrzucił do systemu takie surowe notatki:
@@ -47,7 +47,7 @@ ODPOWIEDZ WYŁĄCZNIE CZYSTYM, SUROWYM KODEM JSON w formacie:
 {"questions": ["pytanie 1", "pytanie 2"]}
 Bez markdownu, bez wstępów, bez komentarzy poza obiektem JSON.`;
 
-        const raw = await this.callGeminiRaw(apiKey, prompt, {
+        const raw = await this.callGeminiRaw(prompt, {
             temperature: 0.8,
             maxOutputTokens: 700,
             // Pkt 1: krótka lista pytań nie wymaga głębokiego "namysłu" modelu - to główne
@@ -95,31 +95,17 @@ Oto pełna treść notatek oraz zebranych informacji o wydarzeniu:
 ${notes}`;
     },
 
-    // Surowe wywołanie API. Jeśli podano własny (osobisty) klucz - wołamy Gemini bezpośrednio.
-    // Jeśli klucz jest pusty - korzystamy z bezpiecznego proxy, które zna klucz redakcji (pkt 7).
-    async callGeminiRaw(apiKey, prompt, generationConfig = {}) {
-        let response;
-
-        if (apiKey) {
-            const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash:generateContent?key=${apiKey}`;
-            response = await fetch(url, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    contents: [{ parts: [{ text: prompt }] }],
-                    generationConfig
-                })
-            });
-        } else {
-            if (!PROXY_URL || PROXY_URL.includes('TWOJ-USER')) {
-                throw new Error("Bezpieczne proxy z kluczem API redakcji nie jest jeszcze skonfigurowane (patrz worker/worker.js i komentarz w js/gemini.js). Skontaktuj się z administratorem strony.");
-            }
-            response = await fetch(PROXY_URL, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ prompt, generationConfig })
-            });
+    // Surowe wywołanie API - zawsze przez bezpieczne proxy (Cloudflare Worker), które trzyma
+    // klucz Gemini po swojej stronie jako sekret środowiskowy (patrz worker/worker.js).
+    async callGeminiRaw(prompt, generationConfig = {}) {
+        if (!PROXY_URL || PROXY_URL.includes('TWOJ-USER')) {
+            throw new Error("Bezpieczne proxy z kluczem API redakcji nie jest jeszcze skonfigurowane (patrz worker/worker.js i komentarz w js/gemini.js). Skontaktuj się z administratorem strony.");
         }
+        const response = await fetch(PROXY_URL, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ prompt, generationConfig })
+        });
 
         if (!response.ok) {
             const errData = await response.json().catch(() => ({}));
@@ -150,8 +136,8 @@ ${notes}`;
         }
     },
 
-    async callGemini(apiKey, prompt) {
-        let textResult = await this.callGeminiRaw(apiKey, prompt, {
+    async callGemini(prompt) {
+        let textResult = await this.callGeminiRaw(prompt, {
             temperature: 0.85,
             // Pełniejszy "namysł" modelu dla długiego, wyczerpującego artykułu = lepsza jakość.
             // Jeśli Twoje konto/model zwróci błąd walidacji przez to pole, usuń całą linię.

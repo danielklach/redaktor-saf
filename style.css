@@ -3,8 +3,8 @@
     --card-bg: #1a1a1e;
     --text-color: #e2e8f0;
     --text-muted: #94a3b8;
-    --primary: #f59e0b;
-    --primary-hover: #d97706;
+    --primary: #dca032;
+    --primary-hover: #bb882a;
     --success: #10b981;
     --danger: #ef4444;
     --border: #2e2e38;
@@ -34,8 +34,15 @@ header {
     backdrop-filter: blur(6px);
 }
 
-.logo-saf { font-weight: 800; font-size: 1.2rem; color: var(--primary); text-transform: uppercase; letter-spacing: 1px; }
 .badge { background: #2a2a35; padding: 3px 8px; font-size: 0.75rem; border-radius: 4px; margin-left: 10px; color: var(--text-muted); }
+
+.logo-zone { display: flex; align-items: center; gap: 14px; text-decoration: none; cursor: pointer; }
+.logo-emblem { height: 48px; width: auto; display: block; }
+.logo-text { display: flex; flex-direction: column; line-height: 1.05; }
+/* Uwaga: selektor uniwersalny "*" u góry pliku ustawia font-family na KAŻDYM elemencie, więc samo
+   dziedziczenie z .logo-text by nie zadziałało - Quicksand trzeba nadać wprost na .logo-line. */
+.logo-line { font-family: 'Quicksand', sans-serif; font-weight: 700; font-size: 1.4rem; color: var(--primary); }
+.logo-version { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; font-size: 0.65rem; font-weight: 600; color: var(--text-muted); margin-left: 6px; }
 
 .header-actions { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
 .header-actions a.btn-secondary { text-decoration: none; display: inline-flex; align-items: center; }
@@ -59,6 +66,8 @@ header {
 /* Responsywność: nagłówek i kroki przenoszą się w bardziej zwarty układ na wąskich ekranach */
 @media (max-width: 640px) {
     header { padding: 12px 16px; }
+    .logo-emblem { height: 36px; }
+    .logo-line { font-size: 1.05rem; }
     .header-actions { width: 100%; }
     .header-actions a.btn-secondary, .header-actions button { flex: 1 1 auto; font-size: 0.78rem; padding: 8px 10px; text-align: center; justify-content: center; }
 
@@ -93,6 +102,11 @@ input[type="text"], input[type="password"], input[type="datetime-local"], select
 }
 input:focus, select:focus, textarea:focus { border-color: var(--primary); outline: none; }
 
+/* Rozsuwanie pól tekstowych TYLKO w pionie - poziome rozciąganie psuło układ (np. w popupie agenta) */
+textarea { resize: vertical; }
+
+.info-text { color: var(--text-muted); font-size: 0.9rem; margin-bottom: 10px; }
+
 /* Ikonka kalendarza w polach datetime-local - domyślnie ciemna i słabo widoczna na ciemnym tle */
 input[type="datetime-local"]::-webkit-calendar-picker-indicator {
     filter: invert(1);
@@ -102,7 +116,7 @@ input[type="datetime-local"]::-webkit-calendar-picker-indicator {
 .dropzone {
     border: 2px dashed var(--border); background: var(--card-bg); padding: 40px; text-align: center; border-radius: 8px; cursor: pointer; transition: 0.2s;
 }
-.dropzone:hover { border-color: var(--primary); background: #202026; box-shadow: 0 0 0 4px rgba(245, 158, 11, 0.08); }
+.dropzone:hover { border-color: var(--primary); background: #202026; box-shadow: 0 0 0 4px rgba(220, 160, 50, 0.1); }
 .dropzone.disabled { opacity: 0.5; pointer-events: none; cursor: not-allowed; }
 .highlight { color: var(--primary); font-weight: 600; }
 
@@ -115,7 +129,13 @@ input[type="datetime-local"]::-webkit-calendar-picker-indicator {
 .actions { display: flex; gap: 15px; margin-top: 30px; justify-content: flex-end; flex-wrap: wrap; }
 .w-100 { width: 100%; }
 
-button { padding: 10px 20px; font-weight: 600; border-radius: 6px; cursor: pointer; border: none; transition: transform 0.15s ease, box-shadow 0.15s ease, background 0.15s ease; }
+/* Wspólne style na klasach (nie na elemencie "button"), żeby przycisk-link <a class="btn-secondary">
+   (np. "Strefa Członka" w nagłówku) wyglądał IDENTYCZNIE jak zwykłe przyciski <button>. */
+button, .btn-primary, .btn-secondary, .btn-success {
+    padding: 10px 20px; font-weight: 600; border-radius: 6px; cursor: pointer; border: none;
+    transition: transform 0.15s ease, box-shadow 0.15s ease, background 0.15s ease;
+    display: inline-block;
+}
 .btn-primary { background: var(--primary); color: #000; }
 .btn-primary:hover { background: var(--primary-hover); }
 .btn-secondary { background: #2e2e38; color: var(--text-color); }
@@ -123,9 +143,9 @@ button { padding: 10px 20px; font-weight: 600; border-radius: 6px; cursor: point
 .btn-success { background: var(--success); color: #fff; }
 .btn-success:hover { opacity: 0.9; }
 
-button:not(:disabled):hover { transform: translateY(-1px); box-shadow: 0 4px 12px rgba(0,0,0,0.3); }
-button:not(:disabled):active { transform: translateY(0); box-shadow: none; }
-button:disabled { background: #2e2e38; color: var(--text-muted); cursor: not-allowed; }
+.btn-primary:hover, .btn-secondary:hover, .btn-success:hover { transform: translateY(-1px); box-shadow: 0 4px 12px rgba(0,0,0,0.3); }
+.btn-primary:active, .btn-secondary:active, .btn-success:active { transform: translateY(0); box-shadow: none; }
+button:disabled { background: #2e2e38; color: var(--text-muted); cursor: not-allowed; transform: none; box-shadow: none; }
 
 @media (max-width: 640px) {
     .actions { justify-content: stretch; }
