@@ -1,6 +1,7 @@
 import { Compressor } from './compressor.js';
 import { Gemini } from './gemini.js';
 import { Gutenberg } from './gutenberg.js';
+import { getRememberedHandle, rememberHandle, verifyPermission } from './dirHandleStore.js';
 
 // Domena WordPressa - w ustawieniach Mediów odznaczone jest "Porządkuj wysyłane pliki w
 // katalogi z numerami miesięcy i lat", więc pliki trafiają bezpośrednio do /wp-content/uploads/
@@ -24,6 +25,7 @@ const App = {
         this.bindEvents();
         this.handleCategoryChange();
         this.switchStep(1);
+        this.initFileSystemSave();
         if (!localStorage.getItem('saf_intro_seen')) {
             this.introModal.classList.remove('hidden');
         }
@@ -71,6 +73,12 @@ const App = {
         this.btnGoToStep3 = document.getElementById('btnGoToStep3');
         this.btnBackToStep2 = document.getElementById('btnBackToStep2');
         this.btnDownloadPhotosStep3 = document.getElementById('btnDownloadPhotosStep3');
+        this.fsSaveButtons = document.getElementById('fsSaveButtons');
+        this.btnSaveLastFolder = document.getElementById('btnSaveLastFolder');
+        this.lastFolderLabel = document.getElementById('lastFolderLabel');
+        this.btnSaveDownloads = document.getElementById('btnSaveDownloads');
+        this.btnSaveCustomFolder = document.getElementById('btnSaveCustomFolder');
+        this.fsUnsupportedNote = document.getElementById('fsUnsupportedNote');
         this.btnTriggerAI = document.getElementById('btnTriggerAI');
         this.btnCopyHtml = document.getElementById('btnCopyHtml');
         this.btnCopyTitle = document.getElementById('btnCopyTitle');
@@ -158,6 +166,9 @@ const App = {
         });
 
         this.btnDownloadPhotosStep3.addEventListener('click', () => this.downloadPhotosZip());
+        this.btnSaveDownloads.addEventListener('click', () => this.saveViaDirectoryPicker({ id: 'safDownloads', startIn: 'downloads' }));
+        this.btnSaveCustomFolder.addEventListener('click', () => this.saveViaDirectoryPicker({ id: 'safCustom' }));
+        this.btnSaveLastFolder.addEventListener('click', () => this.saveToRememberedFolder());
 
         this.btnGoToStep3.addEventListener('click', () => {
             const hasFeaturedCandidate = Compressor.processedFiles.some(f => f.isFeatured || this.canBeFeatured(f));
@@ -192,6 +203,65 @@ const App = {
         const title = this.evtTitle?.value || "wpis";
         const startDate = this.evtStart.value;
         Compressor.generateZip(title, startDate);
+    },
+
+    // File System Access API pozwala zapisać zdjęcia BEZPOŚREDNIO na dysk, bez ZIP-a i bez
+    // ręcznego rozpakowywania - dostępne na razie tylko w Chrome/Edge (komputer i Android).
+    // Safari/iOS tego nie wspiera, więc dla nich zostaje wyłącznie ZIP (patrz fsUnsupportedNote).
+    async initFileSystemSave() {
+        this.fsSupported = typeof window.showDirectoryPicker === 'function';
+        if (!this.fsSupported) {
+            this.fsUnsupportedNote.classList.remove('hidden');
+            return;
+        }
+        this.fsSaveButtons.classList.remove('hidden');
+
+        const remembered = await getRememberedHandle();
+        if (remembered) {
+            this._rememberedDirHandle = remembered;
+            this.lastFolderLabel.textContent = remembered.name;
+            this.btnSaveLastFolder.classList.remove('hidden');
+        }
+    },
+
+    async saveViaDirectoryPicker(options) {
+        try {
+            const dirHandle = await window.showDirectoryPicker(options);
+            await this.performDirectorySave(dirHandle);
+        } catch (err) {
+            if (err.name === 'AbortError') return; // użytkownik zamknął okno wyboru - nic się nie stało
+            alert('Nie udało się zapisać zdjęć: ' + err.message);
+        }
+    },
+
+    async saveToRememberedFolder() {
+        if (!this._rememberedDirHandle) return;
+        const ok = await verifyPermission(this._rememberedDirHandle);
+        if (!ok) {
+            alert('Brak uprawnień do zapamiętanego folderu - wybierz go ponownie przyciskiem "Wybierz inny folder".');
+            return;
+        }
+        try {
+            await this.performDirectorySave(this._rememberedDirHandle);
+        } catch (err) {
+            alert('Nie udało się zapisać zdjęć: ' + err.message);
+        }
+    },
+
+    async performDirectorySave(dirHandle) {
+        this.ensureFeaturedImage();
+        this.renameAllFiles();
+        const title = this.evtTitle?.value || "wpis";
+        const startDate = this.evtStart.value;
+
+        const { folderName, count } = await Compressor.saveToDirectory(dirHandle, title, startDate);
+
+        await rememberHandle(dirHandle);
+        this._rememberedDirHandle = dirHandle;
+        this.lastFolderLabel.textContent = dirHandle.name;
+        this.btnSaveLastFolder.classList.remove('hidden');
+
+        this.showToast(`Zapisano ${count} ${count === 1 ? 'zdjęcie' : 'zdjęć'} w folderze "${folderName}"!`);
     },
 
     // Sprawdza proporcje oryginalnego zdjęcia (3:2, poziomo) z tolerancją na drobne niedokładności.

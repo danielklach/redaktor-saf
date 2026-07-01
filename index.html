@@ -4,6 +4,19 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Redaktor SAFi - Kreator Wpisów SAF Jamnik</title>
+
+    <!-- PWA: manifest + kolor paska przeglądarki/systemu, zgodny z tłem aplikacji -->
+    <link rel="manifest" href="manifest.json">
+    <meta name="theme-color" content="#121214">
+
+    <!-- PWA na iOS: Safari nie czyta manifest.json tak jak Chrome/Edge, więc te tagi są
+         obowiązkowe, żeby "Dodaj do ekranu głównego" dało pełnoprawną, samodzielną aplikację
+         (bez paska adresu) z poprawną nazwą i ikoną. -->
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="Redaktor">
+    <link rel="apple-touch-icon" href="assets/logo-192.png">
+
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Quicksand:wght@600;700&display=swap" rel="stylesheet">
@@ -16,7 +29,7 @@
             <img src="assets/redaktor-saf-emblem.svg" alt="Redaktor SAFi" class="logo-emblem">
             <span class="logo-text">
                 <span class="logo-line">Redaktor</span>
-                <span class="logo-line">SAFi <span class="logo-version">ver. 1.8.4</span></span>
+                <span class="logo-line">SAFi <span class="logo-version">ver. 1.8.5</span></span>
             </span>
         </a>
         <div class="header-actions">
@@ -170,8 +183,19 @@
             </div>
 
             <div class="download-photos-cta">
-                <p><strong>Nie zapomnij pobrać zdjęć!</strong> To jedyne miejsce, w którym można je pobrać - te same nazwy plików muszą trafić do WordPressa, żeby zdjęcia w artykule się wyświetliły.</p>
+                <p><strong>Nie zapomnij zapisać zdjęć!</strong> To jedyne miejsce, w którym można je pobrać - te same nazwy plików muszą trafić do WordPressa, żeby zdjęcia w artykule się wyświetliły. Zdjęcia zapisują się w folderze nazwanym jak wpis (np. "2026-05-koncert").</p>
+
+                <!-- Zapis bezpośrednio na dysk (bez ZIP-a) - dostępny tylko w przeglądarkach z File
+                     System Access API (Chrome/Edge na komputerze i Androidzie). Safari/iOS tego nie
+                     wspiera, więc dla nich zostaje wyłącznie paczka ZIP niżej (patrz fsUnsupportedNote). -->
+                <div id="fsSaveButtons" class="hidden fs-save-buttons">
+                    <button id="btnSaveLastFolder" class="btn-download hidden">💾 Zapisz w: <span id="lastFolderLabel"></span></button>
+                    <button id="btnSaveDownloads" class="btn-download">⬇️ Zapisz w "Pobranych"</button>
+                    <button id="btnSaveCustomFolder" class="btn-secondary">📁 Wybierz inny folder...</button>
+                </div>
+
                 <button id="btnDownloadPhotosStep3" class="btn-download">⬇️ Pobierz paczkę ZIP ze zdjęciami</button>
+                <p id="fsUnsupportedNote" class="hidden info-text" style="margin-top: 10px; margin-bottom: 0;">ℹ️ Ta przeglądarka (typowo Safari/iOS) nie pozwala zapisywać plików wprost na dysk - pobierz paczkę ZIP powyżej. Na iPhonie/iPadzie rozpakujesz ją stuknięciem w aplikacji Pliki, bez instalowania czegokolwiek.</p>
             </div>
 
             <div class="actions">
@@ -253,6 +277,20 @@
 
     <div id="toastContainer" class="toast-container"></div>
 
-    <script type="module" src="js/app.js?v=230"></script>
+    <script type="module" src="js/app.js?v=240"></script>
+
+    <!-- Rejestracja Service Workera (PWA) - celowo osobny, zwykły skrypt (nie moduł aplikacji),
+         żeby infrastruktura PWA działała niezależnie od ewentualnego błędu w js/app.js. -->
+    <script>
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', () => {
+                navigator.serviceWorker.register('sw.js')
+                    .then((reg) => console.log('[PWA] Service Worker zarejestrowany, zakres:', reg.scope))
+                    .catch((err) => console.error('[PWA] Rejestracja Service Workera nie powiodła się:', err));
+            });
+        } else {
+            console.log('[PWA] Ta przeglądarka nie obsługuje Service Workerów.');
+        }
+    </script>
 </body>
 </html>

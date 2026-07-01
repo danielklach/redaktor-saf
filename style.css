@@ -164,6 +164,11 @@ button:disabled { background: #2e2e38; color: var(--text-muted); cursor: not-all
 }
 .download-photos-cta p { margin-bottom: 14px; font-size: 0.9rem; }
 
+/* Zapis bezpośrednio na dysk (PWA / File System Access API) - kilka przycisków obok siebie,
+   ponad ostatecznym fallbackiem w postaci ZIP-a. */
+.fs-save-buttons { display: flex; gap: 10px; flex-wrap: wrap; justify-content: center; margin-bottom: 14px; }
+.fs-save-buttons button { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
 @media (max-width: 640px) {
     .actions { justify-content: stretch; }
     .actions button { flex: 1 1 auto; }

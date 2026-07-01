@@ -120,6 +120,15 @@ export const Compressor = {
         };
     },
 
+    // Nazwa folderu/paczki wspólna dla ZIP-a i zapisu bezpośredniego na dysk (np. "2026-05-koncert").
+    getFolderName(eventTitle, eventDateStr) {
+        const dateObj = new Date(eventDateStr || Date.now());
+        const year = dateObj.getFullYear();
+        const month = String(dateObj.getMonth() + 1).padStart(2, '0');
+        const safeTitle = this.sanitizeString(eventTitle || 'wydarzenie');
+        return `${year}-${month}-${safeTitle}`;
+    },
+
     async generateZip(eventTitle, eventDateStr) {
         if (this.processedFiles.length === 0) return;
         const zip = new JSZip();
@@ -127,16 +136,30 @@ export const Compressor = {
             zip.file(file.name, file.blob);
         });
 
-        const dateObj = new Date(eventDateStr || Date.now());
-        const year = dateObj.getFullYear();
-        const month = String(dateObj.getMonth() + 1).padStart(2, '0');
-        const safeTitle = this.sanitizeString(eventTitle || 'wydarzenie');
-
         const content = await zip.generateAsync({ type: "blob" });
         const url = window.URL.createObjectURL(content);
         const a = document.createElement('a');
         a.href = url;
-        a.download = `${year}-${month}-${safeTitle}.zip`;
+        a.download = `${this.getFolderName(eventTitle, eventDateStr)}.zip`;
         a.click();
+    },
+
+    // Zapisuje wszystkie przetworzone zdjęcia BEZPOŚREDNIO na dysk (File System Access API),
+    // w podfolderze nazwanym jak wydarzenie - bez potrzeby pobierania i rozpakowywania ZIP-a.
+    // Wymaga przeglądarki wspierającej showDirectoryPicker (Chrome/Edge - komputer i Android).
+    async saveToDirectory(dirHandle, eventTitle, eventDateStr) {
+        if (this.processedFiles.length === 0) return { folderName: null, count: 0 };
+
+        const folderName = this.getFolderName(eventTitle, eventDateStr);
+        const subDir = await dirHandle.getDirectoryHandle(folderName, { create: true });
+
+        for (const file of this.processedFiles) {
+            const fileHandle = await subDir.getFileHandle(file.name, { create: true });
+            const writable = await fileHandle.createWritable();
+            await writable.write(file.blob);
+            await writable.close();
+        }
+
+        return { folderName, count: this.processedFiles.length };
     }
 };
