@@ -14,7 +14,7 @@ const App = {
         this.bindEvents();
         this.loadApiKey();
         this.handleCategoryChange();
-        this.switchStep(1); // Twarde wymuszenie widoku pierwszego kroku
+        this.switchStep(1);
     },
 
     cacheDOM() {
@@ -114,13 +114,9 @@ const App = {
             this.notesLabel.innerHTML = "Twoje surowe notatki / spostrzeżenia:";
             this.evtNotes.placeholder = "Kto uczestniczył, jaka była atmosfera, co przykuło uwagę fotografów...";
             
-            if (category === 'kultura') {
-                this.evtTitle.placeholder = "np. Koncert Myslovitz…";
-            } else if (category === 'nauka') {
-                this.evtTitle.placeholder = "np. MSKN...";
-            } else if (category === 'sport') {
-                this.evtTitle.placeholder = "np. Liga Wydziałów...";
-            }
+            if (category === 'kultura') { this.evtTitle.placeholder = "np. Koncert Myslovitz…"; } 
+            else if (category === 'nauka') { this.evtTitle.placeholder = "np. MSKN..."; } 
+            else if (category === 'sport') { this.evtTitle.placeholder = "np. Liga Wydziałów..."; }
         } else {
             this.dynamicFields.style.display = 'none';
             if (category === 'zapowiedzi') {
@@ -133,49 +129,65 @@ const App = {
         }
     },
 
-    // Twarde ukrywanie wszystkich sekcji poza docelową (Punkt 4)
     switchStep(stepNum) {
         this.state.currentStep = stepNum;
-        
-        document.querySelectorAll('.step-section').forEach(s => {
-            s.style.display = 'none';
-            s.classList.remove('active');
-        });
-        
+        document.querySelectorAll('.step-section').forEach(s => { s.style.display = 'none'; s.classList.remove('active'); });
         document.querySelectorAll('.step').forEach(s => s.classList.remove('active'));
         
         const targetSection = document.getElementById(`step${stepNum}`);
-        if (targetSection) {
-            targetSection.style.display = 'block';
-            targetSection.classList.add('active');
-        }
+        if (targetSection) { targetSection.style.display = 'block'; targetSection.classList.add('active'); }
         
         const targetIndicator = document.querySelector(`.step[data-step="${stepNum}"]`);
-        if (targetIndicator) {
-            targetIndicator.classList.add('active');
-        }
+        if (targetIndicator) { targetIndicator.classList.add('active'); }
     },
 
-    // Walidacja pól formularza przed przejściem dalej (Punkt 3)
-    handleStep1Submit() {
+    // Pełna walidacja przed uruchomieniem inteligentnego AI (Punkty 1 i 3)
+    async handleStep1Submit() {
         const cat = this.evtCategory.value;
-        
+        const title = this.evtTitle?.value || "";
+        const loc = this.evtLocation?.value || "";
+        const start = this.evtStart?.value || "";
+        const end = this.evtEnd?.value || "";
+        const notes = this.evtNotes.value.trim();
+
         if (cat === 'kultura' || cat === 'sport' || cat === 'nauka') {
-            if (!this.evtTitle.value || !this.evtLocation.value || !this.evtStart.value || !this.evtEnd.value || !this.evtNotes.value.trim()) {
-                alert("Aby przejść dalej, musisz wypełnić wszystkie pola: Nazwę, Miejsce, Daty i Notatki!");
+            if (!title || !loc || !start || !end || !notes) {
+                alert("BŁĄD: Musisz najpierw wypełnić WSZYSTKIE pola, aby przejść do wgrywania zdjęć.");
                 return;
             }
         } else {
-            if (!this.evtNotes.value.trim()) {
-                alert("Aby przejść dalej, musisz wypełnić pole notatek!");
+            if (!notes) {
+                alert("BŁĄD: Musisz najpierw wypełnić pole notatek.");
                 return;
             }
         }
 
-        const title = this.evtTitle?.value || "Wpis SAF";
-        this.aiQuestionText.innerText = Gemini.getInterviewQuestion(cat, title);
-        this.aiAnswerText.value = "";
+        // Blokada interfejsu i wywołanie prawdziwej AI
         this.aiModal.classList.remove('hidden');
+        this.btnSubmitModal.disabled = true;
+        this.btnSkipModal.disabled = true;
+        this.aiQuestionText.innerHTML = `<div style="display:flex;align-items:center;gap:10px;"><div class="spinner" style="width:20px;height:20px;border:3px solid var(--primary);border-radius:50%;border-top-color:transparent;animation:spin 1s linear infinite;"></div> <span>Agent analizuje wpisane dane i generuje pytania...</span></div>`;
+        this.aiAnswerText.value = "";
+        this.aiAnswerText.style.display = "none";
+
+        try {
+            const apiKey = this.apiKeyInput.value.trim();
+            if(!apiKey) throw new Error("Brak klucza API. Wpisz go w prawym górnym rogu.");
+            
+            // Żądanie o dynamiczny zestaw 10 pytań skrojony pod te notatki
+            const questions = await Gemini.askForMissingDetails(apiKey, cat, title, loc, start, end, notes);
+            
+            // Wyświetlenie gotowych pytań
+            this.aiQuestionText.innerText = questions;
+            this.aiAnswerText.style.display = "block";
+            this.aiAnswerText.placeholder = "Odpowiedz tutaj na wybrane pytania Agenta (to wzbogaci tekst)...";
+        } catch (error) {
+            this.aiQuestionText.innerText = `[Błąd połączenia: ${error.message}]\n\nCzy chcesz samodzielnie dodać jakieś kluczowe szczegóły z pamięci, o których zapomniałeś w notatkach?`;
+            this.aiAnswerText.style.display = "block";
+        }
+
+        this.btnSubmitModal.disabled = false;
+        this.btnSkipModal.disabled = false;
     },
 
     closeModal(saveData) {
@@ -193,13 +205,19 @@ const App = {
         if(!files || files.length === 0) return;
         const incomingFiles = Array.from(files);
         
-        this.fileStatus.innerHTML = `
-            <div style="display: flex; align-items: center; gap: 12px; padding: 15px; background: #1c1c22; border-radius: 6px; border: 1px solid var(--border);">
+        // Dynamiczny loader (Punkt 2) - tworzymy go jako osobny element NAD listą plików
+        const loaderDiv = document.createElement('div');
+        loaderDiv.id = "temp-loader";
+        loaderDiv.innerHTML = `
+            <div style="display: flex; align-items: center; gap: 12px; padding: 15px; background: #202026; border-radius: 6px; border: 1px solid var(--primary); margin-bottom: 15px;">
                 <div class="spinner" style="width: 20px; height: 20px; border: 3px solid var(--border); border-top: 3px solid var(--primary); border-radius: 50%; animation: spin 1s linear infinite;"></div>
-                <span>Agresywna kompresja ${incomingFiles.length} zdjęć (wymuszanie maks. 200 KB)...</span>
+                <span>Błyskawiczna kompresja i ładowanie ${incomingFiles.length} nowych zdjęć (limit max 200 KB)...</span>
             </div>
             <style>@keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }</style>
         `;
+        
+        // Wstawiamy kółko ładowania tuż nad istniejącą listą (bez kasowania jej)
+        this.fileStatus.parentNode.insertBefore(loaderDiv, this.fileStatus);
         
         this.btnDownloadPhotos.disabled = true;
         this.btnGoToStep3.disabled = true;
@@ -219,16 +237,17 @@ const App = {
             }
         }
 
+        // Usuwamy kółko ładowania
+        document.getElementById('temp-loader')?.remove();
         this.fileInput.value = "";
-        this.renderFileList();
+        this.renderFileList(); // Przeładowujemy widok samej listy
     },
 
-    // Generowanie widoku listy ze strzałkami GÓRA/DÓŁ (Punkt 1)
     renderFileList() {
         this.fileStatus.innerHTML = "";
         
         if (Compressor.processedFiles.length === 0) {
-            this.fileStatus.innerHTML = "<p style='text-align:center; padding: 20px; color: var(--text-muted);'>Brak dodanych zdjęć.</p>";
+            this.fileStatus.innerHTML = "<p style='text-align:center; padding: 20px; color: var(--text-muted); border: 1px dashed var(--border); border-radius: 6px;'>Brak dodanych zdjęć. Przeciągnij pliki wyżej, aby je dodać.</p>";
             this.btnDownloadPhotos.disabled = true;
             this.btnGoToStep3.disabled = true;
             return;
@@ -249,16 +268,14 @@ const App = {
             const item = document.createElement('div');
             item.style.cssText = "display: flex; align-items: center; justify-content: space-between; padding: 10px; background: #1c1c22; margin-bottom: 8px; border-radius: 6px; border: 1px solid var(--border);";
             
-            // Kolorowanie wagi na czerwono, jeśli (z jakiegoś technicznego cudu) przekroczy 200KB
             const sizeKB = (file.size/1024).toFixed(1);
-            const sizeColor = file.size > 204800 ? "var(--danger)" : "var(--text-muted)";
 
             item.innerHTML = `
                 <div style="display: flex; align-items: center; gap: 15px;">
                     <img src="${file.previewUrl}" style="width: 55px; height: 55px; object-fit: cover; border-radius: 4px; border: 1px solid #3e3e4a;">
                     <div>
                         <span style="font-weight: 500; color: #fff; display: block;">✅ ${file.name}</span>
-                        <span style="color: ${sizeColor}; font-size: 0.8rem;">Waga: ${sizeKB} KB</span>
+                        <span style="color: var(--text-muted); font-size: 0.8rem;">Waga: ${sizeKB} KB</span>
                     </div>
                 </div>
                 <div style="display: flex; gap: 6px;">
@@ -306,15 +323,15 @@ const App = {
         let compiledInformation = "";
 
         if (cat === 'kultura' || cat === 'sport' || cat === 'nauka') {
-            compiledInformation += `Wydarzenie: ${this.evtTitle.value || 'Brak nazwy'}\n`;
-            compiledInformation += `Miejsce: ${this.evtLocation.value || 'Brak miejsca'}\n`;
-            compiledInformation += `Czas: od ${this.evtStart.value || '?'} do ${this.evtEnd.value || '?'}\n\n`;
+            compiledInformation += `Wydarzenie: ${this.evtTitle.value}\n`;
+            compiledInformation += `Miejsce: ${this.evtLocation.value}\n`;
+            compiledInformation += `Czas: od ${this.evtStart.value} do ${this.evtEnd.value}\n\n`;
         }
         
         compiledInformation += `Główne notatki autora:\n${this.evtNotes.value}\n`;
         
         if (this.state.interviewAnswers) {
-            compiledInformation += `\nDodatkowe szczegóły uzyskane z wywiadu:\n${this.state.interviewAnswers}`;
+            compiledInformation += `\nDodatkowe szczegóły uzyskane z wywiadu z AI:\n${this.state.interviewAnswers}`;
         }
 
         this.finalNotes.value = compiledInformation;

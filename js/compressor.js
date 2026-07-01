@@ -18,53 +18,28 @@ export const Compressor = {
                 const img = new Image();
                 img.src = event.target.result;
                 img.onload = async () => {
-                    const canvas = document.createElement('canvas');
-                    let width = img.width;
-                    let height = img.height;
-                    const maxSide = 2500;
-
-                    if (width > height && width > maxSide) {
-                        height = Math.round((height * maxSide) / width);
-                        width = maxSide;
-                    } else if (height > width && height > maxSide) {
-                        width = Math.round((width * maxSide) / height);
-                        height = maxSide;
-                    }
-
-                    canvas.width = width;
-                    canvas.height = height;
-                    const ctx = canvas.getContext('2d');
-                    ctx.drawImage(img, 0, 0, width, height);
-
-                    const maxSizeBytes = 200 * 1024; // 200 KB
-                    let quality = 0.80;
-                    let currentWidth = width;
-                    let currentHeight = height;
-                    let finalBlob = null;
-
-                    const compress = () => {
+                    const compress = (maxSide, quality) => {
                         return new Promise((resBlob) => {
+                            const canvas = document.createElement('canvas');
+                            let w = img.width, h = img.height;
+                            
+                            if (w > h && w > maxSide) { h = Math.round((h * maxSide) / w); w = maxSide; }
+                            else if (h > w && h > maxSide) { w = Math.round((w * maxSide) / h); h = maxSide; }
+                            
+                            canvas.width = w; canvas.height = h;
+                            const ctx = canvas.getContext('2d');
+                            ctx.drawImage(img, 0, 0, w, h);
                             canvas.toBlob((b) => resBlob(b), 'image/webp', quality);
                         });
                     };
 
-                    finalBlob = await compress();
+                    // Strategia błyskawiczna 2-fazowa (Limit twardy: 200KB = 204800 bajtów)
+                    // Faza 1: Szerokość do 1920px, jakość 0.65 (Zwykle waga wynosi około 120-170KB)
+                    let finalBlob = await compress(1920, 0.65);
 
-                    // Agresywna pętla: jeśli plik > 200 KB
-                    while (finalBlob.size > maxSizeBytes) {
-                        quality -= 0.15; // Drastycznie zjedź z jakości
-                        
-                        // Jeśli jakość jest już bardzo niska, a waga nadal za duża (np. ogromna ilość szumu), tnij rozdzielczość
-                        if (quality <= 0.20) {
-                            currentWidth = Math.round(currentWidth * 0.85);
-                            currentHeight = Math.round(currentHeight * 0.85);
-                            canvas.width = currentWidth;
-                            canvas.height = currentHeight;
-                            ctx.drawImage(img, 0, 0, currentWidth, currentHeight);
-                            quality = 0.70; // Zresetuj jakość dla nowej, mniejszej rozdzielczości
-                        }
-                        
-                        finalBlob = await compress();
+                    // Faza ratunkowa (tylko jeśli zdjęcie jest wybitnie zaszumione lub szczegółowe)
+                    if (finalBlob.size > 204800) {
+                        finalBlob = await compress(1400, 0.50);
                     }
 
                     const dateObj = new Date(eventDateStr || Date.now());
