@@ -11,7 +11,7 @@
     <header>
         <div class="logo-zone">
             <span class="logo-saf">SAF Jamnik</span>
-            <span class="badge">Redaktor v1.0</span>
+            <span class="badge">Redaktor v1.1</span>
         </div>
         <div class="api-zone">
             <input type="password" id="apiKeyInput" placeholder="Klucz Gemini API...">
@@ -20,6 +20,7 @@
     </header>
 
     <main class="container">
+        <!-- Pasek Postępu -->
         <div class="steps-indicator">
             <div class="step active" data-step="1">1. Dane wydarzenia</div>
             <div class="step" data-step="2">2. Kompresja zdjęć</div>
@@ -28,10 +29,23 @@
 
         <hr>
 
+        <!-- KROK 1: Formularz i AI Wywiad -->
         <section id="step1" class="step-section active">
-            <h2>Szczegóły Wydarzenia</h2>
+            <h2>Szczegóły Artykułu</h2>
+            
+            <div class="form-group" style="margin-bottom: 25px;">
+                <label for="evtCategory"><strong>Najpierw wybierz kategorię wpisu:</strong></label>
+                <select id="evtCategory">
+                    <option value="kultura">Kultura / Koncerty / Kluby</option>
+                    <option value="sport">Sport</option>
+                    <option value="zapowiedzi">Zapowiedzi / Ogłoszenia</option>
+                    <option value="zycie">Z życia agencji</option>
+                </select>
+            </div>
+
             <div class="grid-2col">
-                <div class="form-group">
+                <!-- Sekcja pól dynamicznych (Kultura / Sport) -->
+                <div class="form-group" id="dynamicFields">
                     <label for="evtTitle">Nazwa wydarzenia:</label>
                     <input type="text" id="evtTitle" placeholder="np. Kortowiada 2026: Koncert Główny">
 
@@ -48,19 +62,12 @@
                             <input type="datetime-local" id="evtEnd">
                         </div>
                     </div>
-
-                    <label for="evtCategory">Kategoria:</label>
-                    <select id="evtCategory">
-                        <option value="kultura">Kultura / Koncerty / Kluby</option>
-                        <option value="sport">Sport</option>
-                        <option value="zapowiedzi">Zapowiedzi / Ogłoszenia</option>
-                        <option value="zycie">Z życia agencji</option>
-                    </select>
                 </div>
 
+                <!-- Sekcja Notatek (Zawsze widoczna, zmienia się placeholder) -->
                 <div class="form-group">
-                    <label for="evtNotes">Twoje surowe notatki / spostrzeżenia:</label>
-                    <textarea id="evtNotes" rows="10" placeholder="Wpisz tu wszystko co pamiętasz... Kto grał, jaka była atmosfera, czy spadł deszcz, ile było ludzi, specyfika oświetlenia itp."></textarea>
+                    <label for="evtNotes" id="notesLabel">Twoje surowe notatki / spostrzeżenia:</label>
+                    <textarea id="evtNotes" rows="12" placeholder="Wpisz tu wszystko co pamiętasz... Kto grał, jaka była atmosfera, czy spadł deszcz, ile było ludzi, specyfika oświetlenia itp."></textarea>
                 </div>
             </div>
             
@@ -69,14 +76,17 @@
             </div>
         </section>
 
+        <!-- KROK 2: Zdjęcia i Kompresja -->
         <section id="step2" class="step-section">
             <h2>Wgranie i Kompresja Zdjęć</h2>
-            <p class="info-text">Zdjęcia zostaną przekonwertowane do formatu <strong>WebP</strong> (maks. 2500px na dłuższym boku, waga ok. 100-250 KB). Nazwy plików zostaną zunifikowane automatycznie.</p>
+            <p class="info-text">Zdjęcia zostaną przekonwertowane do formatu <strong>WebP</strong> (maks. 2500px na dłuższym boku, waga ok. 100-250 KB).</p>
             
+            <!-- Poprawiona strefa klikania i upuszczania -->
             <div class="dropzone" id="dropzone">
-                <input type="file" id="fileInput" multiple accept="image/*" style="display:none">
-                <p>Przeciągnij i upuść zdjęcia tutaj lub <span class="highlight">kliknij aby wybrać</span></p>
+                <p>Przeciągnij i upuść zdjęcia tutaj lub <span class="highlight" style="text-decoration: underline; pointer-events: none;">kliknij tutaj, aby wybrać z dysku</span></p>
             </div>
+            <!-- Ukryty, ale działający techniczny przycisk pliku -->
+            <input type="file" id="fileInput" multiple accept="image/*" style="display:none;">
 
             <div id="fileStatus" class="file-status"></div>
 
@@ -87,6 +97,7 @@
             </div>
         </section>
 
+        <!-- KROK 3: Podsumowanie i Wynik -->
         <section id="step3" class="step-section">
             <h2>Generowanie Artykułu przez AI</h2>
             
@@ -121,6 +132,7 @@
         </section>
     </main>
 
+    <!-- POPUP / MODAL: Wywiad AI -->
     <div id="aiModal" class="modal hidden">
         <div class="modal-content">
             <h3>🤖 Agent Redakcyjny SAF pyta o szczegóły...</h3>
@@ -132,5 +144,8 @@
             </div>
         </div>
     </div>
+
+    <!-- Załadowanie logiki na samym końcu, gdy cały HTML już istnieje -->
+    <script type="module" src="js/app.js"></script>
 </body>
 </html>

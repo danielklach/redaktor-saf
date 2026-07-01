@@ -14,11 +14,19 @@ const App = {
         this.cacheDOM();
         this.bindEvents();
         this.loadApiKey();
+        this.handleCategoryChange(); // Uruchomienie filtra na start
     },
 
     cacheDOM() {
         this.apiKeyInput = document.getElementById('apiKeyInput');
         this.saveKeyBtn = document.getElementById('saveKeyBtn');
+        this.evtCategory = document.getElementById('evtCategory');
+        this.dynamicFields = document.getElementById('dynamicFields');
+        this.notesLabel = document.getElementById('notesLabel');
+        this.evtNotes = document.getElementById('evtNotes');
+        this.evtStart = document.getElementById('evtStart');
+        this.evtEnd = document.getElementById('evtEnd');
+        
         this.dropzone = document.getElementById('dropzone');
         this.fileInput = document.getElementById('fileInput');
         this.fileStatus = document.getElementById('fileStatus');
@@ -47,10 +55,26 @@ const App = {
 
     bindEvents() {
         this.saveKeyBtn.addEventListener('click', () => this.saveApiKey());
+        this.evtCategory.addEventListener('change', () => this.handleCategoryChange());
+        
+        // Automatyczne ustawianie daty zakończenia na podstawie rozpoczęcia (Punkt 1)
+        this.evtStart.addEventListener('change', (e) => {
+            if (e.target.value) {
+                // Kopiujemy całą datę (RRRR-MM-DD), zostawiając godzinę pustą (00:00)
+                const datePart = e.target.value.split('T')[0];
+                this.evtEnd.value = `${datePart}T00:00`;
+            }
+        });
+
         this.btnGoToStep2.addEventListener('click', () => this.handleStep1Submit());
         this.btnBackToStep1.addEventListener('click', () => this.switchStep(1));
         
-        this.dropzone.addEventListener('click', () => this.fileInput.click());
+        // Poprawione otwieranie okna plików (Punkt 3)
+        this.dropzone.addEventListener('click', (e) => {
+            e.preventDefault();
+            this.fileInput.click();
+        });
+        
         this.fileInput.addEventListener('change', (e) => this.handleFiles(e.target.files));
         
         this.dropzone.addEventListener('dragover', (e) => { e.preventDefault(); this.dropzone.style.borderColor = 'var(--primary)'; });
@@ -68,20 +92,40 @@ const App = {
         this.btnRegenerate.addEventListener('click', () => { this.aiOutput.classList.add('hidden'); this.finalNotes.focus(); });
     },
 
-loadApiKey() {
-    const officialKey = "AQ.Ab8RN6IuYXGYjFNDrkmkYkcACi1plSBa1s1FwJsLuCatQhnK4Q";
-    const saved = localStorage.getItem('saf_gemini_key');
-    if (saved) { 
-        this.apiKeyInput.value = saved; 
-    } else {
-        this.apiKeyInput.value = officialKey;
-        this.apiKeyInput.placeholder = "Używasz oficjalnego klucza SAF Jamnik";
-    }
-},
+    loadApiKey() {
+        // Wklej tutaj swój przetestowany klucz
+        const officialKey = "AQ.Ab8RN6IuYXGYjFNDrkmkYkcACi1plSBa1s1FwJsLuCatQhnK4Q";
+        const saved = localStorage.getItem('saf_gemini_key');
+        if (saved) { 
+            this.apiKeyInput.value = saved; 
+        } else {
+            this.apiKeyInput.value = officialKey;
+            this.apiKeyInput.placeholder = "Używasz oficjalnego klucza SAF Jamnik";
+        }
+    },
 
     saveApiKey() {
         localStorage.setItem('saf_gemini_key', this.apiKeyInput.value);
         alert('Klucz API zapisany lokalnie!');
+    },
+
+    // Obsługa dynamicznych pól w zależności od kategorii (Punkt 2)
+    handleCategoryChange() {
+        const category = this.evtCategory.value;
+        if (category === 'kultura' || category === 'sport') {
+            this.dynamicFields.classList.remove('hidden');
+            this.notesLabel.innerHTML = "Twoje surowe notatki / spostrzeżenia:";
+            this.evtNotes.placeholder = "Kto grał, jaka była atmosfera, ile było ludzi...";
+        } else {
+            this.dynamicFields.classList.add('hidden');
+            if (category === 'zapowiedzi') {
+                this.notesLabel.innerHTML = "<strong>Co dokładnie zapowiadasz, kiedy i gdzie to będzie?</strong>";
+                this.evtNotes.placeholder = "Opisz planowane wydarzenie, datę, godzinę, miejsce, czy wstęp jest wolny itp...";
+            } else if (category === 'zycie') {
+                this.notesLabel.innerHTML = "<strong>Opisz co się działo w agencji / jakie są ustalenia:</strong>";
+                this.evtNotes.placeholder = "Co robiliście, kto brał udział, jakie zapadły decyzje lub jaki sprzęt testowaliście...";
+            }
+        }
     },
 
     switchStep(stepNum) {
@@ -94,8 +138,8 @@ loadApiKey() {
     },
 
     handleStep1Submit() {
-        const cat = document.getElementById('evtCategory').value;
-        const title = document.getElementById('evtTitle').value;
+        const cat = this.evtCategory.value;
+        const title = document.getElementById('evtTitle')?.value || "Wpis SAF";
         
         this.aiQuestionText.innerText = Gemini.getInterviewQuestion(cat, title);
         this.aiAnswerText.value = "";
@@ -107,17 +151,17 @@ loadApiKey() {
             this.state.interviewAnswers = this.aiAnswerText.value.trim();
         }
         this.aiModal.classList.add('hidden');
-        this.switchStep(2);
+        this.switchStep(2); // Przejście do kroku 2 (Punkt 4)
     },
 
     async handleFiles(files) {
-        if(files.length === 0) return;
+        if(!files || files.length === 0) return;
         this.state.filesToProcess = Array.from(files);
         this.fileStatus.innerHTML = "<p>Trwa kompresja obrazów do WebP...</p>";
         
         Compressor.processedFiles = [];
-        const title = document.getElementById('evtTitle').value;
-        const startDate = document.getElementById('evtStart').value;
+        const title = document.getElementById('evtTitle')?.value || "saf-wpis";
+        const startDate = this.evtStart.value;
 
         for (let i = 0; i < this.state.filesToProcess.length; i++) {
             try {
@@ -134,19 +178,19 @@ loadApiKey() {
     },
 
     goToStep3() {
-        const baseNotes = document.getElementById('evtNotes').value;
+        const baseNotes = this.evtNotes.value;
         this.finalNotes.value = baseNotes + (this.state.interviewAnswers ? `\n\n[Dodatkowe szczegóły z wywiadu]: ${this.state.interviewAnswers}` : "");
         this.switchStep(3);
     },
 
     async generateArticle() {
         const apiKey = this.apiKeyInput.value.trim();
-        if(!apiKey) return alert("Musisz najpierw podać klucz API Gemini!");
+        if(!apiKey) return alert("Brak klucza API!");
 
         this.aiLoading.classList.remove('hidden');
         this.aiOutput.classList.add('hidden');
 
-        const cat = document.getElementById('evtCategory').value;
+        const cat = this.evtCategory.value;
         const notes = this.finalNotes.value;
         const prompt = Gemini.getPromptTemplate(cat, notes);
 
@@ -154,10 +198,9 @@ loadApiKey() {
             const aiJson = await Gemini.callGemini(apiKey, prompt);
             this.state.aiData = aiJson;
 
-            // Obliczenie sugerowanej daty publikacji (Koniec wydarzenia + 3 godziny)
-            const endVal = document.getElementById('evtEnd').value;
+            const endVal = this.evtEnd.value;
             let pubDate = new Date();
-            if(endVal) {
+            if(endVal && this.evtCategory.value !== 'zapowiedzi') {
                 pubDate = new Date(endVal);
                 pubDate.setHours(pubDate.getHours() + 3);
             }
@@ -165,7 +208,6 @@ loadApiKey() {
             this.sugDate.innerText = pubDate.toLocaleString('pl-PL');
             this.sugTags.innerText = aiJson.tags ? aiJson.tags.join(', ') : 'brak';
 
-            // Generowanie kodu Gutenberga przeplatanego zasobami WebP
             const finalGutenbergHTML = Gutenberg.generateBlockCode(aiJson, Compressor.processedFiles);
             this.gutenbergOutput.value = finalGutenbergHTML;
 
@@ -173,14 +215,14 @@ loadApiKey() {
             this.aiOutput.classList.remove('hidden');
         } catch (error) {
             this.aiLoading.classList.add('hidden');
-            alert("Błąd podczas kontaktu z AI: " + error.message);
+            alert("Błąd AI: " + error.message);
         }
     },
 
     copyToClipboard() {
         this.gutenbergOutput.select();
         document.execCommand('copy');
-        alert('Skopiowano kod bloku WordPress Gutenberg! Możesz go wkleić bezpośrednio w edytorze kodu WP.');
+        alert('Skopiowano kod bloku WordPress! Możesz wkleić go w edytorze WP.');
     }
 };
 
