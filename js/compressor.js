@@ -113,7 +113,8 @@ export const Compressor = {
             name: fileName,
             size: result.size,
             previewUrl: URL.createObjectURL(result.blob),
-            wpPath: `/wp-content/uploads/${year}/${month}/${fileName}`
+            wpPath: `/wp-content/uploads/${year}/${month}/${fileName}`,
+            isFeatured: false
         };
     },
 

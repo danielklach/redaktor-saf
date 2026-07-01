@@ -11,29 +11,10 @@
     <header>
         <div class="logo-zone">
             <span class="logo-saf">SAF Jamnik</span>
-            <span class="badge">Redaktor v1.7.3.1</span>
+            <span class="badge">Redaktor v1.8</span>
         </div>
-        <div class="api-zone">
-            <div class="input-with-toggle">
-                <!-- Pkt 5 i 7: pole NIE jest typu "password" (unika fałszywej propozycji zapisu hasła
-                     w przeglądarce), a maskowanie wizualne robimy przez CSS (-webkit-text-security).
-                     Domyślnie pole może zostać puste - wtedy używane jest bezpieczne proxy (patrz js/gemini.js). -->
-                <input type="text"
-                       id="apiKeyInput"
-                       class="masked-input"
-                       name="saf_ai_token"
-                       placeholder="Opcjonalnie: własny klucz Gemini API..."
-                       autocomplete="off"
-                       autocapitalize="off"
-                       autocorrect="off"
-                       spellcheck="false"
-                       data-lpignore="true"
-                       data-1p-ignore="true"
-                       data-bwignore="true"
-                       data-form-type="other">
-                <button type="button" id="toggleKeyVisibility" class="btn-toggle-visibility" title="Pokaż/ukryj klucz">👁</button>
-            </div>
-            <button id="saveKeyBtn" class="btn-secondary">Zapisz Klucz</button>
+        <div class="header-actions">
+            <button type="button" id="btnReportIssue" class="btn-secondary">⚠️ Zgłoś problem</button>
         </div>
     </header>
 
@@ -85,7 +66,13 @@
                     <textarea id="evtNotes" rows="12" placeholder="Wpisz tu wszystko co pamiętasz..."></textarea>
                 </div>
             </div>
-            
+
+            <div class="form-group" style="margin-top: 20px;">
+                <label for="evtExternalArticle">Wklej treść zewnętrznego artykułu (opcjonalnie):</label>
+                <p class="info-text" style="margin-bottom: 8px; color: var(--text-muted); font-size: 0.85rem;">Jeśli inny portal (np. olsztyn.com.pl) już opisał to wydarzenie, wklej tu jego treść - AI wykorzysta ją WYŁĄCZNIE jako źródło faktów (poprawne nazwiska, oficjalne nazwy tras koncertowych itp.), a nie jako wzór stylu czy treści do skopiowania.</p>
+                <textarea id="evtExternalArticle" rows="8" placeholder="Wklej tutaj skopiowany tekst zewnętrznego artykułu..."></textarea>
+            </div>
+
             <div class="actions">
                 <button id="btnGoToStep2" class="btn-primary">Dalej: Zdjęcia &rarr;</button>
             </div>
@@ -143,17 +130,23 @@
                             </div>
                             <p><strong>Sugerowana Data Publikacji (WP):</strong> <span id="sugDate">-</span></p>
                             <p><strong>Sugerowane Tagi:</strong> <span id="sugTags">-</span></p>
+                            <p><strong>Obrazek wyróżniający:</strong> <span id="sugFeaturedImage">-</span> <span style="color: var(--text-muted); font-size: 0.8rem;">(ustaw go ręcznie jako "Featured Image" w WordPressie - nie jest wpleciony w treść ani galerię)</span></p>
                         </div>
-                        
+
                         <label for="gutenbergOutput">Kod do wklejenia do Edytora Kodu WordPress (Gutenberg):</label>
                         <textarea id="gutenbergOutput" rows="12" readonly></textarea>
-                        
+
                         <div class="actions" style="margin-top: 10px;">
                             <button id="btnCopyHtml" class="btn-success">Kopiuj artykuł w HTML</button>
                             <button id="btnRegenerate" class="btn-secondary">Generuj jeszcze raz</button>
                         </div>
                     </div>
                 </div>
+            </div>
+
+            <div class="actions">
+                <button id="btnBackToStep2" class="btn-secondary">&larr; Wstecz</button>
+                <button id="btnDownloadPhotosStep3" class="btn-success">Pobierz paczkę ZIP ze zdjęciami</button>
             </div>
         </section>
     </main>
@@ -175,6 +168,33 @@
         </div>
     </div>
 
-    <script type="module" src="js/app.js?v=180"></script>
+    <div id="reportModal" class="modal hidden">
+        <div class="modal-content">
+            <h3>⚠️ Zgłoś problem</h3>
+
+            <div class="form-group">
+                <label for="reportCategory">Co nie działa?</label>
+                <select id="reportCategory">
+                    <option value="Kompresja / wgrywanie zdjęć">Kompresja / wgrywanie zdjęć</option>
+                    <option value="Generowanie artykułu przez AI">Generowanie artykułu przez AI</option>
+                    <option value="Kod Gutenberg / WordPress">Kod Gutenberg / WordPress</option>
+                    <option value="Interfejs / wygląd strony">Interfejs / wygląd strony</option>
+                    <option value="Inne">Inne</option>
+                </select>
+
+                <label for="reportDescription">Opisz problem:</label>
+                <textarea id="reportDescription" rows="6" placeholder="Co się stało? Co próbowałeś/aś zrobić?"></textarea>
+            </div>
+
+            <div class="modal-actions">
+                <button id="btnCancelReport" class="btn-secondary">Anuluj</button>
+                <button id="btnSendReport" class="btn-primary">Wyślij</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="toastContainer" class="toast-container"></div>
+
+    <script type="module" src="js/app.js?v=190"></script>
 </body>
 </html>

@@ -6,7 +6,10 @@ export const Gutenberg = {
 
     generateBlockCode(aiData, processedImages) {
         let output = "";
-        const images = [...processedImages];
+        // Obrazek oznaczony jako wyróżniający (nazwa kończąca się na "-00") jest ustawiany
+        // ręcznie jako Featured Image w WordPressie i wyświetla się tam automatycznie nad
+        // leadem - dlatego MUSI zostać wykluczony z treści i z końcowej galerii, żeby się nie powtórzył.
+        const images = processedImages.filter(img => !img.isFeatured);
         let imgIndex = 0;
 
         // 1. LEAD jako blok generateblocks/text z tagName "h6" (zgodnie z przykładem)

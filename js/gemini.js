@@ -21,6 +21,13 @@ const EXISTING_TAGS = [
     "siatkowka", "sport"
 ];
 
+// Tagi preferowane dla kategorii "Z życia agencji" - wewnętrzne życie i integracja zespołu,
+// zamiast typowo reporterskich tagów (patrz wymóg użytkownika w getPromptTemplate).
+const AGENCY_LIFE_TAGS = [
+    "integracja", "kulisy", "spotkanie-agencji", "szkolenie", "warsztaty-fotograficzne",
+    "sprzet-fotograficzny", "zycie-agencji", "saf-jamnik", "wspolnota"
+];
+
 export const Gemini = {
     // Dynamiczny wywiad AI na podstawie wpisanych danych - zwraca TABLICĘ pytań (JSON),
     // żeby dało się je łatwo i niezawodnie ponumerować w interfejsie (pkt 2).
@@ -56,6 +63,7 @@ Bez markdownu, bez wstępów, bez komentarzy poza obiektem JSON.`;
     },
 
     getPromptTemplate(category, notes) {
+        const isAgencyLife = category === 'zycie';
         return `${AGENCY_CONTEXT}
 
 Działasz jako doświadczony redaktor portalu uniwersyteckiego i krytyk fotograficzny SAF Jamnik. Twój styl jest dynamiczny, poprawny językowo, angażujący i profesjonalny.
@@ -69,7 +77,8 @@ Schemat JSON do zastosowania:
   "paragraphs": [
     {"heading": "Opcjonalny, chwytliwy śródtytuł sekcji", "text": "Treść akapitu, ok. 600 znaków"}
   ],
-  "tags": ["tag1", "tag2"]
+  "tags": ["tag1", "tag2"],
+  "filenameSlug": "krotki-czytelny-slug"
 }
 
 WYMAGANIA DOTYCZĄCE TREŚCI:
@@ -77,7 +86,9 @@ WYMAGANIA DOTYCZĄCE TREŚCI:
 2. LEAD - to pierwszy akapit tekstu, którego zadaniem jest natychmiastowe przyciągnięcie uwagi i przekazanie kluczowych informacji, pełniący jednocześnie funkcję zajawki. Długość: 2-4 zdania, ok. 200-400 znaków. Musi zwięźle odpowiadać na pytania: kto, co, gdzie, kiedy, jak i dlaczego. Wpleć element, który zaintryguje odbiorcę - mocny cytat, zaskakujący fakt lub krótką anegdotę.
 3. ŚRÓDTYTUŁY - dziel dłuższy tekst na logiczne sekcje z krótkimi, chwytliwymi śródtytułami (pole "heading").
 4. AKAPITY - treść ma być długa i wyczerpująca. Każdy akapit ("text") powinien mieć ok. 600 znaków (nie licząc śródtytułów). Używaj znaczników <strong> i <em> w treści akapitów tam, gdzie warto podkreślić ważne informacje, liczby, cytaty lub nazwy własne.
-5. TAGI - w pierwszej kolejności wybieraj spośród tagów już istniejących na stronie: ${EXISTING_TAGS.join(", ")}. Własne, nowe tagi dodawaj TYLKO wtedy, gdy żaden z powyższych naprawdę nie pasuje do tematu.
+5. TAGI - w pierwszej kolejności wybieraj spośród tagów już istniejących na stronie: ${EXISTING_TAGS.join(", ")}. Własne, nowe tagi dodawaj TYLKO wtedy, gdy żaden z powyższych naprawdę nie pasuje do tematu.${isAgencyLife ? ` UWAGA - kategoria to "Z życia agencji": UNIKAJ typowo reporterskich tagów jak "reportaz" czy "olsztyn" (użyj ich TYLKO, jeśli z notatek jasno wynika, że są niezbędne). Zamiast tego dobieraj tagi pasujące do wewnętrznego życia i integracji agencji, np.: ${AGENCY_LIFE_TAGS.join(", ")}.` : ''}
+6. FILENAMESLUG - wygeneruj krótki (2-5 słów), czytelny dla człowieka slug opisujący zdjęcia z tego wydarzenia: same małe litery, myślniki zamiast spacji, BEZ polskich znaków diakrytycznych. Zostanie użyty jako baza nazw plików zdjęć w formacie RRRR-MM-{filenameSlug}-NR.webp (datę i numer porządkowy dogeneruje system automatycznie). Przykłady dobrych sluggów: "kortowiada-kortostrong", "nowy-telewizor", "koncert-myslovitz-w-kortowie".
+7. ŹRÓDŁA - jeśli w notatkach poniżej pojawia się sekcja oznaczona jako "ZEWNĘTRZNY ARTYKUŁ" (tekst wklejony z innego portalu, np. lokalnego serwisu informacyjnego) - potraktuj ją WYŁĄCZNIE jako pomocnicze źródło faktów: poprawne nazwiska, oficjalne nazwy tras koncertowych/wydarzeń, daty i inne szczegóły, które mogły umknąć naszym fotografom. NIE przepisuj z niej zdań ani stylu - Twój tekst ma być w pełni oryginalny. W razie sprzeczności priorytet mają notatki redakcji SAF Jamnik.
 
 Kategoria wpisu: ${category.toUpperCase()}
 Oto pełna treść notatek oraz zebranych informacji o wydarzeniu:
@@ -101,7 +112,7 @@ ${notes}`;
             });
         } else {
             if (!PROXY_URL || PROXY_URL.includes('TWOJ-USER')) {
-                throw new Error("Bezpieczne proxy z kluczem API redakcji nie jest jeszcze skonfigurowane (patrz worker/worker.js i komentarz w js/gemini.js). Wklej tymczasowo własny klucz Gemini API w prawym górnym rogu.");
+                throw new Error("Bezpieczne proxy z kluczem API redakcji nie jest jeszcze skonfigurowane (patrz worker/worker.js i komentarz w js/gemini.js). Skontaktuj się z administratorem strony.");
             }
             response = await fetch(PROXY_URL, {
                 method: 'POST',

@@ -6,41 +6,50 @@ const App = {
     state: {
         currentStep: 1,
         interviewAnswers: "",
-        aiData: null
+        aiData: null,
+        aiFilenameSlug: null,
+        zipDownloaded: false
     },
 
     init() {
         this.cacheDOM();
         this.bindEvents();
-        this.loadApiKey();
         this.handleCategoryChange();
         this.switchStep(1);
     },
 
     cacheDOM() {
-        this.apiKeyInput = document.getElementById('apiKeyInput');
-        this.saveKeyBtn = document.getElementById('saveKeyBtn');
-        this.toggleKeyVisibility = document.getElementById('toggleKeyVisibility');
+        this.btnReportIssue = document.getElementById('btnReportIssue');
+        this.reportModal = document.getElementById('reportModal');
+        this.reportCategory = document.getElementById('reportCategory');
+        this.reportDescription = document.getElementById('reportDescription');
+        this.btnCancelReport = document.getElementById('btnCancelReport');
+        this.btnSendReport = document.getElementById('btnSendReport');
+        this.toastContainer = document.getElementById('toastContainer');
+
         this.evtCategory = document.getElementById('evtCategory');
         this.dynamicFields = document.getElementById('dynamicFields');
         this.notesLabel = document.getElementById('notesLabel');
         this.evtNotes = document.getElementById('evtNotes');
+        this.evtExternalArticle = document.getElementById('evtExternalArticle');
         this.evtStart = document.getElementById('evtStart');
         this.evtEnd = document.getElementById('evtEnd');
         this.evtTitle = document.getElementById('evtTitle');
         this.evtLocation = document.getElementById('evtLocation');
-        
+
         this.dropzone = document.getElementById('dropzone');
         this.fileInput = document.getElementById('fileInput');
         this.fileStatus = document.getElementById('fileStatus');
         this.uploadProgressWrap = document.getElementById('uploadProgressWrap');
         this.uploadProgressBar = document.getElementById('uploadProgressBar');
         this.uploadProgressLabel = document.getElementById('uploadProgressLabel');
-        
+
         this.btnGoToStep2 = document.getElementById('btnGoToStep2');
         this.btnBackToStep1 = document.getElementById('btnBackToStep1');
         this.btnDownloadPhotos = document.getElementById('btnDownloadPhotos');
         this.btnGoToStep3 = document.getElementById('btnGoToStep3');
+        this.btnBackToStep2 = document.getElementById('btnBackToStep2');
+        this.btnDownloadPhotosStep3 = document.getElementById('btnDownloadPhotosStep3');
         this.btnTriggerAI = document.getElementById('btnTriggerAI');
         this.btnCopyHtml = document.getElementById('btnCopyHtml');
         this.btnCopyTitle = document.getElementById('btnCopyTitle');
@@ -63,13 +72,14 @@ const App = {
         this.sugTitleInput = document.getElementById('sugTitleInput');
         this.sugDate = document.getElementById('sugDate');
         this.sugTags = document.getElementById('sugTags');
+        this.sugFeaturedImage = document.getElementById('sugFeaturedImage');
     },
 
     bindEvents() {
-        this.saveKeyBtn.addEventListener('click', () => this.saveApiKey());
-        this.toggleKeyVisibility.addEventListener('click', () => {
-            this.apiKeyInput.classList.toggle('masked-input');
-        });
+        this.btnReportIssue.addEventListener('click', () => this.reportModal.classList.remove('hidden'));
+        this.btnCancelReport.addEventListener('click', () => this.reportModal.classList.add('hidden'));
+        this.btnSendReport.addEventListener('click', () => this.sendReport());
+
         this.evtCategory.addEventListener('change', () => this.handleCategoryChange());
         
         this.evtStart.addEventListener('change', (e) => {
@@ -99,45 +109,62 @@ const App = {
             this.handleFiles(e.dataTransfer.files);
         });
 
-        this.btnDownloadPhotos.addEventListener('click', () => {
-            const title = this.evtTitle?.value || "wpis";
-            const startDate = this.evtStart.value;
-            Compressor.generateZip(title, startDate);
+        this.btnDownloadPhotos.addEventListener('click', () => this.downloadPhotosZip());
+        this.btnDownloadPhotosStep3.addEventListener('click', () => this.downloadPhotosZip());
+
+        this.btnGoToStep3.addEventListener('click', () => {
+            if (!this.state.zipDownloaded) {
+                const proceed = confirm('Nie pobrałeś jeszcze paczki ZIP ze zdjęciami. Zalecamy pobranie kopii zapasowej przed przejściem dalej.\n\nCzy mimo to chcesz kontynuować?');
+                if (!proceed) return;
+            }
+            this.goToStep3();
         });
-        
-        this.btnGoToStep3.addEventListener('click', () => this.goToStep3());
-        
+        this.btnBackToStep2.addEventListener('click', () => {
+            this.switchStep(2);
+            this.renderFileList(); // odśwież listę - nazwy mogły się zmienić po Kroku 3 (slug od AI)
+        });
+
         this.btnSubmitModal.addEventListener('click', () => this.closeModal(true));
         this.btnSkipModal.addEventListener('click', () => this.closeModal(false));
-        
+
         this.btnTriggerAI.addEventListener('click', () => this.generateArticle());
         this.btnCopyHtml.addEventListener('click', () => this.copyGutenbergCode());
         this.btnCopyTitle.addEventListener('click', () => this.copyTitle());
         this.btnRegenerate.addEventListener('click', () => { this.aiOutput.classList.add('hidden'); this.finalNotes.focus(); });
     },
 
-    // Pkt 7: klucz "oficjalny" (redakcji) NIE jest już zaszyty w kodzie strony.
-    // Pole służy wyłącznie do wklejenia WŁASNEGO, osobistego klucza - jeśli zostanie puste,
-    // aplikacja automatycznie korzysta z bezpiecznego proxy (patrz js/gemini.js).
-    loadApiKey() {
-        const saved = localStorage.getItem('saf_gemini_key');
-        if (saved) {
-            this.apiKeyInput.value = saved;
-        } else {
-            this.apiKeyInput.value = "";
-            this.apiKeyInput.placeholder = "Opcjonalnie: własny klucz Gemini API...";
-        }
+    downloadPhotosZip() {
+        const title = this.evtTitle?.value || "wpis";
+        const startDate = this.evtStart.value;
+        Compressor.generateZip(title, startDate);
+        this.state.zipDownloaded = true;
     },
 
-    saveApiKey() {
-        const key = this.apiKeyInput.value.trim();
-        if (!key) {
-            localStorage.removeItem('saf_gemini_key');
-            alert('Usunięto zapisany klucz. Od teraz używane jest bezpieczne, domyślne proxy redakcji.');
+    // Toast notification nienachalny popup na dole ekranu, zamiast systemowego alert() (pkt UI/UX).
+    showToast(message) {
+        const toast = document.createElement('div');
+        toast.className = 'toast';
+        toast.textContent = message;
+        this.toastContainer.appendChild(toast);
+        requestAnimationFrame(() => toast.classList.add('show'));
+        setTimeout(() => {
+            toast.classList.remove('show');
+            setTimeout(() => toast.remove(), 300);
+        }, 3000);
+    },
+
+    sendReport() {
+        const category = this.reportCategory.value;
+        const description = this.reportDescription.value.trim();
+        if (!description) {
+            alert('Opisz proszę, na czym polega problem.');
             return;
         }
-        localStorage.setItem('saf_gemini_key', key);
-        alert('Zapisano Twój osobisty klucz w tej przeglądarce!');
+        const subject = encodeURIComponent(`[Redaktor SAF] Zgłoszenie problemu: ${category}`);
+        const body = encodeURIComponent(`Kategoria: ${category}\n\nOpis problemu:\n${description}\n\n---\nZgłoszenie wysłane z Redaktora SAF Jamnik.`);
+        window.location.href = `mailto:webmaster@klachphoto.com?subject=${subject}&body=${body}`;
+        this.reportModal.classList.add('hidden');
+        this.reportDescription.value = '';
     },
 
     handleCategoryChange() {
@@ -280,8 +307,7 @@ const App = {
         );
 
         try {
-            const apiKey = this.apiKeyInput.value.trim();
-            const questions = await Gemini.askForMissingDetails(apiKey, cat, title, loc, start, end, notes);
+            const questions = await Gemini.askForMissingDetails('', cat, title, loc, start, end, notes);
             progress.finish("Gotowe!");
             this.renderQuestions(questions);
         } catch (error) {
@@ -385,7 +411,7 @@ const App = {
 
         const results = await Promise.all(tasks);
         results.forEach(r => {
-            if (r.ok) Compressor.processedFiles.push(r.res);
+            if (r.ok) { Compressor.processedFiles.push(r.res); this.state.zipDownloaded = false; }
             else skipped.push(r.error);
         });
 
@@ -402,9 +428,42 @@ const App = {
         }
     },
 
+    // Przelicza nazwy WSZYSTKICH plików od nowa: RRRR-MM-{slug}-NR.webp. Slug pochodzi od AI
+    // (po Kroku 3 - patrz generateArticle), a dopóki AI się nie wypowiedziało - od tytułu z Kroku 1.
+    // Zdjęcie oznaczone jako wyróżniające zawsze dostaje numer "00", niezależnie od pozycji na liście;
+    // pozostałe zdjęcia są numerowane kolejno 01, 02... (bez wliczania wyróżniającego).
+    renameAllFiles() {
+        const startDate = this.evtStart.value;
+        const dateObj = new Date(startDate || Date.now());
+        const year = dateObj.getFullYear();
+        const month = String(dateObj.getMonth() + 1).padStart(2, '0');
+        const baseSlug = this.state.aiFilenameSlug
+            ? Compressor.sanitizeString(this.state.aiFilenameSlug)
+            : Compressor.sanitizeString(this.evtTitle?.value || 'saf-wpis');
+
+        let seq = 0;
+        Compressor.processedFiles.forEach(file => {
+            const numStr = file.isFeatured ? '00' : String(++seq).padStart(2, '0');
+            file.name = `${year}-${month}-${baseSlug}-${numStr}.webp`;
+            file.wpPath = `/wp-content/uploads/${year}/${month}/${file.name}`;
+        });
+    },
+
+    // Kliknięcie "Ustaw jako wyróżniające": przenosi zdjęcie na sam początek listy (indeks 0)
+    // i oznacza je flagą isFeatured (numeracja "00" nadawana jest w renameAllFiles).
+    setFeaturedImage(index) {
+        const files = Compressor.processedFiles;
+        if (index < 0 || index >= files.length) return;
+        files.forEach(f => { f.isFeatured = false; });
+        const [item] = files.splice(index, 1);
+        item.isFeatured = true;
+        files.unshift(item);
+        this.renderFileList();
+    },
+
     renderFileList() {
         this.fileStatus.innerHTML = "";
-        
+
         if (Compressor.processedFiles.length === 0) {
             this.fileStatus.innerHTML = "<p style='text-align:center; padding: 20px; color: var(--text-muted); border: 1px dashed var(--border); border-radius: 6px;'>Brak dodanych zdjęć. Przeciągnij pliki wyżej, aby je dodać.</p>";
             this.btnDownloadPhotos.disabled = true;
@@ -412,38 +471,41 @@ const App = {
             return;
         }
 
-        const title = this.evtTitle?.value || "saf-wpis";
-        const startDate = this.evtStart.value;
-        const dateObj = new Date(startDate || Date.now());
-        const year = dateObj.getFullYear();
-        const month = String(dateObj.getMonth() + 1).padStart(2, '0');
-        const safeTitle = Compressor.sanitizeString(title);
+        this.renameAllFiles();
 
         Compressor.processedFiles.forEach((file, index) => {
-            const numStr = String(index + 1).padStart(2, '0');
-            file.name = `${year}-${month}-${safeTitle}-${numStr}.webp`;
-            file.wpPath = `/wp-content/uploads/${year}/${month}/${file.name}`;
-
             const item = document.createElement('div');
-            item.style.cssText = "display: flex; align-items: center; justify-content: space-between; padding: 10px; background: #1c1c22; margin-bottom: 8px; border-radius: 6px; border: 1px solid var(--border);";
-            
+            item.style.cssText = "display: flex; align-items: center; justify-content: space-between; padding: 10px; background: #1c1c22; margin-bottom: 8px; border-radius: 6px; border: 1px solid var(--border); flex-wrap: wrap; gap: 10px;";
+
             const sizeKB = (file.size/1024).toFixed(1);
+            const statusIcon = file.isFeatured ? '⭐' : '✅';
 
             item.innerHTML = `
                 <div style="display: flex; align-items: center; gap: 15px;">
                     <img src="${file.previewUrl}" style="width: 55px; height: 55px; object-fit: cover; border-radius: 4px; border: 1px solid #3e3e4a;">
                     <div>
-                        <span style="font-weight: 500; color: #fff; display: block;">✅ ${file.name}</span>
+                        <span style="font-weight: 500; color: #fff; display: block;">${statusIcon} ${file.name}</span>
                         <span style="color: var(--text-muted); font-size: 0.8rem;">Waga: ${sizeKB} KB</span>
                     </div>
                 </div>
-                <div style="display: flex; gap: 6px;">
+                <div style="display: flex; gap: 6px; flex-wrap: wrap;">
+                    <button class="btn-feature${file.isFeatured ? ' active' : ''}" style="padding: 8px 12px; font-size: 0.85rem; border-radius: 4px; border: none; cursor: pointer;">${file.isFeatured ? '⭐ Wyróżniające' : '☆ Ustaw jako wyróżniające'}</button>
                     <button class="btn-up" style="background: #2e2e38; color: #fff; padding: 8px 12px; font-size: 0.85rem; border-radius: 4px; border: none; cursor: pointer;">▲</button>
                     <button class="btn-down" style="background: #2e2e38; color: #fff; padding: 8px 12px; font-size: 0.85rem; border-radius: 4px; border: none; cursor: pointer;">▼</button>
                     <button class="btn-del" style="background: var(--danger); color: white; padding: 8px 12px; font-size: 0.85rem; border-radius: 4px; font-weight: bold; border: none; cursor: pointer;">Usuń</button>
                 </div>
             `;
-            
+
+            item.querySelector('.btn-feature').addEventListener('click', (e) => {
+                e.preventDefault();
+                if (file.isFeatured) {
+                    file.isFeatured = false;
+                    this.renderFileList();
+                } else {
+                    this.setFeaturedImage(index);
+                }
+            });
+
             item.querySelector('.btn-up').addEventListener('click', (e) => {
                 e.preventDefault();
                 if (index > 0) {
@@ -468,6 +530,7 @@ const App = {
                 e.preventDefault();
                 const [removed] = Compressor.processedFiles.splice(index, 1);
                 if (removed?.previewUrl) URL.revokeObjectURL(removed.previewUrl);
+                this.state.zipDownloaded = false;
                 this.renderFileList();
             });
 
@@ -479,6 +542,12 @@ const App = {
     },
 
     goToStep3() {
+        // Jeśli użytkownik nie wybrał ręcznie obrazka wyróżniającego, wybieramy losowy (pkt "Obrazek wyróżniający").
+        if (Compressor.processedFiles.length > 0 && !Compressor.processedFiles.some(f => f.isFeatured)) {
+            const randomIndex = Math.floor(Math.random() * Compressor.processedFiles.length);
+            this.setFeaturedImage(randomIndex);
+        }
+
         const cat = this.evtCategory.value;
         let compiledInformation = "";
 
@@ -487,11 +556,16 @@ const App = {
             compiledInformation += `Miejsce: ${this.evtLocation.value}\n`;
             compiledInformation += `Czas: od ${this.evtStart.value} do ${this.evtEnd.value}\n\n`;
         }
-        
+
         compiledInformation += `Główne notatki autora:\n${this.evtNotes.value}\n`;
-        
+
         if (this.state.interviewAnswers) {
             compiledInformation += `\nDodatkowe szczegóły uzyskane z wywiadu z AI:\n${this.state.interviewAnswers}`;
+        }
+
+        const externalArticle = this.evtExternalArticle?.value.trim();
+        if (externalArticle) {
+            compiledInformation += `\n\n=== ZEWNĘTRZNY ARTYKUŁ O TYM WYDARZENIU (TYLKO DO INSPIRACJI FAKTOGRAFICZNEJ - NIE KOPIUJ ZDAŃ ANI STYLU) ===\n${externalArticle}`;
         }
 
         this.finalNotes.value = compiledInformation;
@@ -519,10 +593,9 @@ const App = {
         const cat = this.evtCategory.value;
         const notes = this.finalNotes.value;
         const prompt = Gemini.getPromptTemplate(cat, notes);
-        const apiKey = this.apiKeyInput.value.trim();
 
         try {
-            const aiJson = await Gemini.callGemini(apiKey, prompt);
+            const aiJson = await Gemini.callGemini('', prompt);
             this.state.aiData = aiJson;
             progress.finish("Gotowe!");
 
@@ -532,10 +605,20 @@ const App = {
                 pubDate = new Date(endVal);
                 pubDate.setHours(pubDate.getHours() + 3);
             }
-            
+
             this.sugTitleInput.value = aiJson.title || '';
             this.sugDate.innerText = pubDate.toLocaleString('pl-PL');
             this.sugTags.innerText = aiJson.tags ? aiJson.tags.join(', ') : 'brak';
+
+            // AI decyduje o czytelnej nazwie bazowej plików (pkt "Nazwy plików WebP generowane przez AI") -
+            // przemianowujemy wszystkie zdjęcia PRZED wygenerowaniem kodu Gutenberga, żeby ścieżki się zgadzały.
+            if (aiJson.filenameSlug || aiJson.title) {
+                this.state.aiFilenameSlug = aiJson.filenameSlug || aiJson.title;
+                this.renameAllFiles();
+            }
+
+            const featured = Compressor.processedFiles.find(f => f.isFeatured);
+            this.sugFeaturedImage.textContent = featured ? featured.name : 'brak';
 
             const finalGutenbergHTML = Gutenberg.generateBlockCode(aiJson, Compressor.processedFiles);
             this.gutenbergOutput.value = finalGutenbergHTML;
@@ -559,7 +642,7 @@ const App = {
             this.gutenbergOutput.select();
             document.execCommand('copy');
         }
-        alert('Skopiowano kod bloku WordPress!');
+        this.showToast('Skopiowano do schowka!');
     },
 
     // Pkt 6: osobny przycisk kopiujący sam tytuł wpisu
@@ -571,7 +654,7 @@ const App = {
             this.sugTitleInput.select();
             document.execCommand('copy');
         }
-        alert('Skopiowano tytuł wpisu!');
+        this.showToast('Skopiowano do schowka!');
     }
 };
 
