@@ -1,42 +1,56 @@
 export const Gemini = {
-    // Nowa funkcja: Dynamiczny wywiad AI na podstawie wpisanych danych
     async askForMissingDetails(apiKey, category, title, location, start, end, notes) {
-        const prompt = `Jesteś dociekliwym redaktorem naczelnym SAF Jamnik. Twój fotograf właśnie wrócił z wydarzenia i wrzucił Ci do systemu takie surowe notatki:
+        const prompt = `Jesteś redaktorem Studenckiej Agencji Fotograficznej (SAF) Jamnik. Zbierasz informacje do artykułu. Fotograf wrzucił notatki:
 Kategoria: ${category}
 Wydarzenie: ${title}
 Miejsce: ${location}
 Czas: ${start} - ${end}
-Notatki fotografa: ${notes}
+Notatki: ${notes}
 
-Twoim zadaniem jest pomóc mu napisać z tego świetny artykuł. Wygeneruj od 5 do 10 konkretnych, krótkich pytań pomocniczych (w formie wypunktowanej listy), które wyciągną od niego ciekawe szczegóły (klimat, anegdoty, braki w informacjach), o których ZAPOMNIAŁ NAPISAĆ. Nie pytaj o to, co już podał!
-Zwróć TYLKO i wyłącznie listę pytań, bez powitań, bez wstępów.`;
+Wygeneruj od 5 do 8 krótkich, dziennikarskich pytań o szczegóły (anegdoty, emocje, braki w informacji), o których ZAPOMNIAŁ NAPISAĆ. 
+WAŻNE: Zwróć wynik WYŁĄCZNIE w postaci surowej tablicy JSON zawierającej stringi (pytania). Żadnego markdownu.
+Przykład: ["Jakie były emocje?", "Kto wygrał?"]`;
 
-        return await this.callGeminiRaw(apiKey, prompt);
+        const responseText = await this.callGeminiRaw(apiKey, prompt);
+        
+        try {
+            const jsonMatch = responseText.match(/\[[\s\S]*\]/);
+            if (jsonMatch) return JSON.parse(jsonMatch[0]);
+            return JSON.parse(responseText);
+        } catch(e) {
+            throw new Error("AI nie zwróciło pytań w formacie tablicy JSON.");
+        }
     },
 
     getPromptTemplate(category, notes) {
-        return `Działasz jako doświadczony redaktor portalu uniwersyteckiego i krytyk fotograficzny SAF Jamnik. Twój styl jest dynamiczny, poprawny językowo, angażujący i profesjonalny. 
+        return `Jesteś redaktorem na stronie aktualności Studenckiej Agencji Fotograficznej (SAF) Jamnik z uwm.edu.pl. 
+Piszesz ten tekst w imieniu redakcji/agencji, na podstawie podanych notatek. Pamiętaj: autor piszący ten tekst to niekoniecznie autor zdjęć! 
 
-ODPOWIEDZ WYŁĄCZNIE CZYSTYM, SUROWYM KODEM JSON. Nie używaj znaczników markdownu, nie dodawaj żadnych wstępów.
+WYTYCZNE DZIENNIKARSKIE:
+1. Tytuł: ma być chwytliwy, fajny, nie za długi, nie za krótki.
+2. Lead (zajawka): długość 2-4 zdania (200-400 znaków). Ma natychmiast przykuć uwagę i odpowiadać na pytania: kto, co, gdzie, kiedy, dlaczego. Zastosuj intrygujący element.
+3. Treść (akapity): Długa i wyczerpująca. Dąż do ok. 600 znaków na każdy akapit tekstowy. Używaj w tekście pogrubień (<b> lub <strong>) dla wyróżnienia ważnych nazwisk, zwycięzców lub nazw.
+4. Tagi: Użyj tych, jeśli pasują: boj-wydzialow, flanki, gry-barowe, kortowiada, kortowo, koszykowka, kultura, lekkoatletyka, liga-wydzialow, mok, mskn, muzyka-na-zywo, olsztyn, green, pilka-nozna, pilka-reczna, polandrock, reportaz, siatkowka, sport. Możesz dodać własne.
 
-Schemat JSON do zastosowania:
+ODPOWIEDZ WYŁĄCZNIE CZYSTYM KODEM JSON! Brak markdownu, brak znaczników \`\`\`json.
+Schemat JSON:
 {
-  "title": "Tytuł wpisu",
-  "lead": "Wprowadzający, krótki, pogrubiony lead",
+  "title": "Twój chwytliwy tytuł",
+  "lead": "Tekst leadu...",
   "paragraphs": [
-    {"heading": "Opcjonalny nagłówek sekcji", "text": "Treść akapitu tekstowego"}
+    {"heading": "Intrygujący śródtytuł (lub null)", "text": "Długi tekst akapitu (ok 600 znaków)"}
   ],
   "tags": ["tag1", "tag2"]
 }
 
-Kategoria wpisu: ${category.toUpperCase()}
-Oto pełna treść notatek oraz zebranych informacji o wydarzeniu:
+Kategoria: ${category.toUpperCase()}
+Notatki z terenu do przetworzenia:
 ${notes}`;
     },
 
-    // Surowe wywołanie API (najbardziej stabilna wersja)
     async callGeminiRaw(apiKey, prompt) {
-        const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash:generateContent?key=${apiKey}`;
+        // Używamy stabilnego v1beta i modelu 1.5-flash bez blokujących paramertów konfiguracyjnych
+        const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`;
         
         const response = await fetch(url, {
             method: 'POST',
@@ -59,13 +73,8 @@ ${notes}`;
 
     async callGemini(apiKey, prompt) {
         let textResult = await this.callGeminiRaw(apiKey, prompt);
-        
-        // Zabezpieczenie: sztuczna inteligencja zawsze musi zwrócić parsowalny JSON
         const jsonMatch = textResult.match(/\{[\s\S]*\}/);
-        if (jsonMatch) {
-            textResult = jsonMatch[0];
-        }
-        
+        if (jsonMatch) textResult = jsonMatch[0];
         return JSON.parse(textResult);
     }
 };
