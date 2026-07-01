@@ -6,7 +6,10 @@ const App = {
     state: {
         currentStep: 1,
         interviewAnswers: "",
-        aiData: null
+        externalArticle: "",
+        aiData: null,
+        progressInterval: null,
+        zipDownloaded: false // Flaga sprawdzająca, czy użytkownik pamiętał o pobraniu zdjęć
     },
 
     init() {
@@ -20,7 +23,6 @@ const App = {
     cacheDOM() {
         this.apiKeyInput = document.getElementById('apiKeyInput');
         this.saveKeyBtn = document.getElementById('saveKeyBtn');
-        this.toggleKeyVisibility = document.getElementById('toggleKeyVisibility');
         this.evtCategory = document.getElementById('evtCategory');
         this.dynamicFields = document.getElementById('dynamicFields');
         this.notesLabel = document.getElementById('notesLabel');
@@ -47,29 +49,26 @@ const App = {
         this.btnRegenerate = document.getElementById('btnRegenerate');
 
         this.aiModal = document.getElementById('aiModal');
-        this.aiProgressWrap = document.getElementById('aiProgressWrap');
-        this.aiProgressBar = document.getElementById('aiProgressBar');
-        this.aiProgressLabel = document.getElementById('aiProgressLabel');
+        this.modalLoading = document.getElementById('modalLoading');
+        this.modalContentArea = document.getElementById('modalContentArea');
         this.aiQuestionsContainer = document.getElementById('aiQuestionsContainer');
+        this.aiExternalArticle = document.getElementById('aiExternalArticle');
+        this.modalProgressBar = document.getElementById('modalProgressBar');
         this.btnSkipModal = document.getElementById('btnSkipModal');
         this.btnSubmitModal = document.getElementById('btnSubmitModal');
 
         this.finalNotes = document.getElementById('finalNotes');
         this.aiLoading = document.getElementById('aiLoading');
-        this.genProgressBar = document.getElementById('genProgressBar');
-        this.genProgressLabel = document.getElementById('genProgressLabel');
+        this.articleProgressBar = document.getElementById('articleProgressBar');
         this.aiOutput = document.getElementById('aiOutput');
         this.gutenbergOutput = document.getElementById('gutenbergOutput');
-        this.sugTitleInput = document.getElementById('sugTitleInput');
+        this.outTitle = document.getElementById('outTitle');
         this.sugDate = document.getElementById('sugDate');
         this.sugTags = document.getElementById('sugTags');
     },
 
     bindEvents() {
         this.saveKeyBtn.addEventListener('click', () => this.saveApiKey());
-        this.toggleKeyVisibility.addEventListener('click', () => {
-            this.apiKeyInput.classList.toggle('masked-input');
-        });
         this.evtCategory.addEventListener('change', () => this.handleCategoryChange());
         
         this.evtStart.addEventListener('change', (e) => {
@@ -97,6 +96,7 @@ const App = {
             const title = this.evtTitle?.value || "wpis";
             const startDate = this.evtStart.value;
             Compressor.generateZip(title, startDate);
+            this.state.zipDownloaded = true; // Flaga bezpieczeństwa - oznacz pobranie
         });
         
         this.btnGoToStep3.addEventListener('click', () => this.goToStep3());
@@ -105,33 +105,21 @@ const App = {
         this.btnSkipModal.addEventListener('click', () => this.closeModal(false));
         
         this.btnTriggerAI.addEventListener('click', () => this.generateArticle());
-        this.btnCopyHtml.addEventListener('click', () => this.copyGutenbergCode());
-        this.btnCopyTitle.addEventListener('click', () => this.copyTitle());
-        this.btnRegenerate.addEventListener('click', () => { this.aiOutput.classList.add('hidden'); this.finalNotes.focus(); });
+        this.btnCopyHtml.addEventListener('click', () => {
+            navigator.clipboard.writeText(this.gutenbergOutput.value).then(() => { alert('Skopiowano kod artykułu!'); });
+        });
+        this.btnCopyTitle.addEventListener('click', () => {
+            navigator.clipboard.writeText(this.outTitle.value).then(() => { alert('Skopiowano tytuł!'); });
+        });
+        this.btnRegenerate.addEventListener('click', () => { this.aiOutput.classList.add('hidden'); this.btnTriggerAI.scrollIntoView(); });
     },
 
-    // Pkt 7: klucz "oficjalny" (redakcji) NIE jest już zaszyty w kodzie strony.
-    // Pole służy wyłącznie do wklejenia WŁASNEGO, osobistego klucza - jeśli zostanie puste,
-    // aplikacja automatycznie korzysta z bezpiecznego proxy (patrz js/gemini.js).
     loadApiKey() {
-        const saved = localStorage.getItem('saf_gemini_key');
-        if (saved) {
-            this.apiKeyInput.value = saved;
-        } else {
-            this.apiKeyInput.value = "";
-            this.apiKeyInput.placeholder = "Opcjonalnie: własny klucz Gemini API...";
-        }
+        this.apiKeyInput.value = "";
     },
 
     saveApiKey() {
-        const key = this.apiKeyInput.value.trim();
-        if (!key) {
-            localStorage.removeItem('saf_gemini_key');
-            alert('Usunięto zapisany klucz. Od teraz używane jest bezpieczne, domyślne proxy redakcji.');
-            return;
-        }
-        localStorage.setItem('saf_gemini_key', key);
-        alert('Zapisano Twój osobisty klucz w tej przeglądarce!');
+        alert('Klucze są teraz autoryzowane za pomocą bezpiecznego proxy na serwerze! Nie musisz wpisywać klucza do przeglądarki.');
     },
 
     handleCategoryChange() {
@@ -168,74 +156,23 @@ const App = {
         if (targetIndicator) { targetIndicator.classList.add('active'); }
     },
 
-    // Pkt 1: uniwersalny, symulowany pasek postępu z rotującymi komunikatami etapów.
-    // Nie udaje 100% dopóki prawdziwa odpowiedź faktycznie nie przyjdzie (asymptotyczne dobicie do ~92%).
-    startProgressSimulation(barEl, labelEl, wrapEls, stages, estimatedMs = 8000) {
-        wrapEls.forEach(el => el.classList.remove('hidden'));
-        let pct = 4;
-        let stageIndex = 0;
-        barEl.style.width = pct + '%';
-        labelEl.textContent = stages[0];
-
-        const stageIntervalMs = Math.max(1200, Math.floor(estimatedMs / stages.length));
-        let elapsed = 0;
-
-        const tick = setInterval(() => {
-            elapsed += 300;
-            pct = pct + (92 - pct) * 0.06;
-            barEl.style.width = Math.min(pct, 92).toFixed(0) + '%';
-
-            const nextStage = Math.min(stages.length - 1, Math.floor(elapsed / stageIntervalMs));
-            if (nextStage !== stageIndex) {
-                stageIndex = nextStage;
-                labelEl.textContent = stages[stageIndex];
+    startProgressBar(element) {
+        element.style.width = '0%';
+        let width = 0;
+        this.state.progressInterval = setInterval(() => {
+            if(width < 90) { 
+                width += Math.random() * 8; 
+                if(width > 90) width = 90;
+                element.style.width = width + '%'; 
             }
-        }, 300);
-
-        return {
-            finish: (finalLabel) => {
-                clearInterval(tick);
-                barEl.style.width = '100%';
-                if (finalLabel) labelEl.textContent = finalLabel;
-                setTimeout(() => wrapEls.forEach(el => el.classList.add('hidden')), 500);
-            },
-            stop: () => {
-                clearInterval(tick);
-                wrapEls.forEach(el => el.classList.add('hidden'));
-            }
-        };
+        }, 600);
     },
 
-    // Pkt 2: buduje ponumerowane pytania, każde z własnym polem odpowiedzi TUŻ pod nim.
-    renderQuestions(questions) {
-        this.aiQuestionsContainer.innerHTML = "";
-
-        if (!questions || questions.length === 0) {
-            this.aiQuestionsContainer.innerHTML = `<p class="info-text">Agent nie ma dodatkowych pytań - możesz przejść dalej.</p>`;
-            return;
-        }
-
-        questions.forEach((q, idx) => {
-            const block = document.createElement('div');
-            block.className = 'question-block';
-
-            const qTitle = document.createElement('div');
-            qTitle.className = 'q-title';
-            qTitle.textContent = `${idx + 1}. ${q}`;
-
-            const answer = document.createElement('textarea');
-            answer.className = 'question-answer';
-            answer.rows = 3;
-            answer.placeholder = "Twoja odpowiedź (opcjonalnie)...";
-            answer.dataset.question = q;
-
-            block.appendChild(qTitle);
-            block.appendChild(answer);
-            this.aiQuestionsContainer.appendChild(block);
-        });
+    stopProgressBar(element) {
+        clearInterval(this.state.progressInterval);
+        element.style.width = '100%';
     },
 
-    // Pełna walidacja przed uruchomieniem inteligentnego AI (Punkty 1, 2 i 3)
     async handleStep1Submit() {
         const cat = this.evtCategory.value;
         const title = this.evtTitle?.value || "";
@@ -246,7 +183,7 @@ const App = {
 
         if (cat === 'kultura' || cat === 'sport' || cat === 'nauka') {
             if (!title || !loc || !start || !end || !notes) {
-                alert("BŁĄD: Musisz najpierw wypełnić WSZYSTKIE pola, aby przejść do wgrywania zdjęć.");
+                alert("BŁĄD: Musisz najpierw wypełnić WSZYSTKIE pola, aby przejść dalej.");
                 return;
             }
         } else {
@@ -256,52 +193,58 @@ const App = {
             }
         }
 
+        this.aiExternalArticle.value = "";
         this.aiModal.classList.remove('hidden');
-        this.btnSubmitModal.disabled = true;
-        this.btnSkipModal.disabled = true;
-        this.aiQuestionsContainer.innerHTML = "";
-
-        const progress = this.startProgressSimulation(
-            this.aiProgressBar,
-            this.aiProgressLabel,
-            [this.aiProgressWrap, this.aiProgressLabel],
-            [
-                "Agent analizuje wpisane dane...",
-                "Szuka wątków wartych dopytania...",
-                "Formułuje pytania pomocnicze..."
-            ],
-            6000
-        );
+        this.modalLoading.classList.remove('hidden');
+        this.modalContentArea.classList.add('hidden');
+        this.btnSubmitModal.classList.add('hidden');
+        this.startProgressBar(this.modalProgressBar);
 
         try {
-            const apiKey = this.apiKeyInput.value.trim();
-            const questions = await Gemini.askForMissingDetails(apiKey, cat, title, loc, start, end, notes);
-            progress.finish("Gotowe!");
-            this.renderQuestions(questions);
-        } catch (error) {
-            progress.stop();
-            this.renderQuestions([
-                `Nie udało się połączyć z AI (${error.message}). Czy chcesz samodzielnie dodać jakieś kluczowe szczegóły, o których zapomniałeś w notatkach?`
-            ]);
-        }
+            const apiKey = "DUMMY_KEY_PROXY";
+            const questionsArray = await Gemini.askForMissingDetails(apiKey, cat, title, loc, start, end, notes);
+            
+            this.aiQuestionsContainer.innerHTML = '';
+            questionsArray.forEach((q, index) => {
+                this.aiQuestionsContainer.innerHTML += `
+                    <div class="q-block">
+                        <label>${index + 1}. ${q}</label>
+                        <textarea class="ai-ans-input" data-question="${q}" rows="2" placeholder="Odpowiedź..."></textarea>
+                    </div>
+                `;
+            });
 
-        this.btnSubmitModal.disabled = false;
-        this.btnSkipModal.disabled = false;
+            this.stopProgressBar(this.modalProgressBar);
+            setTimeout(() => {
+                this.modalLoading.classList.add('hidden');
+                this.modalContentArea.classList.remove('hidden');
+                this.btnSubmitModal.classList.remove('hidden');
+            }, 300);
+
+        } catch (error) {
+            this.stopProgressBar(this.modalProgressBar);
+            this.aiQuestionsContainer.innerHTML = `<div class="q-block"><label>Wystąpił błąd podczas analizy AI. Podaj dodatkowe informacje z pamięci:</label><textarea class="ai-ans-input" data-question="Dodatkowe informacje z pamięci:" rows="4"></textarea></div>`;
+            this.modalLoading.classList.add('hidden');
+            this.modalContentArea.classList.remove('hidden');
+            this.btnSubmitModal.classList.remove('hidden');
+        }
     },
 
     closeModal(saveData) {
         if (saveData) {
-            const answers = [];
-            this.aiQuestionsContainer.querySelectorAll('.question-answer').forEach(ta => {
-                const val = ta.value.trim();
-                if (val) {
-                    answers.push(`Pytanie: ${ta.dataset.question}\nOdpowiedź: ${val}`);
+            let combined = "";
+            document.querySelectorAll('.ai-ans-input').forEach(input => {
+                if(input.value.trim()) {
+                    combined += `Pytanie AI: ${input.getAttribute('data-question')}\nOdpowiedź Autora: ${input.value.trim()}\n\n`;
                 }
             });
-            this.state.interviewAnswers = answers.join('\n\n');
+            this.state.interviewAnswers = combined;
+            this.state.externalArticle = this.aiExternalArticle.value.trim();
         } else {
             this.state.interviewAnswers = "";
+            this.state.externalArticle = "";
         }
+        
         this.aiModal.classList.add('hidden');
         this.switchStep(2);
         this.renderFileList();
@@ -312,18 +255,17 @@ const App = {
         const incomingFiles = Array.from(files);
         const total = incomingFiles.length;
 
-        // Pkt 4: pasek postępu jest już obecny w DOM (nie tworzymy go dynamicznie),
-        // więc pokazuje się natychmiast po odsłonięciu klasy "hidden".
         this.uploadProgressWrap.classList.remove('hidden');
         this.uploadProgressLabel.classList.remove('hidden');
         this.uploadProgressBar.style.width = '0%';
-        this.uploadProgressLabel.textContent = `Przygotowywanie ${total} ${total === 1 ? 'zdjęcia' : 'zdjęć'}...`;
+        this.uploadProgressLabel.textContent = `Przygotowywanie ${total} plików...`;
 
         this.btnDownloadPhotos.disabled = true;
         this.btnGoToStep3.disabled = true;
+        this.state.zipDownloaded = false; // Nowe zdjęcia kasują status "bezpiecznego" archiwum
 
-        // Wymuszenie natychmiastowego przerysowania strony PRZED ciężką pracą (naprawia zawieszkę z pkt 4)
         await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+        await new Promise(resolve => setTimeout(resolve, 50));
 
         const title = this.evtTitle?.value || "saf-wpis";
         const startDate = this.evtStart.value;
@@ -331,21 +273,19 @@ const App = {
 
         for (let i = 0; i < incomingFiles.length; i++) {
             try {
+                this.uploadProgressLabel.textContent = `Przetwarzanie pliku ${i + 1} z ${total}...`;
+                await new Promise(resolve => setTimeout(resolve, 20));
+
                 const nextIndex = Compressor.processedFiles.length;
                 const res = await Compressor.processImage(incomingFiles[i], nextIndex, title, startDate);
                 Compressor.processedFiles.push(res);
             } catch (err) {
                 console.error(err);
-                // Naprawa: wcześniej błąd trafiał TYLKO do konsoli, więc pominięty plik
-                // znikał bez żadnej informacji dla użytkownika. Teraz zbieramy komunikaty
-                // i pokazujemy je zbiorczo na końcu (patrz alert() poniżej).
                 skipped.push(err?.message || incomingFiles[i].name);
             }
 
-            const done = i + 1;
-            const pct = Math.round((done / total) * 100);
+            const pct = Math.round(((i + 1) / total) * 100);
             this.uploadProgressBar.style.width = pct + '%';
-            this.uploadProgressLabel.textContent = `Przetworzono ${done} z ${total} zdjęć (${pct}%)...`;
         }
 
         this.uploadProgressWrap.classList.add('hidden');
@@ -354,7 +294,7 @@ const App = {
         this.renderFileList();
 
         if (skipped.length > 0) {
-            alert(`Nie udało się przetworzyć ${skipped.length} z ${total} plików:\n\n- ${skipped.join('\n- ')}`);
+            alert(`Pominięto ${skipped.length} plików.\nSzczegóły:\n- ${skipped.join('\n- ')}`);
         }
     },
 
@@ -368,22 +308,39 @@ const App = {
             return;
         }
 
-        const title = this.evtTitle?.value || "saf-wpis";
+        // Tytuł zależy od tego czy AI już go wygenerowało, czy użwamy wstępnego z kroku 1
+        const slug = this.state.aiData?.image_slug 
+            ? Compressor.sanitizeString(this.state.aiData.image_slug) 
+            : Compressor.sanitizeString(this.evtTitle?.value || 'wydarzenie');
+
         const startDate = this.evtStart.value;
         const dateObj = new Date(startDate || Date.now());
         const year = dateObj.getFullYear();
         const month = String(dateObj.getMonth() + 1).padStart(2, '0');
-        const safeTitle = Compressor.sanitizeString(title);
+
+        let nonFeaturedCounter = 1;
 
         Compressor.processedFiles.forEach((file, index) => {
-            const numStr = String(index + 1).padStart(2, '0');
-            file.name = `${year}-${month}-${safeTitle}-${numStr}.webp`;
+            let numStr;
+            // Wymóg "00" na obrazku wyróżniającym. Jeśli plik nie jest wyróżniający, zaczynamy klasycznie od "01"
+            if (file.isFeatured) {
+                numStr = '00';
+            } else {
+                numStr = String(nonFeaturedCounter++).padStart(2, '0');
+            }
+
+            file.name = `${year}-${month}-${slug}-${numStr}.webp`;
             file.wpPath = `/wp-content/uploads/${year}/${month}/${file.name}`;
 
             const item = document.createElement('div');
             item.style.cssText = "display: flex; align-items: center; justify-content: space-between; padding: 10px; background: #1c1c22; margin-bottom: 8px; border-radius: 6px; border: 1px solid var(--border);";
             
             const sizeKB = (file.size/1024).toFixed(1);
+
+            // Logika wyświetlania "gwiazdki" jeśli wybrane na Wyróżniający (zastępuje przycisk)
+            const featuredBtnHtml = file.isFeatured 
+                ? `<span style="color:var(--primary); font-size:0.8rem; font-weight:bold; display:flex; align-items:center; margin-right: 10px;">⭐ Wyróżniające</span>`
+                : `<button class="btn-feat" style="background: #2e2e38; color: var(--primary); padding: 8px 12px; font-size: 0.85rem; border-radius: 4px; border: 1px solid var(--primary); cursor: pointer; font-weight:bold;">⭐ Ustaw jako wyróżniający</button>`;
 
             item.innerHTML = `
                 <div style="display: flex; align-items: center; gap: 15px;">
@@ -393,19 +350,37 @@ const App = {
                         <span style="color: var(--text-muted); font-size: 0.8rem;">Waga: ${sizeKB} KB</span>
                     </div>
                 </div>
-                <div style="display: flex; gap: 6px;">
+                <div style="display: flex; align-items: center; gap: 6px;">
+                    ${featuredBtnHtml}
                     <button class="btn-up" style="background: #2e2e38; color: #fff; padding: 8px 12px; font-size: 0.85rem; border-radius: 4px; border: none; cursor: pointer;">▲</button>
                     <button class="btn-down" style="background: #2e2e38; color: #fff; padding: 8px 12px; font-size: 0.85rem; border-radius: 4px; border: none; cursor: pointer;">▼</button>
                     <button class="btn-del" style="background: var(--danger); color: white; padding: 8px 12px; font-size: 0.85rem; border-radius: 4px; font-weight: bold; border: none; cursor: pointer;">Usuń</button>
                 </div>
             `;
             
+            // Obsługa kliknięcia "Ustaw jako wyróżniający"
+            if (!file.isFeatured) {
+                item.querySelector('.btn-feat').addEventListener('click', (e) => {
+                    e.preventDefault();
+                    Compressor.processedFiles.forEach(f => f.isFeatured = false);
+                    Compressor.processedFiles[index].isFeatured = true;
+                    
+                    // Przesunięcie elementu na absolutny szczyt tablicy (indeks 0)
+                    const temp = Compressor.processedFiles.splice(index, 1)[0];
+                    Compressor.processedFiles.unshift(temp);
+                    
+                    this.state.zipDownloaded = false; // Jakakolwiek zmiana kolejności / nazw unieważnia pobraną paczkę
+                    this.renderFileList();
+                });
+            }
+
             item.querySelector('.btn-up').addEventListener('click', (e) => {
                 e.preventDefault();
                 if (index > 0) {
                     const temp = Compressor.processedFiles[index];
                     Compressor.processedFiles[index] = Compressor.processedFiles[index - 1];
                     Compressor.processedFiles[index - 1] = temp;
+                    this.state.zipDownloaded = false;
                     this.renderFileList();
                 }
             });
@@ -416,6 +391,7 @@ const App = {
                     const temp = Compressor.processedFiles[index];
                     Compressor.processedFiles[index] = Compressor.processedFiles[index + 1];
                     Compressor.processedFiles[index + 1] = temp;
+                    this.state.zipDownloaded = false;
                     this.renderFileList();
                 }
             });
@@ -423,6 +399,7 @@ const App = {
             item.querySelector('.btn-del').addEventListener('click', (e) => {
                 e.preventDefault();
                 Compressor.processedFiles.splice(index, 1);
+                this.state.zipDownloaded = false;
                 this.renderFileList();
             });
 
@@ -434,6 +411,28 @@ const App = {
     },
 
     goToStep3() {
+        // Zabezpieczenie przed utratą zmodyfikowanych lub zoptymalizowanych plików
+        if (!this.state.zipDownloaded && Compressor.processedFiles.length > 0) {
+            const confirmProceed = confirm("UWAGA! Masz niepobraną (lub zmienioną) paczkę zdjęć ZIP.\n\nCzy na pewno chcesz przejść do generowania wpisu, ryzykując utratę ułożonych i zoptymalizowanych zdjęć?");
+            if (!confirmProceed) return;
+        }
+
+        // Jeśli użytkownik zapomniał wybrać obrazka wyróżniającego przed krokiem 3 - robimy to losowo za niego.
+        if (Compressor.processedFiles.length > 0) {
+            const featuredExists = Compressor.processedFiles.some(f => f.isFeatured);
+            if (!featuredExists) {
+                const randIndex = Math.floor(Math.random() * Compressor.processedFiles.length);
+                Compressor.processedFiles[randIndex].isFeatured = true;
+                
+                // Wypychamy wylosowane zdjęcie na 1 miejsce w tabeli
+                const temp = Compressor.processedFiles.splice(randIndex, 1)[0];
+                Compressor.processedFiles.unshift(temp);
+                
+                // Aktualizujemy numery na żywo żeby "00" zapisało się w obiekcie
+                this.renderFileList(); 
+            }
+        }
+
         const cat = this.evtCategory.value;
         let compiledInformation = "";
 
@@ -443,10 +442,13 @@ const App = {
             compiledInformation += `Czas: od ${this.evtStart.value} do ${this.evtEnd.value}\n\n`;
         }
         
-        compiledInformation += `Główne notatki autora:\n${this.evtNotes.value}\n`;
+        compiledInformation += `Główne notatki:\n${this.evtNotes.value}\n\n`;
         
         if (this.state.interviewAnswers) {
-            compiledInformation += `\nDodatkowe szczegóły uzyskane z wywiadu z AI:\n${this.state.interviewAnswers}`;
+            compiledInformation += `--- Dodatkowe szczegóły z wywiadu AI ---\n${this.state.interviewAnswers}\n\n`;
+        }
+        if (this.state.externalArticle) {
+            compiledInformation += `--- ZEWNĘTRZNY ARTYKUŁ (INSPIRACJA O ZEWNĘTRZNE FAKTY) ---\n${this.state.externalArticle}\n\n`;
         }
 
         this.finalNotes.value = compiledInformation;
@@ -456,77 +458,47 @@ const App = {
     async generateArticle() {
         this.aiLoading.classList.remove('hidden');
         this.aiOutput.classList.add('hidden');
-
-        const progress = this.startProgressSimulation(
-            this.genProgressBar,
-            this.genProgressLabel,
-            [],
-            [
-                "Analizuję notatki...",
-                "Redaguję tytuł i lead...",
-                "Piszę treść artykułu...",
-                "Dobieram tagi...",
-                "Formatuję kod dla WordPressa..."
-            ],
-            11000
-        );
+        this.startProgressBar(this.articleProgressBar);
 
         const cat = this.evtCategory.value;
         const notes = this.finalNotes.value;
         const prompt = Gemini.getPromptTemplate(cat, notes);
-        const apiKey = this.apiKeyInput.value.trim();
 
         try {
-            const aiJson = await Gemini.callGemini(apiKey, prompt);
+            const aiJson = await Gemini.callGemini("DUMMY_KEY_PROXY", prompt);
             this.state.aiData = aiJson;
-            progress.finish("Gotowe!");
+
+            // --- Płynna zmiana nazw plików zdjęć w locie po uzyskaniu dobrego Tytułu ---
+            if (Compressor.processedFiles.length > 0) {
+                this.renderFileList(); 
+            }
 
             const endVal = this.evtEnd.value;
             let pubDate = new Date();
-            if (endVal && this.evtCategory.value !== 'zapowiedzi') {
+            if(endVal && this.evtCategory.value !== 'zapowiedzi') {
                 pubDate = new Date(endVal);
                 pubDate.setHours(pubDate.getHours() + 3);
             }
             
-            this.sugTitleInput.value = aiJson.title || '';
             this.sugDate.innerText = pubDate.toLocaleString('pl-PL');
             this.sugTags.innerText = aiJson.tags ? aiJson.tags.join(', ') : 'brak';
+
+            this.outTitle.value = aiJson.title || "Tytuł Artykułu";
 
             const finalGutenbergHTML = Gutenberg.generateBlockCode(aiJson, Compressor.processedFiles);
             this.gutenbergOutput.value = finalGutenbergHTML;
 
-            this.aiLoading.classList.add('hidden');
-            this.aiOutput.classList.remove('hidden');
+            this.stopProgressBar(this.articleProgressBar);
+            setTimeout(() => {
+                this.aiLoading.classList.add('hidden');
+                this.aiOutput.classList.remove('hidden');
+            }, 300);
+            
         } catch (error) {
-            progress.stop();
+            this.stopProgressBar(this.articleProgressBar);
             this.aiLoading.classList.add('hidden');
             alert("Błąd AI: " + error.message);
         }
-    },
-
-    // Pkt 5: korzystamy z asynchronicznego Clipboard API zamiast select()+execCommand,
-    // co dodatkowo ogranicza ryzyko dziwnych "heurystyk" przeglądarki przy kopiowaniu.
-    async copyGutenbergCode() {
-        const text = this.gutenbergOutput.value;
-        try {
-            await navigator.clipboard.writeText(text);
-        } catch (e) {
-            this.gutenbergOutput.select();
-            document.execCommand('copy');
-        }
-        alert('Skopiowano kod bloku WordPress!');
-    },
-
-    // Pkt 6: osobny przycisk kopiujący sam tytuł wpisu
-    async copyTitle() {
-        const text = this.sugTitleInput.value;
-        try {
-            await navigator.clipboard.writeText(text);
-        } catch (e) {
-            this.sugTitleInput.select();
-            document.execCommand('copy');
-        }
-        alert('Skopiowano tytuł wpisu!');
     }
 };
 

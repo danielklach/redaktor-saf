@@ -1,63 +1,65 @@
 export const Gutenberg = {
-    // Generuje losowy 8-znakowy identyfikator hex, tak jak w przykładowych blokach WP (np. "e002b2ba")
-    randomId() {
-        return Array.from({ length: 8 }, () => Math.floor(Math.random() * 16).toString(16)).join('');
+    generateId() {
+        return Math.random().toString(36).substring(2, 10);
     },
 
     generateBlockCode(aiData, processedImages) {
         let output = "";
-        const images = [...processedImages];
-        let imgIndex = 0;
 
-        // 1. LEAD jako blok generateblocks/text z tagName "h6" (zgodnie z przykładem)
-        output += `<!-- wp:generateblocks/text {"uniqueId":"${this.randomId()}","tagName":"h6"} -->\n`;
-        output += `<h6 class="gb-text">${aiData.lead || ''}</h6>\n`;
-        output += `<!-- /wp:generateblocks/text -->\n\n`;
+        // 1. Lead blokowany w H6
+        const leadId = this.generateId();
+        output += `\n`;
+        output += `<h6 class="gb-text">${aiData.lead}</h6>\n`;
+        output += `\n\n`;
+
+        // 2. Filtrujemy obrazek wyróżniający (który ma końcówkę -00.webp lub flagę isFeatured = true).
+        // Dzięki temu NIE pojawi się on drugi raz w treści artykułu, gdyż WordPress wstawia go samodzielnie nad leadem.
+        const galleryImages = processedImages.filter(img => !img.isFeatured && !img.name.endsWith('-00.webp'));
 
         const bodyParagraphs = aiData.paragraphs || [];
+        let imgIndex = 0;
 
+        // Przeplatanie akapitów i pojedynczych zdjęć
         bodyParagraphs.forEach((item) => {
-            // Śródtytuł jako blok generateblocks/text z tagName "h5"
             if (item.heading) {
-                output += `<!-- wp:generateblocks/text {"uniqueId":"${this.randomId()}","tagName":"h5"} -->\n`;
+                const headingId = this.generateId();
+                output += `\n`;
                 output += `<h5 class="gb-text">${item.heading}</h5>\n`;
-                output += `<!-- /wp:generateblocks/text -->\n\n`;
+                output += `\n\n`;
             }
 
-            // Akapit jako standardowy blok wp:paragraph
             if (item.text) {
-                output += `<!-- wp:paragraph -->\n`;
+                output += `\n`;
                 output += `<p>${item.text}</p>\n`;
-                output += `<!-- /wp:paragraph -->\n\n`;
+                output += `\n\n`;
             }
 
-            // Pojedyncze zdjęcie wplecione w treść (maks. 3 - reszta trafia do galerii na końcu)
-            if (imgIndex < images.length && imgIndex < 3) {
-                const img = images[imgIndex];
-                output += `<!-- wp:image {"sizeSlug":"full","linkDestination":"none"} -->\n`;
+            if (imgIndex < galleryImages.length && imgIndex < 3) {
+                const img = galleryImages[imgIndex];
+                output += `\n`;
                 output += `<figure class="wp-block-image size-full"><img src="${img.wpPath}" alt=""/></figure>\n`;
-                output += `<!-- /wp:image -->\n\n`;
+                output += `\n\n`;
                 imgIndex++;
             }
         });
 
-        // 2. Galeria końcowa dla pozostałych zdjęć (identyczna konstrukcja jak w przykładzie)
-        if (imgIndex < images.length) {
-            output += `<!-- wp:gallery {"columns":2,"randomOrder":true,"linkTo":"none"} -->\n`;
-            output += `<figure class="wp-block-gallery has-nested-images columns-2 is-cropped">`;
-
-            while (imgIndex < images.length) {
-                const img = images[imgIndex];
-                output += `<!-- wp:image {"sizeSlug":"large","linkDestination":"none"} -->\n`;
+        // 3. Galeria końcowa dla pozostałych zdjęć
+        if (imgIndex < galleryImages.length) {
+            output += `\n`;
+            output += `<figure class="wp-block-gallery has-nested-images columns-2 is-cropped">\n`;
+            
+            while (imgIndex < galleryImages.length) {
+                const img = galleryImages[imgIndex];
+                output += `\n`;
                 output += `<figure class="wp-block-image size-large"><img src="${img.wpPath}" alt=""/></figure>\n`;
-                output += `<!-- /wp:image -->\n\n`;
+                output += `\n`;
                 imgIndex++;
             }
 
             output += `</figure>\n`;
-            output += `<!-- /wp:gallery -->\n`;
+            output += `\n`;
         }
 
-        return output.trim();
+        return output;
     }
 };
