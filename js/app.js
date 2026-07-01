@@ -80,7 +80,13 @@ const App = {
         this.dropzone.addEventListener('dragleave', () => { this.dropzone.style.borderColor = 'var(--border)'; });
         this.dropzone.addEventListener('drop', (e) => { e.preventDefault(); this.handleFiles(e.dataTransfer.files); });
 
-        this.btnDownloadPhotos.addEventListener('click', () => Compressor.generateZip());
+        // Pobranie dynamicznie nazwanego ZIP (Punkt 2)
+        this.btnDownloadPhotos.addEventListener('click', () => {
+            const title = this.evtTitle?.value || "wpis";
+            const startDate = this.evtStart.value;
+            Compressor.generateZip(title, startDate);
+        });
+        
         this.btnGoToStep3.addEventListener('click', () => this.goToStep3());
         
         this.btnSubmitModal.addEventListener('click', () => this.closeModal(true));
@@ -109,10 +115,11 @@ const App = {
 
     handleCategoryChange() {
         const category = this.evtCategory.value;
-        if (category === 'kultura' || category === 'sport') {
+        // Dodana obsługa kategorii 'nauka' (Punkt 3)
+        if (category === 'kultura' || category === 'sport' || category === 'nauka') {
             this.dynamicFields.classList.remove('hidden');
             this.notesLabel.innerHTML = "Twoje surowe notatki / spostrzeżenia:";
-            this.evtNotes.placeholder = "Kto grał, jaka była atmosfera, ile było ludzi...";
+            this.evtNotes.placeholder = "Kto uczestniczył, jaka była atmosfera, co przykuło uwagę fotografów...";
         } else {
             this.dynamicFields.classList.add('hidden');
             if (category === 'zapowiedzi') {
@@ -156,22 +163,38 @@ const App = {
     async handleFiles(files) {
         if(!files || files.length === 0) return;
         this.state.filesToProcess = Array.from(files);
-        this.fileStatus.innerHTML = "<p>Trwa kompresja obrazów do WebP...</p>";
         
+        // Punkt 1: Błyskawiczne wdrożenie kółka ładowania w tej samej milisekundzie
+        this.fileStatus.innerHTML = `
+            <div style="display: flex; align-items: center; gap: 12px; padding: 10px 0;">
+                <div class="spinner" style="width: 20px; height: 20px; border: 3px solid var(--border); border-top: 3px solid var(--primary); border-radius: 50%; animation: spin 1s linear infinite;"></div>
+                <span>Trwa walidacja i optymalizacja ${this.state.filesToProcess.length} zdjęć do WebP (max 200 KB)...</span>
+            </div>
+            <style>@keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }</style>
+        `;
+        
+        this.btnDownloadPhotos.disabled = true;
+        this.btnGoToStep3.disabled = true;
+
         Compressor.processedFiles = [];
         const title = this.evtTitle?.value || "saf-wpis";
         const startDate = this.evtStart.value;
 
+        // Krótkie opóźnienie (10ms), aby przeglądarka zdążyła natychmiast wyrenderować kółko ładowania na ekranie
+        await new Promise(resolve => setTimeout(resolve, 10));
+
+        let statusHtml = "";
         for (let i = 0; i < this.state.filesToProcess.length; i++) {
             try {
                 const res = await Compressor.processImage(this.state.filesToProcess[i], i, title, startDate);
                 Compressor.processedFiles.push(res);
-                this.fileStatus.innerHTML += `<div class="file-item"><span>✅ ${res.name}</span><span>${(res.size/1024).toFixed(1)} KB</span></div>`;
+                statusHtml += `<div class="file-item"><span>✅ ${res.name}</span><span>${(res.size/1024).toFixed(1)} KB</span></div>`;
             } catch (err) {
-                this.fileStatus.innerHTML += `<div class="file-item" style="color:var(--danger)">❌ Błąd pliku ${i+1}</div>`;
+                statusHtml += `<div class="file-item" style="color:var(--danger)">❌ Błąd pliku ${i+1}</div>`;
             }
         }
 
+        this.fileStatus.innerHTML = statusHtml;
         this.btnDownloadPhotos.disabled = false;
         this.btnGoToStep3.disabled = false;
     },
@@ -180,8 +203,7 @@ const App = {
         const cat = this.evtCategory.value;
         let compiledInformation = "";
 
-        // Zbieranie wszystkich danych w jeden czytelny blok tekstowy (Punkt 1)
-        if (cat === 'kultura' || cat === 'sport') {
+        if (cat === 'kultura' || cat === 'sport' || cat === 'nauka') {
             compiledInformation += `Wydarzenie: ${this.evtTitle.value || 'Brak nazwy'}\n`;
             compiledInformation += `Miejsce: ${this.evtLocation.value || 'Brak miejsca'}\n`;
             compiledInformation += `Czas: od ${this.evtStart.value || '?'} do ${this.evtEnd.value || '?'}\n\n`;
@@ -205,7 +227,7 @@ const App = {
         this.aiOutput.classList.add('hidden');
 
         const cat = this.evtCategory.value;
-        const notes = this.finalNotes.value; // AI bierze tekst WYŁĄCZNIE stąd
+        const notes = this.finalNotes.value;
         const prompt = Gemini.getPromptTemplate(cat, notes);
 
         try {

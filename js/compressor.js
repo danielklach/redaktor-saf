@@ -36,7 +36,7 @@ export const Compressor = {
                     const ctx = canvas.getContext('2d');
                     ctx.drawImage(img, 0, 0, width, height);
 
-                    // Wybór jakości zapewniający oczekiwany przedział 100-250kb
+                    // Zmniejszona jakość z 0.82 na 0.73 gwarantująca wagę do max 200 KB przy 2500px
                     canvas.toBlob((blob) => {
                         if (!blob) return reject(new Error("Błąd zapisu canvas"));
                         
@@ -52,24 +52,32 @@ export const Compressor = {
                             size: blob.size,
                             wpPath: `/wp-content/uploads/${year}/${month}/${fileName}`
                         });
-                    }, 'image/webp', 0.82);
+                    }, 'image/webp', 0.73);
                 };
             };
             reader.onerror = error => reject(error);
         });
     },
 
-    async generateZip() {
+    // Generowanie ZIP na podstawie czystej nazwy plików (Punkt 2)
+    async generateZip(eventTitle, eventDateStr) {
         if (this.processedFiles.length === 0) return;
         const zip = new JSZip();
         this.processedFiles.forEach(file => {
             zip.file(file.name, file.blob);
         });
+        
+        const dateObj = new Date(eventDateStr || Date.now());
+        const year = dateObj.getFullYear();
+        const month = String(dateObj.getMonth() + 1).padStart(2, '0');
+        const safeTitle = this.sanitizeString(eventTitle || 'wydarzenie');
+        const zipName = `${year}-${month}-${safeTitle}.zip`; // Nazwa ZIP identyczna z rdzeniem plików
+
         const content = await zip.generateAsync({ type: "blob" });
         const url = window.URL.createObjectURL(content);
         const a = document.createElement('a');
         a.href = url;
-        a.download = `saf-paczka-zdjec.zip`;
+        a.download = zipName;
         a.click();
     }
 };

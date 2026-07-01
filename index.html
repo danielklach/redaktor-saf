@@ -11,7 +11,7 @@
     <header>
         <div class="logo-zone">
             <span class="logo-saf">SAF Jamnik</span>
-            <span class="badge">Redaktor v1.2</span>
+            <span class="badge">Redaktor v1.3</span>
         </div>
         <div class="api-zone">
             <input type="password" id="apiKeyInput" placeholder="Klucz Gemini API...">
@@ -20,7 +20,6 @@
     </header>
 
     <main class="container">
-        <!-- Pasek Postępu -->
         <div class="steps-indicator">
             <div class="step active" data-step="1">1. Dane wydarzenia</div>
             <div class="step" data-step="2">2. Kompresja zdjęć</div>
@@ -29,22 +28,21 @@
 
         <hr>
 
-        <!-- KROK 1: Formularz i AI Wywiad -->
         <section id="step1" class="step-section active">
             <h2>Szczegóły Artykułu</h2>
             
             <div class="form-group" style="margin-bottom: 25px;">
                 <label for="evtCategory"><strong>Najpierw wybierz kategorię wpisu:</strong></label>
                 <select id="evtCategory">
-                    <option value="kultura">Kultura / Koncerty / Kluby</option>
+                    <option value="kultura">Kultura</option>
+                    <option value="nauka">Nauka</option>
                     <option value="sport">Sport</option>
-                    <option value="zapowiedzi">Zapowiedzi / Ogłoszenia</option>
+                    <option value="zapowiedzi">Zapowiedzi</option>
                     <option value="zycie">Z życia agencji</option>
                 </select>
             </div>
 
             <div class="grid-2col">
-                <!-- Sekcja pól dynamicznych (Kultura / Sport) -->
                 <div class="form-group" id="dynamicFields">
                     <label for="evtTitle">Nazwa wydarzenia:</label>
                     <input type="text" id="evtTitle" placeholder="np. Kortowiada 2026: Koncert Główny">
@@ -64,10 +62,9 @@
                     </div>
                 </div>
 
-                <!-- Sekcja Notatek (Główne źródło wiedzy) -->
                 <div class="form-group">
                     <label for="evtNotes" id="notesLabel">Twoje surowe notatki / spostrzeżenia:</label>
-                    <textarea id="evtNotes" rows="12" placeholder="Wpisz tu wszystko co pamiętasz... Kto grał, jaka była atmosfera..."></textarea>
+                    <textarea id="evtNotes" rows="12" placeholder="Wpisz tu wszystko co pamiętasz..."></textarea>
                 </div>
             </div>
             
@@ -76,10 +73,9 @@
             </div>
         </section>
 
-        <!-- KROK 2: Zdjęcia i Kompresja -->
         <section id="step2" class="step-section">
             <h2>Wgranie i Kompresja Zdjęć</h2>
-            <p class="info-text">Zdjęcia zostaną przekonwertowane do formatu <strong>WebP</strong> (maks. 2500px na dłuższym boku, waga ok. 100-250 KB).</p>
+            <p class="info-text">Zdjęcia zostaną przekonwertowane do formatu <strong>WebP</strong> (maks. 2500px, waga do <strong>200 KB</strong>).</p>
             
             <div class="dropzone" id="dropzone">
                 <p>Przeciągnij i upuść zdjęcia tutaj lub <span class="highlight" style="text-decoration: underline; pointer-events: none;">kliknij tutaj, aby wybrać z dysku</span></p>
@@ -95,7 +91,6 @@
             </div>
         </section>
 
-        <!-- KROK 3: Wynik końcowy -->
         <section id="step3" class="step-section">
             <h2>Generowanie Artykułu przez AI</h2>
             
@@ -130,7 +125,6 @@
         </section>
     </main>
 
-    <!-- POPUP / MODAL: Wywiad AI -->
     <div id="aiModal" class="modal hidden">
         <div class="modal-content">
             <h3>🤖 Agent Redakcyjny SAF pyta o szczegóły...</h3>
