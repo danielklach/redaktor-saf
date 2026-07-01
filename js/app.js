@@ -111,13 +111,21 @@ const App = {
         alert('Klucz API zapisany lokalnie!');
     },
 
+    // Punkt 1: Różne dynamiczne placeholders w zależności od wybranej kategorii
     handleCategoryChange() {
         const category = this.evtCategory.value;
-        // Kategoria nauka dodana do grupy koncertów/sportu (Punkt 1)
         if (category === 'kultura' || category === 'sport' || category === 'nauka') {
             this.dynamicFields.classList.remove('hidden');
             this.notesLabel.innerHTML = "Twoje surowe notatki / spostrzeżenia:";
             this.evtNotes.placeholder = "Kto uczestniczył, jaka była atmosfera, co przykuło uwagę fotografów...";
+            
+            if (category === 'kultura') {
+                this.evtTitle.placeholder = "np. Koncert Myslovitz…";
+            } else if (category === 'nauka') {
+                this.evtTitle.placeholder = "np. MSKN...";
+            } else if (category === 'sport') {
+                this.evtTitle.placeholder = "np. Liga Wydziałów...";
+            }
         } else {
             this.dynamicFields.classList.add('hidden');
             if (category === 'zapowiedzi') {
@@ -156,57 +164,57 @@ const App = {
         }
         this.aiModal.classList.add('hidden');
         this.switchStep(2);
+        this.renderFileList(); // Odświeżenie widoku na start kroku 2
     },
 
     async handleFiles(files) {
         if(!files || files.length === 0) return;
         const incomingFiles = Array.from(files);
         
-        // Dynamiczny loader nad listą plików
-        const loader = document.createElement('div');
-        loader.id = "temp-loader";
-        loader.innerHTML = `
-            <div style="display: flex; align-items: center; gap: 12px; padding: 10px; background: #202026; border-radius: 6px; margin-bottom: 10px;">
-                <div class="spinner" style="width: 18px; height: 18px; border: 2px solid var(--border); border-top: 2px solid var(--primary); border-radius: 50%; animation: spin 1s linear infinite;"></div>
-                <span>Trwa dopisywanie i optymalizacja ${incomingFiles.length} nowych zdjęć...</span>
+        // Punkt 2: Błyskawiczny, synchroniczny wtrysk kółka ładowania w ułamku sekundy
+        this.fileStatus.innerHTML = `
+            <div id="immediate-spinner" style="display: flex; align-items: center; gap: 12px; padding: 15px; background: #1c1c22; border-radius: 6px; border: 1px solid var(--border); margin-top: 15px;">
+                <div class="spinner" style="width: 20px; height: 20px; border: 3px solid var(--border); border-top: 3px solid var(--primary); border-radius: 50%; animation: spin 1s linear infinite;"></div>
+                <span>Trwa optymalizacja i generowanie miniaturek dla ${incomingFiles.length} zdjęć...</span>
             </div>
             <style>@keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }</style>
         `;
-        this.fileStatus.parentNode.insertBefore(loader, this.fileStatus);
-
+        
         this.btnDownloadPhotos.disabled = true;
         this.btnGoToStep3.disabled = true;
 
         const title = this.evtTitle?.value || "saf-wpis";
         const startDate = this.evtStart.value;
 
-        await new Promise(resolve => setTimeout(resolve, 15));
+        // Pozwól przeglądarce narysować kółko ładowania na ekranie przed obciążeniem procesora
+        await new Promise(resolve => setTimeout(resolve, 50));
 
-        // Pętla dopisuje nowe zdjęcia bez kasowania dotychczasowych (Punkt 2)
+        // Punkt 4: Zdjęcia są DOPISYWANE do tablicy, stare nie znikają
         for (let i = 0; i < incomingFiles.length; i++) {
             try {
                 const nextIndex = Compressor.processedFiles.length;
                 const res = await Compressor.processImage(incomingFiles[i], nextIndex, title, startDate);
                 Compressor.processedFiles.push(res);
             } catch (err) {
-                console.error("Błąd przetwarzania", err);
+                console.error("Błąd przetwarzania:", err);
             }
         }
 
-        document.getElementById('temp-loader')?.remove();
-        this.renderFileList(); // Przeładuj widok listy wraz z miniaturkami i przyciskami
+        this.fileInput.value = ""; // Czyszczenie technicznego pola wyboru plików
+        this.renderFileList(); // Przeładuj widok listy wraz z miniaturkami i opcją usuwania
     },
 
-    // Generowanie widoku listy z miniaturkami i przyciskami usuwania (Punkt 2)
+    // Punkt 4: Kompletny silnik zarządzania listą plików z miniaturami i przyciskiem USUŃ
     renderFileList() {
         this.fileStatus.innerHTML = "";
+        
         if (Compressor.processedFiles.length === 0) {
+            this.fileStatus.innerHTML = "<p class='info-text' style='text-align:center; padding: 20px; color: var(--text-muted);'>Brak dodanych zdjęć. Przeciągnij pliki lub kliknij strefę powyżej.</p>";
             this.btnDownloadPhotos.disabled = true;
             this.btnGoToStep3.disabled = true;
             return;
         }
 
-        // Przebudowanie nazw plików na wypadek, gdyby zmieniła się kolejność po usunięciu jakiegoś zdjęcia
         const title = this.evtTitle?.value || "saf-wpis";
         const startDate = this.evtStart.value;
         const dateObj = new Date(startDate || Date.now());
@@ -214,6 +222,7 @@ const App = {
         const month = String(dateObj.getMonth() + 1).padStart(2, '0');
         const safeTitle = Compressor.sanitizeString(title);
 
+        // Przebudowanie nazw od nowa (żeby zachować ciągłość numeryczną po usunięciu środkowego pliku)
         Compressor.processedFiles.forEach((file, index) => {
             const numStr = String(index + 1).padStart(2, '0');
             file.name = `${year}-${month}-${safeTitle}-${numStr}.webp`;
@@ -223,20 +232,22 @@ const App = {
             item.className = "file-item";
             item.style.cssText = "display: flex; align-items: center; justify-content: space-between; padding: 10px; background: #1c1c22; margin-bottom: 8px; border-radius: 6px; border: 1px solid var(--border);";
             
+            // Renderowanie HTML z miniaturką zdjęcia obok nazwy
             item.innerHTML = `
                 <div style="display: flex; align-items: center; gap: 15px;">
                     <img src="${file.previewUrl}" style="width: 50px; height: 50px; object-fit: cover; border-radius: 4px; border: 1px solid #3e3e4a;">
-                    <span style="font-weight: 500;">✅ ${file.name}</span>
+                    <span style="font-weight: 500; color: #fff;">✅ ${file.name}</span>
                     <span style="color: var(--text-muted); font-size: 0.85rem;">(${(file.size/1024).toFixed(1)} KB)</span>
                 </div>
-                <button class="btn-delete" data-index="${index}" style="background: var(--danger); color: white; padding: 5px 12px; font-size: 0.8rem; border-radius: 4px; font-weight: bold;">Usuń</button>
+                <button class="btn-delete-item" style="background: var(--danger); color: white; padding: 6px 12px; font-size: 0.8rem; border-radius: 4px; font-weight: bold; cursor: pointer; border: none;">Usuń</button>
             `;
             
-            // Obsługa usuwania pojedynczego zdjęcia z listy (Punkt 2)
-            item.querySelector('.btn-delete').addEventListener('click', (e) => {
-                const idx = parseInt(e.target.getAttribute('data-index'));
-                Compressor.processedFiles.splice(idx, 1);
-                this.renderFileList(); // Odśwież listę po usunięciu
+            // Obsługa kliknięcia "Usuń" dla pojedynczego ujęcia
+            item.querySelector('.btn-delete-item').addEventListener('click', (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                Compressor.processedFiles.splice(index, 1); // Usuń zdjęcie z pamięci podręcznej
+                this.renderFileList(); // Przerysuj listę na nowo
             });
 
             this.fileStatus.appendChild(item);

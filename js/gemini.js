@@ -5,7 +5,7 @@ export const Gemini = {
         const prompts = {
             kultura: base + `Kategoria: Kultura. Głównie koncerty, występy, spektakle. Skup się na energii wykonawców, reakcji publiki, klimacie oświetlenia scenicznego i emocjach uchwyconych w kadrze.`,
             nauka: base + `Kategoria: Nauka. Głównie konferencje naukowe, sympozja, wystąpienia, seminaria. Skup się na merytoryce, prelegentach, technologiach, znaczeniu naukowym i profesjonalnym, eksperckim klimacie wydarzenia uniwersyteckiego.`,
-            sport: base + `Kategoria: Sport. Mecze, zawody, mistrzostwa. Skup się na dynamice akcji, rywalizacji, dramaturgii momentu i zamrożeniu ruchu na zdjęciach agencji.`,
+            sport: base + `Kategoria: Sport. Mecze, zawodowi, mistrzostwa. Skup się na dynamice akcji, rywalizacji, dramaturgii momentu i zamrożeniu ruchu na zdjęciach agencji.`,
             zapowiedzi: base + `Kategoria: Zapowiedzi. Tekst musi mieć charakter informacyjny, zapraszający, z jasną strukturą i wezwaniem do akcji.`,
             zycie: base + `Kategoria: Z życia agencji. Ton wewnętrzny, integracyjny, pokazujący pasję, kulisy pracy fotografów i atmosferę wewnątrz teamu.`
         };
@@ -25,7 +25,6 @@ export const Gemini = {
     },
 
     async callGemini(apiKey, prompt) {
-        // Poprawiony model na wersję z końcówką -latest (naprawia Błąd API)
         const url = `https://generativelanguage.googleapis.com/v1/models/gemini-1.5-flash-latest:generateContent?key=${apiKey}`;
         
         const requestBody = {
@@ -33,7 +32,7 @@ export const Gemini = {
                 parts: [{ text: prompt }] 
             }],
             generationConfig: {
-                responseMimeType: "application/json"
+                response_mime_type: "application/json" // POPRAWIONE NA SNAKE_CASE DLA REST API
             }
         };
 

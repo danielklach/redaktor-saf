@@ -44,7 +44,6 @@ export const Compressor = {
                         const month = String(dateObj.getMonth() + 1).padStart(2, '0');
                         const safeTitle = Compressor.sanitizeString(eventTitle || 'wydarzenie');
                         
-                        // Zapewnienie stałego, dwucyfrowego numerowania (01, 02 itd.)
                         const numStr = String(targetIndex + 1).padStart(2, '0');
                         const fileName = `${year}-${month}-${safeTitle}-${numStr}.webp`;
 
@@ -52,7 +51,7 @@ export const Compressor = {
                             blob: blob,
                             name: fileName,
                             size: blob.size,
-                            previewUrl: event.target.result, // Zapis miniaturki podglądu
+                            previewUrl: event.target.result,
                             wpPath: `/wp-content/uploads/${year}/${month}/${fileName}`
                         });
                     }, 'image/webp', 0.73);

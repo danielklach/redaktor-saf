@@ -11,7 +11,7 @@
     <header>
         <div class="logo-zone">
             <span class="logo-saf">SAF Jamnik</span>
-            <span class="badge">Redaktor v1.3</span>
+            <span class="badge">Redaktor v1.4</span>
         </div>
         <div class="api-zone">
             <input type="password" id="apiKeyInput" placeholder="Klucz Gemini API...">
@@ -20,6 +20,7 @@
     </header>
 
     <main class="container">
+        <!-- Pasek Postępu -->
         <div class="steps-indicator">
             <div class="step active" data-step="1">1. Dane wydarzenia</div>
             <div class="step" data-step="2">2. Kompresja zdjęć</div>
@@ -28,6 +29,7 @@
 
         <hr>
 
+        <!-- KROK 1: Formularz i AI Wywiad -->
         <section id="step1" class="step-section active">
             <h2>Szczegóły Artykułu</h2>
             
@@ -43,9 +45,10 @@
             </div>
 
             <div class="grid-2col">
+                <!-- Sekcja pól dynamicznych (Kultura / Nauka / Sport) -->
                 <div class="form-group" id="dynamicFields">
                     <label for="evtTitle">Nazwa wydarzenia:</label>
-                    <input type="text" id="evtTitle" placeholder="np. Kortowiada 2026: Koncert Główny">
+                    <input type="text" id="evtTitle" placeholder="np. Koncert Myslovitz…">
 
                     <label for="evtLocation">Miejsce:</label>
                     <input type="text" id="evtLocation" placeholder="np. Kortowo, Górka Kortowska">
@@ -62,6 +65,7 @@
                     </div>
                 </div>
 
+                <!-- Sekcja Notatek -->
                 <div class="form-group">
                     <label for="evtNotes" id="notesLabel">Twoje surowe notatki / spostrzeżenia:</label>
                     <textarea id="evtNotes" rows="12" placeholder="Wpisz tu wszystko co pamiętasz..."></textarea>
@@ -73,15 +77,17 @@
             </div>
         </section>
 
+        <!-- KROK 2: Zdjęcia i Kompresja -->
         <section id="step2" class="step-section">
             <h2>Wgranie i Kompresja Zdjęć</h2>
-            <p class="info-text">Zdjęcia zostaną przekonwertowane do formatu <strong>WebP</strong> (maks. 2500px, waga do <strong>200 KB</strong>).</p>
+            <p class="info-text"><strong>Wrzuć tu zdjęcia w dowolnym formacie i rozmiarze i pobierz wersje zoptymalizowane pod stronę internetową.</strong></p>
             
             <div class="dropzone" id="dropzone">
                 <p>Przeciągnij i upuść zdjęcia tutaj lub <span class="highlight" style="text-decoration: underline; pointer-events: none;">kliknij tutaj, aby wybrać z dysku</span></p>
             </div>
             <input type="file" id="fileInput" multiple accept="image/*" style="display:none;">
 
+            <!-- Tu będą generować się pliki z miniaturkami i opcją usuwania -->
             <div id="fileStatus" class="file-status"></div>
 
             <div class="actions">
@@ -91,6 +97,7 @@
             </div>
         </section>
 
+        <!-- KROK 3: Wynik końcowy -->
         <section id="step3" class="step-section">
             <h2>Generowanie Artykułu przez AI</h2>
             
@@ -125,6 +132,7 @@
         </section>
     </main>
 
+    <!-- POPUP / MODAL: Wywiad AI -->
     <div id="aiModal" class="modal hidden">
         <div class="modal-content">
             <h3>🤖 Agent Redakcyjny SAF pyta o szczegóły...</h3>
