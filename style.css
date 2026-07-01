@@ -12,15 +12,28 @@
 
 * { box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
 
-body { background-color: var(--bg-color); color: var(--text-color); padding-bottom: 50px; line-height: 1.5; }
+body {
+    background-color: var(--bg-color);
+    color: var(--text-color);
+    padding-bottom: 50px;
+    line-height: 1.5;
+}
 
-header { background-color: var(--card-bg); padding: 15px 30px; display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--border); }
+header {
+    background-color: var(--card-bg);
+    padding: 15px 30px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    border-bottom: 1px solid var(--border);
+    flex-wrap: wrap;
+    gap: 12px;
+}
+
 .logo-saf { font-weight: 800; font-size: 1.2rem; color: var(--primary); text-transform: uppercase; letter-spacing: 1px; }
 .badge { background: #2a2a35; padding: 3px 8px; font-size: 0.75rem; border-radius: 4px; margin-left: 10px; color: var(--text-muted); }
 
-.api-zone { display: flex; gap: 10px; }
-/* Zamaskowanie tekstu (działa jak hasło, ale nie aktywuje menedżerów haseł) */
-.masked-input { -webkit-text-security: disc; }
+.api-zone { display: flex; align-items: center; gap: 10px; }
 
 .container { max-width: 1200px; margin: 30px auto; padding: 0 20px; }
 
@@ -29,21 +42,36 @@ header { background-color: var(--card-bg); padding: 15px 30px; display: flex; ju
 .step.active { background: var(--primary); color: #000; border-color: var(--primary); }
 
 hr { border: 0; height: 1px; background: var(--border); margin: 30px 0; }
+
 h2 { margin-bottom: 20px; font-size: 1.6rem; color: #fff; }
 h3 { margin-bottom: 15px; font-size: 1.1rem; color: var(--primary); }
 
+/* UKRYWANIE NIEAKTYWNYCH KROKÓW - TO TE KLUCZOWE LINIJKI */
 .step-section { display: none; }
 .step-section.active { display: block !important; }
 
 .grid-2col { display: grid; grid-template-columns: 1fr 1fr; gap: 30px; }
 
 .form-group label { display: block; margin-top: 15px; margin-bottom: 5px; font-weight: 600; font-size: 0.9rem; }
-input[type="text"], input[type="datetime-local"], select, textarea {
+input[type="text"], input[type="password"], input[type="datetime-local"], select, textarea {
     width: 100%; padding: 10px; background: #0c0c0e; border: 1px solid var(--border); color: #fff; border-radius: 6px; font-size: 0.95rem;
 }
 input:focus, select:focus, textarea:focus { border-color: var(--primary); outline: none; }
 
-.dropzone { border: 2px dashed var(--border); background: var(--card-bg); padding: 40px; text-align: center; border-radius: 8px; cursor: pointer; transition: 0.2s; }
+/* Pkt 5: maskowanie CSS zamiast type="password", żeby przeglądarka nie oferowała zapisu hasła */
+.masked-input { -webkit-text-security: disc; }
+
+.input-with-toggle { position: relative; display: flex; align-items: center; width: 260px; }
+.input-with-toggle input { padding-right: 38px; width: 100%; }
+.btn-toggle-visibility {
+    position: absolute; right: 4px; background: transparent; border: none; color: var(--text-muted);
+    font-size: 1rem; cursor: pointer; padding: 6px 8px; border-radius: 4px;
+}
+.btn-toggle-visibility:hover { color: #fff; background: #2e2e38; }
+
+.dropzone {
+    border: 2px dashed var(--border); background: var(--card-bg); padding: 40px; text-align: center; border-radius: 8px; cursor: pointer; transition: 0.2s;
+}
 .dropzone:hover { border-color: var(--primary); background: #202026; }
 .highlight { color: var(--primary); font-weight: 600; }
 
@@ -59,20 +87,40 @@ button { padding: 10px 20px; font-weight: 600; border-radius: 6px; cursor: point
 .btn-secondary:hover { background: #3e3e4a; }
 .btn-success { background: var(--success); color: #fff; }
 .btn-success:hover { opacity: 0.9; }
+
 button:disabled { background: #2e2e38; color: var(--text-muted); cursor: not-allowed; }
 
 .modal { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.8); display: flex; align-items: center; justify-content: center; z-index: 1000; }
-.modal-content { background: var(--card-bg); padding: 30px; border-radius: 8px; max-width: 500px; width: 90%; border: 1px solid var(--border); }
+.modal-content { background: var(--card-bg); padding: 30px; border-radius: 8px; max-width: 560px; width: 90%; border: 1px solid var(--border); max-height: 85vh; overflow-y: auto; }
 .modal-actions { display: flex; justify-content: flex-end; gap: 10px; margin-top: 20px; }
 
 .hidden { display: none !important; }
+
 .loading-spinner { padding: 30px 10px; text-align: center; color: var(--primary); font-weight: 600; }
 .meta-suggestion { background: #202026; padding: 15px; border-radius: 6px; margin-bottom: 15px; font-size: 0.9rem; border-left: 4px solid var(--primary); }
 
-/* Paski Postępu i Pytania */
-.progress-bar-container { width: 100%; background: var(--border); height: 8px; border-radius: 4px; overflow: hidden; margin-top: 10px; }
-.progress-bar-fill { height: 100%; background: var(--primary); width: 0%; transition: width 0.3s ease; }
+/* Pkt 1 i 4: pasek postępu, wspólny dla generowania AI i wgrywania zdjęć */
+.progress-wrap {
+    width: 100%; height: 8px; background: #0c0c0e; border-radius: 4px; overflow: hidden;
+    margin: 12px 0 6px; border: 1px solid var(--border);
+}
+.progress-bar {
+    height: 100%; width: 0%; background: linear-gradient(90deg, var(--primary), var(--primary-hover));
+    transition: width 0.3s ease;
+}
+.progress-label { font-size: 0.85rem; color: var(--text-muted); text-align: center; margin-bottom: 10px; }
 
-.q-block { margin-bottom: 20px; background: #202026; padding: 15px; border-radius: 6px; border-left: 3px solid var(--primary); }
-.q-block label { display: block; font-weight: bold; margin-bottom: 10px; color: #fff; }
-.q-block textarea { width: 100%; background: #0c0c0e; }
+/* Pkt 2: numerowane pytania agenta, z polem odpowiedzi bezpośrednio pod każdym z nich */
+.question-block {
+    background: #1c1c22; border: 1px solid var(--border); border-radius: 6px;
+    padding: 12px 15px; margin-bottom: 14px;
+}
+.question-block .q-title { font-weight: 600; margin-bottom: 8px; color: #fff; line-height: 1.4; }
+.question-block textarea { margin-top: 0; }
+
+/* Pkt 6: osobny, gotowy do skopiowania tytuł wpisu */
+.copy-row { display: flex; gap: 10px; margin: 6px 0 14px; }
+.copy-row input[readonly] { background: #0c0c0e; }
+.copy-row button { flex-shrink: 0; }
+
+@keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
