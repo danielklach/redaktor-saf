@@ -12,11 +12,19 @@ export const Compressor = {
 
     processImage(file, targetIndex, eventTitle, eventDateStr) {
         return new Promise((resolve, reject) => {
-            const allowedFormats = ['jpg', 'jpeg', 'png', 'tiff', 'tif', 'dng', 'webp', 'heic', 'gif', 'avif', 'heif', 'bmp'];
-            const fileExt = file.name.split('.').pop().toLowerCase();
-
-            if (!allowedFormats.includes(fileExt)) {
-                reject(new Error(`"${file.name}" ma błędny format (.${fileExt}). Obsługiwane pliki to: ${allowedFormats.join(', ')}.`));
+            // NAPRAWA ZAWIESZKI: pliki, które przeglądarka nie umie zdekodować w <img> (najczęściej
+            // HEIC/HEIF z iPhone'a, ale też RAW z aparatu, PDF-y czy inne pliki wrzucone przez drag&drop -
+            // atrybut accept="image/*" NIE filtruje przeciąganych plików) wcześniej nie miały żadnej
+            // obsługi błędu ani limitu czasu. Efekt: "img.onload" nigdy się nie odpalał i CAŁA kolejka
+            // stała w miejscu w nieskończoność, bez żadnego komunikatu. Poniżej: wczesne odrzucenie
+            // nieobsługiwanych formatów + reject przy błędzie + twardy limit czasu jako siatka bezpieczeństwa.
+            const isHeic = /\.(heic|heif)$/i.test(file.name) || /heic|heif/i.test(file.type || '');
+            if (isHeic) {
+                reject(new Error(`"${file.name}" to format HEIC/HEIF (typowy dla iPhone'a) - przeglądarki na komputerze nie umieją go podglądać. Przekonwertuj plik na JPG i wgraj ponownie.`));
+                return;
+            }
+            if (file.type && !file.type.startsWith('image/')) {
+                reject(new Error(`"${file.name}" nie jest rozpoznawany jako obraz (typ: ${file.type}) i został pominięty.`));
                 return;
             }
 
@@ -24,9 +32,8 @@ export const Compressor = {
             const timeoutId = setTimeout(() => {
                 if (settled) return;
                 settled = true;
-                reject(new Error(`Czas przetwarzania "${file.name}" minął. Plik jest uszkodzony lub przeglądarka nie wspiera tego formatu natywnie.`));
-            }, 15000);
-
+                reject(new Error(`"${file.name}" przetwarzał się dłużej niż 20 sekund i został pominięty (prawdopodobnie nieobsługiwany lub uszkodzony plik).`));
+            }, 20000);
             const settle = (fn, arg) => {
                 if (settled) return;
                 settled = true;
@@ -35,14 +42,10 @@ export const Compressor = {
             };
 
             const reader = new FileReader();
-            reader.onerror = () => settle(reject, new Error(`Błąd odczytu pliku "${file.name}".`));
-            
+            reader.onerror = () => settle(reject, new Error(`Nie udało się wczytać pliku "${file.name}".`));
             reader.onload = (event) => {
                 const img = new Image();
-                
-                // Błyskawiczne złapanie błędu dekodowania, np. dla DNG/TIFF w Chrome
-                img.onerror = () => settle(reject, new Error(`Przeglądarka nie potrafi natywnie wyświetlić pliku "${file.name}" (najczęściej HEIC, TIFF lub DNG). Skonwertuj plik na JPG.`));
-                
+                img.onerror = () => settle(reject, new Error(`"${file.name}" nie jest prawidłowym lub wspieranym plikiem obrazu.`));
                 img.onload = async () => {
                     try {
                         const compress = (maxSide, quality) => {
@@ -55,24 +58,19 @@ export const Compressor = {
 
                                 canvas.width = w; canvas.height = h;
                                 const ctx = canvas.getContext('2d');
-                                if (!ctx) { rejBlob(new Error('Brak wsparcia dla Canvas 2D.')); return; }
+                                if (!ctx) { rejBlob(new Error('Canvas 2D nie jest dostępny w tej przeglądarce.')); return; }
                                 ctx.drawImage(img, 0, 0, w, h);
-                                canvas.toBlob((b) => b ? resBlob(b) : rejBlob(new Error('Błąd kompresji do WebP.')), 'image/webp', quality);
+                                canvas.toBlob((b) => b ? resBlob(b) : rejBlob(new Error('Kodowanie do WebP nie powiodło się.')), 'image/webp', quality);
                             });
                         };
 
+                        // Strategia błyskawiczna 2-fazowa (Limit twardy: 200KB = 204800 bajtów)
+                        // Faza 1: Szerokość do 1920px, jakość 0.65 (Zwykle waga wynosi około 120-170KB)
                         let finalBlob = await compress(1920, 0.65);
 
-                        // Agresywna, ale wydajna pętla wymuszająca twardy limit 200 KB
-                        let quality = 0.65;
-                        let maxDimension = 1920;
-                        while (finalBlob.size > 204800 && quality > 0.1) {
-                            quality -= 0.15;
-                            if (quality <= 0.3) {
-                                maxDimension = Math.round(maxDimension * 0.8);
-                                quality = 0.5; // zresetowanie jakości przy mniejszej rozdzielczości
-                            }
-                            finalBlob = await compress(maxDimension, quality);
+                        // Faza ratunkowa (tylko jeśli zdjęcie jest wybitnie zaszumione lub szczegółowe)
+                        if (finalBlob.size > 204800) {
+                            finalBlob = await compress(1400, 0.50);
                         }
 
                         const dateObj = new Date(eventDateStr || Date.now());
