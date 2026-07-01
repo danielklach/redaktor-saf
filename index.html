@@ -11,11 +11,28 @@
     <header>
         <div class="logo-zone">
             <span class="logo-saf">SAF Jamnik</span>
-            <span class="badge">Redaktor v1.6</span>
+            <span class="badge">Redaktor v1.7.1</span>
         </div>
         <div class="api-zone">
-            <!-- Typ zmieniony na text, ukryty przez CSS, żeby przeglądarka nie pytała o zapis hasła -->
-            <input type="text" id="apiKeyInput" class="masked-input" placeholder="Klucz Gemini API..." autocomplete="off">
+            <div class="input-with-toggle">
+                <!-- Pkt 5 i 7: pole NIE jest typu "password" (unika fałszywej propozycji zapisu hasła
+                     w przeglądarce), a maskowanie wizualne robimy przez CSS (-webkit-text-security).
+                     Domyślnie pole może zostać puste - wtedy używane jest bezpieczne proxy (patrz js/gemini.js). -->
+                <input type="text"
+                       id="apiKeyInput"
+                       class="masked-input"
+                       name="saf_ai_token"
+                       placeholder="Opcjonalnie: własny klucz Gemini API..."
+                       autocomplete="off"
+                       autocapitalize="off"
+                       autocorrect="off"
+                       spellcheck="false"
+                       data-lpignore="true"
+                       data-1p-ignore="true"
+                       data-bwignore="true"
+                       data-form-type="other">
+                <button type="button" id="toggleKeyVisibility" class="btn-toggle-visibility" title="Pokaż/ukryj klucz">👁</button>
+            </div>
             <button id="saveKeyBtn" class="btn-secondary">Zapisz Klucz</button>
         </div>
     </header>
@@ -83,6 +100,11 @@
             </div>
             <input type="file" id="fileInput" multiple accept="image/*" style="display:none;">
 
+            <!-- Pkt 4: pasek postępu jest STAŁYM elementem DOM (nie tworzonym dynamicznie),
+                 dzięki czemu pojawia się natychmiast po dodaniu zdjęć, bez "zawieszki". -->
+            <div id="uploadProgressWrap" class="progress-wrap hidden"><div class="progress-bar" id="uploadProgressBar"></div></div>
+            <p id="uploadProgressLabel" class="progress-label hidden"></p>
+
             <div id="fileStatus" class="file-status"></div>
 
             <div class="actions">
@@ -99,35 +121,34 @@
                 <div class="review-zone">
                     <h3>Ostateczne Notatki do AI</h3>
                     <p class="info-text" style="margin-bottom: 10px;">To jest jedyne źródło wiedzy dla sztucznej inteligencji:</p>
-                    <textarea id="finalNotes" rows="14" readonly style="background: #111; color: #888; border: 1px solid #333;"></textarea>
-                    <button id="btnTriggerAI" class="btn-primary w-100" style="margin-top: 15px;">Uruchom Magię AI (Gemini 1.5 Flash)</button>
+                    <textarea id="finalNotes" rows="14"></textarea>
+                    <button id="btnTriggerAI" class="btn-primary w-100" style="margin-top: 15px;">Uruchom Magię AI (Gemini 3.5 Flash)</button>
                 </div>
 
                 <div class="result-zone">
                     <h3>Wynik działania systemu</h3>
-                    
+
                     <div id="aiLoading" class="loading-spinner hidden">
-                        <div style="margin-bottom: 10px;">Trwa pisanie dziennikarskiego wpisu...</div>
-                        <div class="progress-bar-container"><div id="articleProgressBar" class="progress-bar-fill"></div></div>
+                        <div class="progress-wrap"><div class="progress-bar" id="genProgressBar"></div></div>
+                        <p id="genProgressLabel" class="progress-label">Inicjalizacja generowania...</p>
                     </div>
                     
                     <div id="aiOutput" class="hidden">
                         <div class="meta-suggestion">
-                            <p><strong>Data Publikacji (WP):</strong> <span id="sugDate">-</span></p>
-                            <p><strong>Tagi:</strong> <span id="sugTags">-</span></p>
-                        </div>
-
-                        <label for="outTitle">Chwytliwy Tytuł:</label>
-                        <div style="display:flex; gap:10px; margin-bottom: 15px;">
-                            <input type="text" id="outTitle" readonly>
-                            <button id="btnCopyTitle" class="btn-secondary">Kopiuj</button>
+                            <p><strong>Sugerowany Tytuł wpisu:</strong></p>
+                            <div class="copy-row">
+                                <input type="text" id="sugTitleInput" readonly>
+                                <button id="btnCopyTitle" class="btn-secondary">Kopiuj tytuł</button>
+                            </div>
+                            <p><strong>Sugerowana Data Publikacji (WP):</strong> <span id="sugDate">-</span></p>
+                            <p><strong>Sugerowane Tagi:</strong> <span id="sugTags">-</span></p>
                         </div>
                         
                         <label for="gutenbergOutput">Kod do wklejenia do Edytora Kodu WordPress (Gutenberg):</label>
                         <textarea id="gutenbergOutput" rows="12" readonly></textarea>
                         
                         <div class="actions" style="margin-top: 10px;">
-                            <button id="btnCopyHtml" class="btn-success">Kopiuj kod artykułu</button>
+                            <button id="btnCopyHtml" class="btn-success">Kopiuj artykuł w HTML</button>
                             <button id="btnRegenerate" class="btn-secondary">Generuj jeszcze raz</button>
                         </div>
                     </div>
@@ -137,26 +158,22 @@
     </main>
 
     <div id="aiModal" class="modal hidden">
-        <div class="modal-content" style="max-width: 600px; max-height: 90vh; display: flex; flex-direction: column;">
-            <h3>🤖 Wywiad Redakcyjny...</h3>
-            
-            <div id="modalLoading" class="loading-spinner">
-                <div style="margin-bottom: 10px;">Agent analizuje Twoje notatki i szuka braków...</div>
-                <div class="progress-bar-container"><div id="modalProgressBar" class="progress-bar-fill"></div></div>
-            </div>
+        <div class="modal-content">
+            <h3>🤖 Agent Redakcyjny SAF pyta o szczegóły...</h3>
 
-            <div id="modalContentArea" class="hidden" style="overflow-y: auto; padding-right: 10px;">
-                <p class="info-text" style="margin-bottom:15px;">Poniżej znajdują się pytania dopytujące od Agenta. Odpowiedz na te, które pamiętasz – to mocno wzbogaci artykuł.</p>
-                <div id="aiQuestionsContainer"></div>
-            </div>
-            
+            <div id="aiProgressWrap" class="progress-wrap hidden"><div class="progress-bar" id="aiProgressBar"></div></div>
+            <p id="aiProgressLabel" class="progress-label hidden"></p>
+
+            <!-- Pkt 2: pytania numerowane, a pole odpowiedzi jest tuż pod KAŻDYM z nich (wypełniane przez JS) -->
+            <div id="aiQuestionsContainer"></div>
+
             <div class="modal-actions">
-                <button id="btnSkipModal" class="btn-secondary">Pomiń wywiad</button>
-                <button id="btnSubmitModal" class="btn-primary hidden">Zatwierdź odpowiedzi i przejdź dalej</button>
+                <button id="btnSkipModal" class="btn-secondary">Pomiń</button>
+                <button id="btnSubmitModal" class="btn-primary">Zatwierdź i przejdź dalej</button>
             </div>
         </div>
     </div>
 
-    <script type="module" src="js/app.js"></script>
+    <script type="module" src="js/app.js?v=161"></script>
 </body>
 </html>
