@@ -5,7 +5,6 @@ import { Gutenberg } from './gutenberg.js';
 const App = {
     state: {
         currentStep: 1,
-        filesToProcess: [],
         interviewAnswers: "",
         aiData: null
     },
@@ -80,7 +79,6 @@ const App = {
         this.dropzone.addEventListener('dragleave', () => { this.dropzone.style.borderColor = 'var(--border)'; });
         this.dropzone.addEventListener('drop', (e) => { e.preventDefault(); this.handleFiles(e.dataTransfer.files); });
 
-        // Pobranie dynamicznie nazwanego ZIP (Punkt 2)
         this.btnDownloadPhotos.addEventListener('click', () => {
             const title = this.evtTitle?.value || "wpis";
             const startDate = this.evtStart.value;
@@ -115,7 +113,7 @@ const App = {
 
     handleCategoryChange() {
         const category = this.evtCategory.value;
-        // Dodana obsługa kategorii 'nauka' (Punkt 3)
+        // Kategoria nauka dodana do grupy koncertów/sportu (Punkt 1)
         if (category === 'kultura' || category === 'sport' || category === 'nauka') {
             this.dynamicFields.classList.remove('hidden');
             this.notesLabel.innerHTML = "Twoje surowe notatki / spostrzeżenia:";
@@ -162,39 +160,88 @@ const App = {
 
     async handleFiles(files) {
         if(!files || files.length === 0) return;
-        this.state.filesToProcess = Array.from(files);
+        const incomingFiles = Array.from(files);
         
-        // Punkt 1: Błyskawiczne wdrożenie kółka ładowania w tej samej milisekundzie
-        this.fileStatus.innerHTML = `
-            <div style="display: flex; align-items: center; gap: 12px; padding: 10px 0;">
-                <div class="spinner" style="width: 20px; height: 20px; border: 3px solid var(--border); border-top: 3px solid var(--primary); border-radius: 50%; animation: spin 1s linear infinite;"></div>
-                <span>Trwa walidacja i optymalizacja ${this.state.filesToProcess.length} zdjęć do WebP (max 200 KB)...</span>
+        // Dynamiczny loader nad listą plików
+        const loader = document.createElement('div');
+        loader.id = "temp-loader";
+        loader.innerHTML = `
+            <div style="display: flex; align-items: center; gap: 12px; padding: 10px; background: #202026; border-radius: 6px; margin-bottom: 10px;">
+                <div class="spinner" style="width: 18px; height: 18px; border: 2px solid var(--border); border-top: 2px solid var(--primary); border-radius: 50%; animation: spin 1s linear infinite;"></div>
+                <span>Trwa dopisywanie i optymalizacja ${incomingFiles.length} nowych zdjęć...</span>
             </div>
             <style>@keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }</style>
         `;
-        
+        this.fileStatus.parentNode.insertBefore(loader, this.fileStatus);
+
         this.btnDownloadPhotos.disabled = true;
         this.btnGoToStep3.disabled = true;
 
-        Compressor.processedFiles = [];
         const title = this.evtTitle?.value || "saf-wpis";
         const startDate = this.evtStart.value;
 
-        // Krótkie opóźnienie (10ms), aby przeglądarka zdążyła natychmiast wyrenderować kółko ładowania na ekranie
-        await new Promise(resolve => setTimeout(resolve, 10));
+        await new Promise(resolve => setTimeout(resolve, 15));
 
-        let statusHtml = "";
-        for (let i = 0; i < this.state.filesToProcess.length; i++) {
+        // Pętla dopisuje nowe zdjęcia bez kasowania dotychczasowych (Punkt 2)
+        for (let i = 0; i < incomingFiles.length; i++) {
             try {
-                const res = await Compressor.processImage(this.state.filesToProcess[i], i, title, startDate);
+                const nextIndex = Compressor.processedFiles.length;
+                const res = await Compressor.processImage(incomingFiles[i], nextIndex, title, startDate);
                 Compressor.processedFiles.push(res);
-                statusHtml += `<div class="file-item"><span>✅ ${res.name}</span><span>${(res.size/1024).toFixed(1)} KB</span></div>`;
             } catch (err) {
-                statusHtml += `<div class="file-item" style="color:var(--danger)">❌ Błąd pliku ${i+1}</div>`;
+                console.error("Błąd przetwarzania", err);
             }
         }
 
-        this.fileStatus.innerHTML = statusHtml;
+        document.getElementById('temp-loader')?.remove();
+        this.renderFileList(); // Przeładuj widok listy wraz z miniaturkami i przyciskami
+    },
+
+    // Generowanie widoku listy z miniaturkami i przyciskami usuwania (Punkt 2)
+    renderFileList() {
+        this.fileStatus.innerHTML = "";
+        if (Compressor.processedFiles.length === 0) {
+            this.btnDownloadPhotos.disabled = true;
+            this.btnGoToStep3.disabled = true;
+            return;
+        }
+
+        // Przebudowanie nazw plików na wypadek, gdyby zmieniła się kolejność po usunięciu jakiegoś zdjęcia
+        const title = this.evtTitle?.value || "saf-wpis";
+        const startDate = this.evtStart.value;
+        const dateObj = new Date(startDate || Date.now());
+        const year = dateObj.getFullYear();
+        const month = String(dateObj.getMonth() + 1).padStart(2, '0');
+        const safeTitle = Compressor.sanitizeString(title);
+
+        Compressor.processedFiles.forEach((file, index) => {
+            const numStr = String(index + 1).padStart(2, '0');
+            file.name = `${year}-${month}-${safeTitle}-${numStr}.webp`;
+            file.wpPath = `/wp-content/uploads/${year}/${month}/${file.name}`;
+
+            const item = document.createElement('div');
+            item.className = "file-item";
+            item.style.cssText = "display: flex; align-items: center; justify-content: space-between; padding: 10px; background: #1c1c22; margin-bottom: 8px; border-radius: 6px; border: 1px solid var(--border);";
+            
+            item.innerHTML = `
+                <div style="display: flex; align-items: center; gap: 15px;">
+                    <img src="${file.previewUrl}" style="width: 50px; height: 50px; object-fit: cover; border-radius: 4px; border: 1px solid #3e3e4a;">
+                    <span style="font-weight: 500;">✅ ${file.name}</span>
+                    <span style="color: var(--text-muted); font-size: 0.85rem;">(${(file.size/1024).toFixed(1)} KB)</span>
+                </div>
+                <button class="btn-delete" data-index="${index}" style="background: var(--danger); color: white; padding: 5px 12px; font-size: 0.8rem; border-radius: 4px; font-weight: bold;">Usuń</button>
+            `;
+            
+            // Obsługa usuwania pojedynczego zdjęcia z listy (Punkt 2)
+            item.querySelector('.btn-delete').addEventListener('click', (e) => {
+                const idx = parseInt(e.target.getAttribute('data-index'));
+                Compressor.processedFiles.splice(idx, 1);
+                this.renderFileList(); // Odśwież listę po usunięciu
+            });
+
+            this.fileStatus.appendChild(item);
+        });
+
         this.btnDownloadPhotos.disabled = false;
         this.btnGoToStep3.disabled = false;
     },

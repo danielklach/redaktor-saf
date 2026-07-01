@@ -10,7 +10,7 @@ export const Compressor = {
             .replace(/[\s_]+/g, '-');
     },
 
-    processImage(file, index, eventTitle, eventDateStr) {
+    processImage(file, targetIndex, eventTitle, eventDateStr) {
         return new Promise((resolve, reject) => {
             const reader = new FileReader();
             reader.readAsDataURL(file);
@@ -36,7 +36,6 @@ export const Compressor = {
                     const ctx = canvas.getContext('2d');
                     ctx.drawImage(img, 0, 0, width, height);
 
-                    // Zmniejszona jakość z 0.82 na 0.73 gwarantująca wagę do max 200 KB przy 2500px
                     canvas.toBlob((blob) => {
                         if (!blob) return reject(new Error("Błąd zapisu canvas"));
                         
@@ -44,12 +43,16 @@ export const Compressor = {
                         const year = dateObj.getFullYear();
                         const month = String(dateObj.getMonth() + 1).padStart(2, '0');
                         const safeTitle = Compressor.sanitizeString(eventTitle || 'wydarzenie');
-                        const fileName = `${year}-${month}-${safeTitle}-${index + 1}.webp`;
+                        
+                        // Zapewnienie stałego, dwucyfrowego numerowania (01, 02 itd.)
+                        const numStr = String(targetIndex + 1).padStart(2, '0');
+                        const fileName = `${year}-${month}-${safeTitle}-${numStr}.webp`;
 
                         resolve({
                             blob: blob,
                             name: fileName,
                             size: blob.size,
+                            previewUrl: event.target.result, // Zapis miniaturki podglądu
                             wpPath: `/wp-content/uploads/${year}/${month}/${fileName}`
                         });
                     }, 'image/webp', 0.73);
@@ -59,7 +62,6 @@ export const Compressor = {
         });
     },
 
-    // Generowanie ZIP na podstawie czystej nazwy plików (Punkt 2)
     async generateZip(eventTitle, eventDateStr) {
         if (this.processedFiles.length === 0) return;
         const zip = new JSZip();
@@ -71,7 +73,7 @@ export const Compressor = {
         const year = dateObj.getFullYear();
         const month = String(dateObj.getMonth() + 1).padStart(2, '0');
         const safeTitle = this.sanitizeString(eventTitle || 'wydarzenie');
-        const zipName = `${year}-${month}-${safeTitle}.zip`; // Nazwa ZIP identyczna z rdzeniem plików
+        const zipName = `${year}-${month}-${safeTitle}.zip`;
 
         const content = await zip.generateAsync({ type: "blob" });
         const url = window.URL.createObjectURL(content);
