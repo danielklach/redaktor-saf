@@ -2,7 +2,7 @@
 // wpisy w cache'u zostały jawnie skasowane w evencie "activate" (patrz niżej). Samo Network First
 // już samo w sobie zapewnia świeże pliki przy każdym ładowaniu online - ta wersja to dodatkowa
 // siatka bezpieczeństwa, np. gdyby trzeba było wymusić czystkę po zmianie listy PRECACHE_URLS.
-const CACHE_VERSION = 'v1';
+const CACHE_VERSION = 'v2';
 const CACHE_NAME = `redaktor-safi-${CACHE_VERSION}`;
 
 // Kluczowe pliki statyczne cache'owane przy instalacji - aplikacja ma z nich korzystać
@@ -42,7 +42,7 @@ self.addEventListener('activate', (event) => {
 });
 
 // Strategia "Network First": przy KAŻDYM żądaniu najpierw próbujemy pobrać świeżą wersję
-// z sieci (i od razu aktualizujemy nią cache) - dzięki temu zmiany wypchnięte na GitHub Pages
+// z sieci (i od razu aktualizujemy nią cache) - dzięki temu zmiany wypchnięte na Netlify
 // są widoczne natychmiast przy pierwszym online'owym wczytaniu strony, bez czekania na
 // wygaśnięcie jakiegokolwiek cache'u. Do cache'u sięgamy TYLKO, gdy sieć faktycznie zawiedzie
 // (np. brak internetu) - wtedy aplikacja i tak działa z ostatnią znaną, dobrą wersją.

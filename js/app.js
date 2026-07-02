@@ -58,6 +58,8 @@ const App = {
         this.initFileSystemSave();
         this.resetLinkRows();
         this.footerYear.textContent = new Date().getFullYear();
+        this.renderFooterVersion();
+        this.handleHashNavigation();
         if (installPromptPending) {
             installPromptPending = false;
             this.onInstallPromptAvailable();
@@ -155,6 +157,7 @@ const App = {
         this.aiActionsFooter = document.getElementById('aiActionsFooter');
 
         this.footerYear = document.getElementById('footerYear');
+        this.footerVersion = document.getElementById('footerVersion');
     },
 
     bindEvents() {
@@ -163,6 +166,10 @@ const App = {
             e.preventDefault();
             location.reload();
         });
+
+        // Pozwala przeskoczyć do kroku wklejając np. "#3" w adresie, także BEZ przeładowania
+        // strony (patrz handleHashNavigation) - przydatne przy testowaniu.
+        window.addEventListener('hashchange', () => this.handleHashNavigation());
 
         this.btnShowIntro.addEventListener('click', () => this.introModal.classList.remove('hidden'));
         this.btnCloseIntro.addEventListener('click', () => {
@@ -486,6 +493,34 @@ const App = {
         
         const targetIndicator = document.querySelector(`.step[data-step="${stepNum}"]`);
         if (targetIndicator) { targetIndicator.classList.add('active'); }
+    },
+
+    // W adresie strony można wkleić np. "#3", żeby od razu przeskoczyć do Kroku 3 - wygodne przy
+    // testowaniu, żeby nie trzeba było za każdym razem ręcznie przechodzić przez Kroki 1 i 2.
+    // Celowo pomija normalną walidację (handleStep1Submit/goToStep3) - to skrót WYŁĄCZNIE
+    // nawigacyjny, więc pola danego kroku mogą zostać puste.
+    handleHashNavigation() {
+        const match = window.location.hash.match(/^#([1-3])$/);
+        if (match) {
+            this.switchStep(parseInt(match[1], 10));
+        }
+    },
+
+    // Wersja i data jej wprowadzenia w stopce - czytane BEZPOŚREDNIO z nagłówka (.logo-version
+    // i jego atrybutu data-release-date), żeby aktualizacja wersji w jednym miejscu (nagłówek)
+    // wystarczyła - bez ręcznego powtarzania tej samej informacji w stopce.
+    renderFooterVersion() {
+        const versionEl = document.querySelector('.logo-version');
+        if (!versionEl) return;
+        const releaseDate = versionEl.dataset.releaseDate;
+        let dateLabel = '';
+        if (releaseDate) {
+            const parsed = new Date(releaseDate);
+            if (!isNaN(parsed)) {
+                dateLabel = ` (${parsed.toLocaleDateString('pl-PL', { day: 'numeric', month: 'long', year: 'numeric' })})`;
+            }
+        }
+        this.footerVersion.textContent = `${versionEl.textContent}${dateLabel}`;
     },
 
     // Pkt 1: uniwersalny, symulowany pasek postępu z rotującymi komunikatami etapów.

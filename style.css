@@ -313,19 +313,22 @@ button:disabled { background: #2e2e38; color: var(--text-muted); cursor: not-all
 .btn-feature { background: #2e2e38; color: #fff; }
 .btn-feature.active { background: var(--primary); color: #000; font-weight: 700; }
 
-/* Toast notification - nienachalny popup na dole ekranu, zastępuje systemowe alert() przy kopiowaniu */
+/* Toast notification - popup na dole ekranu, zastępuje systemowe alert() przy kopiowaniu/zgłoszeniach.
+   Celowo wyraźnie odróżniony od ciemnego tła strony (zielony akcent, mocniejszy cień, większa
+   czcionka) - poprzednia, stonowana wersja "gubiła się" wizualnie na dole strony. */
 .toast-container {
     position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%);
-    z-index: 2000; display: flex; flex-direction: column; gap: 8px; align-items: center;
+    z-index: 2600; display: flex; flex-direction: column; gap: 10px; align-items: center;
     pointer-events: none;
 }
 .toast {
-    background: #1c1c22; color: #fff; padding: 12px 22px; border-radius: 8px;
-    border: 1px solid var(--border); box-shadow: 0 4px 16px rgba(0,0,0,0.4);
-    font-size: 0.9rem; font-weight: 500; opacity: 0; transform: translateY(10px);
+    background: #1c1c22; color: #fff; padding: 16px 26px; border-radius: 10px;
+    border: 1px solid var(--border); border-left: 4px solid var(--success);
+    box-shadow: 0 10px 34px rgba(0,0,0,0.55);
+    font-size: 1rem; font-weight: 600; opacity: 0; transform: translateY(14px) scale(0.97);
     transition: opacity 0.25s ease, transform 0.25s ease;
 }
-.toast.show { opacity: 1; transform: translateY(0); }
+.toast.show { opacity: 1; transform: translateY(0) scale(1); }
 
 /* Bardzo widoczny (celowo "agresywny") popup instalacji PWA - większy, z pulsującą poświatą,
    pojawia się na KAŻDE odświeżenie strony, dopóki aplikacja nie jest zainstalowana
@@ -373,3 +376,4 @@ button:disabled { background: #2e2e38; color: var(--text-muted); cursor: not-all
 }
 .site-footer a { color: var(--primary); text-decoration: none; }
 .site-footer a:hover { text-decoration: underline; }
+.footer-meta { margin-top: 10px; font-size: 0.72rem; opacity: 0.7; }

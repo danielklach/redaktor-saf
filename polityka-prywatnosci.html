@@ -1,0 +1,115 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Polityka Prywatności - Redaktor SAFi</title>
+
+    <link rel="icon" type="image/svg+xml" href="assets/redaktor-saf-emblem.svg">
+    <link rel="icon" type="image/png" sizes="192x192" href="assets/logo-192.png">
+    <link rel="icon" type="image/png" sizes="512x512" href="assets/logo-512.png">
+    <meta name="theme-color" content="#121214">
+
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Quicksand:wght@600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="style.css">
+    <style>
+        /* Style tylko dla tej strony - reszta wyglądu (kolory, czcionka, kontener) pochodzi ze
+           wspólnego style.css, żeby polityka wyglądała spójnie z resztą aplikacji. */
+        .policy-content { max-width: 820px; margin: 0 auto; }
+        .policy-updated { color: var(--text-muted); font-size: 0.85rem; margin-bottom: 30px; }
+        .policy-content h3 { margin-top: 30px; }
+        .policy-content p, .policy-content li { color: var(--text-color); line-height: 1.7; margin-bottom: 10px; }
+        .policy-content ul { padding-left: 22px; margin-bottom: 14px; }
+        .policy-content strong { color: #fff; }
+        .back-link { display: inline-block; margin-bottom: 20px; color: var(--primary); text-decoration: none; font-weight: 600; }
+        .back-link:hover { text-decoration: underline; }
+    </style>
+</head>
+<body>
+    <header>
+        <a href="/" class="logo-zone" title="Wróć do Redaktora SAFi">
+            <img src="assets/redaktor-saf-emblem.svg" alt="Redaktor SAFi" class="logo-emblem">
+            <span class="logo-text">
+                <span class="logo-line">Redaktor</span>
+                <span class="logo-line">SAFi</span>
+            </span>
+        </a>
+    </header>
+
+    <main class="container">
+        <div class="policy-content">
+            <a href="/" class="back-link">&larr; Wróć do aplikacji</a>
+            <h2>Polityka Prywatności</h2>
+            <p class="policy-updated">Ostatnia aktualizacja: 2 lipca 2026</p>
+
+            <p>Redaktor SAFi to narzędzie Studenckiej Agencji Fotograficznej "Jamnik" (SAF Jamnik) przy Uniwersytecie Warmińsko-Mazurskim w Olsztynie, ułatwiające redaktorom agencji przygotowywanie wpisów na stronę. Poniżej, prostym językiem, wyjaśniamy dokładnie co dzieje się z Twoimi danymi podczas korzystania z tej aplikacji.</p>
+
+            <h3>Kto odpowiada za tę stronę?</h3>
+            <p>Administratorem strony i osobą odpowiedzialną za jej działanie jest Daniel Klach. W sprawach związanych z prywatnością, danymi lub działaniem aplikacji możesz napisać na: <strong>webmaster@klachphoto.com</strong>.</p>
+
+            <h3>Czy trzeba założyć konto?</h3>
+            <p>Nie. Aplikacja nie wymaga logowania, rejestracji ani podawania jakichkolwiek danych identyfikujących Cię jako osobę. Jest przeznaczona do użytku wewnętrznego przez redaktorów SAF Jamnik, ale sama w sobie nie sprawdza ani nie zapisuje, kto z niej korzysta.</p>
+
+            <h3>Co dzieje się z tekstem, który wpisujesz?</h3>
+            <p>Notatki, które wpisujesz w Kroku 1 i 3 (opis wydarzenia, ewentualny wklejony artykuł zewnętrzny, ostateczne uwagi do AI), są wysyłane do modelu sztucznej inteligencji <strong>Google Gemini</strong> wyłącznie po to, żeby wygenerować dla Ciebie gotowy tekst artykułu. Żądanie nie trafia do Google bezpośrednio z Twojej przeglądarki - przechodzi przez nasz własny, bezpieczny serwer pośredniczący (tzw. "Worker" na Cloudflare), który trzyma klucz dostępu do API po swojej stronie, żeby nigdy nie był widoczny w kodzie strony ani w Twojej przeglądarce.</p>
+            <p>Sama aplikacja Redaktor SAFi <strong>nie ma żadnej bazy danych</strong> - nie zapisuje wpisywanych notatek ani wygenerowanych artykułów na żadnym serwerze. Wszystko, co widzisz na ekranie, istnieje wyłącznie w pamięci Twojej przeglądarki i znika, gdy zamkniesz lub odświeżysz kartę (chyba że sam/sama coś skopiujesz lub zapiszesz). Przetwarzanie tekstu przez Google podlega odrębnie polityce prywatności Google.</p>
+
+            <h3>Co dzieje się ze zdjęciami, które wgrywasz?</h3>
+            <p>To najważniejsza rzecz do zapamiętania: <strong>zdjęcia nigdy nie są wysyłane na żaden serwer przez tę aplikację</strong>. Cała kompresja i zmiana formatu zdjęć (do WebP) odbywa się w całości lokalnie, w Twojej przeglądarce, przy użyciu tzw. Web Workerów - to fragmenty kodu wykonywane bezpośrednio na Twoim urządzeniu, w tle, żeby nie blokowały interfejsu. Oryginalne i przetworzone zdjęcia opuszczają Twoje urządzenie tylko wtedy, gdy Ty sam/sama je zapiszesz na dysk, pobierzesz jako paczkę .zip albo ręcznie wgrasz je później do WordPressa - to już czynności całkowicie poza kontrolą tej aplikacji.</p>
+
+            <h3>Jaki model AI obsługuje tę aplikację?</h3>
+            <p>Generowanie treści artykułów opiera się na modelu <strong>Google Gemini</strong> (konkretna wersja modelu może się zmieniać w czasie wraz z rozwojem oferty Google). Wywołania do API Gemini idą przez nasz serwer pośredniczący (Cloudflare Worker), a nie bezpośrednio z Twojej przeglądarki - to rozwiązanie chroni klucz dostępu do API i pozwala nam kontrolować, co dokładnie jest wysyłane.</p>
+
+            <h3>Formularz zgłaszania usterek</h3>
+            <p>Formularz "Zgłoś problem" jest w pełni <strong>anonimowy</strong> - nie prosimy o imię, adres e-mail ani żadne inne dane identyfikujące. Wpisany opis problemu trafia do usługi Google Apps Script (uruchomionej na naszym prywatnym koncie Google), która automatycznie wysyła go mailem na skrzynkę administratora. Google, jako dostawca tej usługi, może zapisywać standardowe dane techniczne takie jak adres IP zgodnie z własną polityką prywatności - z naszej strony nie łączymy tych zgłoszeń z żadną konkretną osobą.</p>
+
+            <h3>Pliki cookies i dane przechowywane lokalnie</h3>
+            <p>Redaktor SAFi <strong>nie używa plików cookies</strong> do śledzenia, reklam ani analityki - nie ma tu żadnych narzędzi statystycznych (np. Google Analytics) ani reklamowych. Aplikacja korzysta natomiast z technicznych mechanizmów przechowywania danych wbudowanych w przeglądarkę, które działają WYŁĄCZNIE na Twoim urządzeniu i nigdzie nie są wysyłane:</p>
+            <ul>
+                <li><strong>localStorage</strong> - zapamiętuje jedynie, czy widziałeś/aś już ekran powitalny z instrukcją, żeby nie pokazywać go za każdym razem.</li>
+                <li><strong>IndexedDB</strong> - jeśli korzystasz z funkcji zapisu zdjęć bezpośrednio na dysk, tu zapamiętywany jest wybrany wcześniej folder, żebyś nie musiał/a wybierać go za każdym razem.</li>
+                <li><strong>Cache Service Workera (tryb PWA)</strong> - przechowuje pliki samej aplikacji (kod, style, ikony), żeby działała szybciej i częściowo offline. To pliki programu, nie Twoje dane osobowe.</li>
+            </ul>
+
+            <h3>Jak wykorzystywane są zasoby Twojego urządzenia?</h3>
+            <p>Kompresja i konwersja zdjęć wymaga mocy obliczeniowej - dzieje się to lokalnie, na procesorze Twojego komputera lub telefonu, w tle (Web Workery), żeby nie zamrażać interfejsu aplikacji. To świadomy wybór: dzięki temu Twoje oryginalne zdjęcia nie muszą nigdzie być wysyłane, żeby zostały przetworzone.</p>
+
+            <h3>Z jakich zewnętrznych usług korzystamy?</h3>
+            <p>Aby aplikacja działała, korzystamy z kilku zewnętrznych dostawców infrastruktury. Każdy z nich może zapisywać standardowe, techniczne logi serwera (np. adres IP, znacznik czasu żądania) zgodnie z własną polityką prywatności:</p>
+            <ul>
+                <li><strong>Netlify</strong> - hosting, na którym działa sama strona.</li>
+                <li><strong>Google (Gemini API, Google Apps Script, Google Fonts)</strong> - generowanie treści artykułów, wysyłka zgłoszeń usterek, czcionka Quicksand.</li>
+                <li><strong>Cloudflare</strong> - bezpieczny serwer pośredniczący (Worker) do wywołań AI oraz sieć dostarczania treści (CDN) dla biblioteki JSZip.</li>
+            </ul>
+
+            <h3>Jak długo przechowywane są dane?</h3>
+            <p>Aplikacja sama nie przechowuje niczego długoterminowo - nie ma bazy danych. Notatki i wygenerowane treści istnieją tylko w pamięci przeglądarki podczas Twojej sesji. Zgłoszenie usterki, wysłane mailem do administratora, jest przechowywane tak długo, jak zwykła korespondencja e-mail (do czasu ręcznego usunięcia).</p>
+
+            <h3>Twoje prawa</h3>
+            <p>W zakresie, w jakim aplikacja w ogóle przetwarza jakiekolwiek dane mogące mieć charakter osobowy (co w praktyce zdarza się rzadko - np. jeśli w notatkach wpiszesz swoje imię i nazwisko), przysługuje Ci prawo do: dostępu do danych, ich sprostowania, usunięcia, ograniczenia przetwarzania, sprzeciwu wobec przetwarzania oraz przenoszenia danych. Przysługuje Ci też prawo wniesienia skargi do Prezesa Urzędu Ochrony Danych Osobowych (UODO). W sprawie realizacji tych praw napisz na webmaster@klachphoto.com.</p>
+
+            <h3>Bezpieczeństwo</h3>
+            <p>Cała komunikacja odbywa się przez szyfrowane połączenie HTTPS. Klucze dostępu do zewnętrznych usług (np. API Gemini) są przechowywane wyłącznie po stronie serwera (Cloudflare Worker) i nigdy nie trafiają do kodu strony ani do Twojej przeglądarki.</p>
+
+            <h3>Zmiany tej polityki</h3>
+            <p>Ta polityka może być od czasu do czasu aktualizowana, np. gdy zmieni się sposób działania aplikacji. Datę ostatniej aktualizacji znajdziesz na górze tej strony.</p>
+
+            <h3>Kontakt</h3>
+            <p>Pytania, uwagi lub wątpliwości dotyczące prywatności? Napisz: <strong>webmaster@klachphoto.com</strong>.</p>
+
+            <a href="/" class="back-link">&larr; Wróć do aplikacji</a>
+        </div>
+    </main>
+
+    <footer class="site-footer">
+        <p>Admin: Daniel Klach · <a href="mailto:webmaster@klachphoto.com">webmaster@klachphoto.com</a> - w razie pytań, sugestii lub problemów proszę o kontakt.</p>
+        <p>SAF Jamnik © <span id="footerYear"></span> · <a href="https://wa.me/48507584351" target="_blank" rel="noopener noreferrer">💬 WhatsApp</a></p>
+    </footer>
+
+    <script>
+        document.getElementById('footerYear').textContent = new Date().getFullYear();
+    </script>
+</body>
+</html>

@@ -1,8 +1,8 @@
 {
   "name": "Redaktor SAFi",
   "short_name": "Redaktor",
-  "start_url": "/redaktor-saf/",
-  "scope": "/redaktor-saf/",
+  "start_url": "/",
+  "scope": "/",
   "display": "standalone",
   "background_color": "#121214",
   "theme_color": "#121214",

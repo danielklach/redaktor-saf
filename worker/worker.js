@@ -1,4 +1,4 @@
-const ALLOWED_ORIGIN = "https://danielklach.github.io";
+const ALLOWED_ORIGIN = "https://redaktor-safi.netlify.app";
 
 // Modele Gemini do wypróbowania w kolejności - gdy Google wycofa/zmieni pierwszy z nich, Worker
 // automatycznie spróbuje kolejnego, zamiast od razu zwracać błąd. Zwiększa to szansę, że aplikacja
