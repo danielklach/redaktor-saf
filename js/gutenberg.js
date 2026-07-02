@@ -39,8 +39,12 @@ export const Gutenberg = {
                 output += `<!-- /wp:generateblocks/text -->\n\n`;
             }
 
-            // Akapit jako standardowy blok wp:paragraph
-            if (item.text) {
+            // Tabela (np. wyniki meczów, tabela grupowa) jako standardowy blok wp:table - AI ma
+            // z niej korzystać oszczędnie, tylko gdy naprawdę porządkuje dane (patrz gemini.js).
+            if (item.type === 'table' && Array.isArray(item.rows) && item.rows.length) {
+                output += this.renderTableBlock(item.rows);
+            } else if (item.text) {
+                // Zwykły akapit jako standardowy blok wp:paragraph
                 output += `<!-- wp:paragraph -->\n`;
                 output += `<p>${item.text}</p>\n`;
                 output += `<!-- /wp:paragraph -->\n\n`;
@@ -54,6 +58,15 @@ export const Gutenberg = {
                 imgIndex++;
             }
         });
+
+        // Przycisk-link (np. do zewnętrznej galerii zdjęć w chmurze - patrz gemini.js, pkt 11).
+        // Owinięty w wp:html, bo ".retro-link-btn" to niestandardowa klasa CSS motywu strony, a nie
+        // natywny blok Gutenberga - umieszczony na końcu treści, tuż przed końcową galerią zdjęć.
+        if (aiData.linkButton && aiData.linkButton.url) {
+            output += `<!-- wp:html -->\n`;
+            output += `<a href="${aiData.linkButton.url}" target="_blank" rel="noopener noreferrer" class="retro-link-btn">${aiData.linkButton.label || 'Zobacz więcej'}</a>\n`;
+            output += `<!-- /wp:html -->\n\n`;
+        }
 
         // 2. Galeria końcowa dla pozostałych zdjęć (identyczna konstrukcja jak w przykładzie)
         if (imgIndex < images.length) {
@@ -73,5 +86,18 @@ export const Gutenberg = {
         }
 
         return output.trim();
+    },
+
+    // Renderuje wiersze tabeli (pierwszy = nagłówek) jako standardowy blok wp:table.
+    renderTableBlock(rows) {
+        const [header, ...body] = rows;
+        let html = `<!-- wp:table -->\n<figure class="wp-block-table"><table><thead><tr>`;
+        html += header.map(cell => `<th>${cell}</th>`).join('');
+        html += `</tr></thead><tbody>`;
+        body.forEach(row => {
+            html += `<tr>${row.map(cell => `<td>${cell}</td>`).join('')}</tr>`;
+        });
+        html += `</tbody></table></figure>\n<!-- /wp:table -->\n\n`;
+        return html;
     }
 };

@@ -238,7 +238,18 @@ button:disabled { background: #2e2e38; color: var(--text-muted); cursor: not-all
 .hidden { display: none !important; }
 
 .loading-spinner { padding: 30px 10px; text-align: center; color: var(--primary); font-weight: 600; }
-.meta-suggestion { background: #202026; padding: 15px; border-radius: 6px; margin-bottom: 15px; font-size: 0.9rem; border-left: 4px solid var(--primary); }
+
+/* Pasek z sugestiami AI (tytuł/tagi/data/obrazek wyróżniający) - CELOWO pełnej szerokości strony
+   (POZA siatką 2-kolumnową notatki/wynik), żeby kolumna "Wynik działania systemu" nie musiała
+   mieścić tego wszystkiego w pionie jedno pod drugim - stąd zwarte, poziome rzędy zamiast kart. */
+.meta-suggestion { background: #202026; padding: 16px 20px; border-radius: 8px; margin: 25px 0; font-size: 0.9rem; border-left: 4px solid var(--primary); }
+.meta-row { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin-bottom: 10px; }
+.meta-row:last-of-type { margin-bottom: 0; }
+.meta-row label { flex-shrink: 0; font-weight: 600; min-width: 45px; }
+.meta-row input[readonly] { flex: 1 1 200px; background: #0c0c0e; }
+.meta-row button { flex-shrink: 0; }
+.meta-row-split { display: flex; flex-wrap: wrap; gap: 8px 24px; margin-top: 12px; color: var(--text-color); }
+.meta-row-split strong { color: #fff; }
 
 /* Pkt 1 i 4: pasek postępu, wspólny dla generowania AI i wgrywania zdjęć */
 .progress-wrap {
@@ -259,11 +270,6 @@ button:disabled { background: #2e2e38; color: var(--text-muted); cursor: not-all
 .question-block .q-title { font-weight: 600; margin-bottom: 8px; color: #fff; line-height: 1.4; }
 .question-block textarea { margin-top: 0; }
 
-/* Pkt 6: osobny, gotowy do skopiowania tytuł wpisu */
-.copy-row { display: flex; gap: 10px; margin: 6px 0 14px; }
-.copy-row input[readonly] { background: #0c0c0e; }
-.copy-row button { flex-shrink: 0; }
-
 /* Przełącznik "Tekst artykułu" / "Kod Gutenberga" - tekst do edycji przed skopiowaniem
    (bez zdjęć, żeby nie zajmowały miejsca), kod jako gotowy blok do wklejenia w WordPressie. */
 .output-tabs { display: flex; gap: 6px; margin-bottom: 4px; border-bottom: 1px solid var(--border); }
@@ -274,7 +280,16 @@ button:disabled { background: #2e2e38; color: var(--text-muted); cursor: not-all
 .output-tab:hover { background: #1c1c22; color: var(--text-color); transform: none; box-shadow: none; }
 .output-tab.active { background: #1c1c22; color: var(--primary); font-weight: 700; }
 
-#articleTextInput { min-height: 260px; }
+/* Ten sam mechanizm "rozciągania" co #finalNotes/#aiEmptyState (patrz review-zone/result-zone
+   wyżej): #aiOutput i aktywny panel są kolumnami flex, a same textarki flex:1 - dzięki temu,
+   gdy lewa kolumna (notatki + pole na link) jest wyższa niż tabki+tekst, to WŁAŚNIE textarea
+   rośnie i wypełnia różnicę, zamiast zostawiać martwą, pustą przestrzeń pod spodem. */
+#aiOutput { flex: 1; display: flex; flex-direction: column; min-height: 0; }
+.output-panel { flex: 1; display: flex; flex-direction: column; min-height: 0; }
+#articleTextInput, #gutenbergOutput { flex: 1; min-height: 260px; }
+
+/* Pole na opcjonalny link do artykułu (Krok 3) - odstęp między URL-em a jego opisem */
+.link-input-group input + input { margin-top: 8px; }
 
 /* Przycisk oznaczania zdjęcia jako obrazek wyróżniający (numer "00") na liście w Kroku 2 */
 .btn-feature { background: #2e2e38; color: #fff; }
@@ -331,3 +346,12 @@ button:disabled { background: #2e2e38; color: var(--text-muted); cursor: not-all
 }
 
 @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+
+/* Minimalistyczna stopka - dane kontaktowe do admina strony */
+.site-footer {
+    max-width: 1200px; margin: 50px auto 0; padding: 20px 20px 30px;
+    border-top: 1px solid var(--border); text-align: center;
+    color: var(--text-muted); font-size: 0.8rem; line-height: 1.7;
+}
+.site-footer a { color: var(--primary); text-decoration: none; }
+.site-footer a:hover { text-decoration: underline; }

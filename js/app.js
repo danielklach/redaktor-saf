@@ -56,6 +56,7 @@ const App = {
         this.handleCategoryChange();
         this.switchStep(1);
         this.initFileSystemSave();
+        this.footerYear.textContent = new Date().getFullYear();
         if (installPromptPending) {
             installPromptPending = false;
             this.onInstallPromptAvailable();
@@ -128,6 +129,8 @@ const App = {
         this.btnSubmitModal = document.getElementById('btnSubmitModal');
 
         this.finalNotes = document.getElementById('finalNotes');
+        this.articleLinkUrl = document.getElementById('articleLinkUrl');
+        this.articleLinkDesc = document.getElementById('articleLinkDesc');
         this.aiEmptyState = document.getElementById('aiEmptyState');
         this.aiLoading = document.getElementById('aiLoading');
         this.genProgressBar = document.getElementById('genProgressBar');
@@ -147,6 +150,10 @@ const App = {
         this.sugTagsInput = document.getElementById('sugTagsInput');
         this.btnCopyTags = document.getElementById('btnCopyTags');
         this.sugFeaturedImage = document.getElementById('sugFeaturedImage');
+        this.metaSuggestion = document.getElementById('metaSuggestion');
+        this.aiActionsFooter = document.getElementById('aiActionsFooter');
+
+        this.footerYear = document.getElementById('footerYear');
     },
 
     bindEvents() {
@@ -244,8 +251,7 @@ const App = {
         this.btnCopyTags.addEventListener('click', () => this.copyTags());
         this.btnCopyFallbackPrompt.addEventListener('click', () => this.copyFallbackPrompt());
         this.btnRegenerate.addEventListener('click', () => {
-            this.aiOutput.classList.add('hidden');
-            this.aiEmptyState.classList.remove('hidden');
+            this.setResultState('empty');
             this.finalNotes.focus();
         });
         this.btnStartNew.addEventListener('click', () => this.startNewPost());
@@ -865,7 +871,7 @@ const App = {
     // czyszczenia każdego pola z osobna. Pyta o potwierdzenie tylko, gdy faktycznie jest coś do
     // stracenia (świeży formularz nie musi straszyć użytkownika niepotrzebnym oknem).
     startNewPost() {
-        const hasContent = this.evtTitle.value || this.evtNotes.value
+        const hasContent = this.evtTitle.value || this.evtNotes.value || this.articleLinkUrl.value
             || Compressor.processedFiles.length > 0 || this.state.aiData;
         if (hasContent && !window.confirm('Czy na pewno chcesz zacząć nowy wpis? Obecne dane, zdjęcia i wygenerowana treść zostaną utracone.')) {
             return;
@@ -889,6 +895,8 @@ const App = {
 
         // Krok 3
         this.finalNotes.value = '';
+        this.articleLinkUrl.value = '';
+        this.articleLinkDesc.value = '';
         this.state.interviewAnswers = '';
         this.state.aiFilenameSlug = null;
         this.state.aiData = null;
@@ -898,10 +906,7 @@ const App = {
         this.sugFeaturedImage.textContent = '-';
         this.articleTextInput.value = '';
         this.gutenbergOutput.value = '';
-        this.aiOutput.classList.add('hidden');
-        this.aiFallback.classList.add('hidden');
-        this.aiLoading.classList.add('hidden');
-        this.aiEmptyState.classList.remove('hidden');
+        this.setResultState('empty');
         this.switchOutputTab('text');
 
         this.switchStep(1);
@@ -914,22 +919,52 @@ const App = {
         return (text || '').replace(/<\/?(strong|em)>/gi, '');
     },
 
-    // Scala lead + akapity w JEDNO pole tekstowe: akapity oddzielone pustą linią, opcjonalny
-    // śródtytuł jako pierwsza linia akapitu w formie "## Śródtytuł" - prosty, czytelny format,
-    // który użytkownik może dowolnie edytować (dopisać/usunąć/poprawić całe akapity, nie tylko słowa).
+    // Serializuje jeden wiersz tabeli do czytelnej postaci "| komórka | komórka |" w widoku tekstu.
+    formatTableRow(cells) {
+        return '| ' + (cells || []).map(c => String(c ?? '').replace(/\|/g, '/').trim()).join(' | ') + ' |';
+    },
+
+    // Odwrotność formatTableRow - rozbija "| a | b |" z powrotem na tablicę komórek.
+    parseTableRow(line) {
+        return line.trim().replace(/^\|/, '').replace(/\|$/, '').split('|').map(c => c.trim());
+    },
+
+    // Scala lead + akapity (w tym ewentualne tabele i przycisk-link) w JEDNO pole tekstowe: bloki
+    // oddzielone pustą linią, opcjonalny śródtytuł jako pierwsza linia bloku w formie "## Śródtytuł".
+    // Prosty, czytelny format, który użytkownik może dowolnie edytować (dopisać/usunąć/poprawić
+    // całe akapity, wiersze tabeli czy sam przycisk - nie tylko pojedyncze słowa).
     buildArticleText(aiData) {
         const blocks = [this.stripFormattingTags(aiData.lead)];
         (aiData.paragraphs || []).forEach((para) => {
             const headingLine = para.heading ? `## ${para.heading}\n` : '';
-            blocks.push(headingLine + this.stripFormattingTags(para.text));
+            if (para.type === 'table' && Array.isArray(para.rows)) {
+                blocks.push(headingLine + para.rows.map(row => this.formatTableRow(row)).join('\n'));
+            } else {
+                blocks.push(headingLine + this.stripFormattingTags(para.text));
+            }
         });
+        if (aiData.linkButton && aiData.linkButton.url) {
+            blocks.push(`[PRZYCISK: ${aiData.linkButton.label || 'Zobacz więcej'} -> ${aiData.linkButton.url}]`);
+        }
         return blocks.join('\n\n');
     },
 
-    // Odwrotność buildArticleText: rozdziela tekst z powrotem na lead + akapity po pustych liniach.
+    // Odwrotność buildArticleText: rozdziela tekst z powrotem na lead + akapity (w tym tabele
+    // i przycisk-link) po pustych liniach.
     parseArticleText(text) {
         const blocks = (text || '').split(/\n\s*\n/).map(b => b.trim()).filter(b => b.length > 0);
         const lead = blocks.shift() || '';
+
+        // Przycisk-link, jeśli obecny, jest ZAWSZE ostatnim blokiem (patrz buildArticleText) -
+        // użytkownik może dowolnie poprawić etykietę/adres albo usunąć całą linię, by go wyłączyć.
+        let linkButton = null;
+        const lastBlock = blocks[blocks.length - 1];
+        const btnMatch = lastBlock && lastBlock.match(/^\[PRZYCISK:\s*(.+?)\s*->\s*(\S+)\]$/i);
+        if (btnMatch) {
+            linkButton = { label: btnMatch[1].trim(), url: btnMatch[2].trim() };
+            blocks.pop();
+        }
+
         const paragraphs = blocks.map((block) => {
             const lines = block.split('\n');
             let heading = '';
@@ -938,22 +973,31 @@ const App = {
                 heading = lines[0].trim().slice(3).trim();
                 bodyLines = lines.slice(1);
             }
-            return { heading, text: bodyLines.join('\n').trim() };
+
+            const nonEmptyLines = bodyLines.filter(l => l.trim().length > 0);
+            const isTable = nonEmptyLines.length > 0 && nonEmptyLines.every(l => l.trim().startsWith('|'));
+            if (isTable) {
+                return { type: 'table', heading, rows: nonEmptyLines.map(l => this.parseTableRow(l)) };
+            }
+            return { type: 'text', heading, text: bodyLines.join('\n').trim() };
         });
-        return { lead, paragraphs };
+
+        return { lead, paragraphs, linkButton };
     },
 
-    // Wypełnia edytowalny "widok tekstu" jednym polem, złożonym z leadu i akapitów - CELOWO bez
-    // znaczników HTML i bez zdjęć, żeby dało się swobodnie dopisać, usunąć lub poprawić treść
-    // przed skopiowaniem (zdjęcia i formatowanie widać wyłącznie w kodzie Gutenberga).
+    // Wypełnia edytowalny "widok tekstu" jednym polem, złożonym z leadu, akapitów, ewentualnych
+    // tabel i przycisku-linku - CELOWO bez znaczników HTML i bez zdjęć, żeby dało się swobodnie
+    // dopisać, usunąć lub poprawić treść przed skopiowaniem (formatowanie i zdjęcia widać
+    // wyłącznie w kodzie Gutenberga).
     renderTextView(aiData) {
         this.articleTextInput.value = this.buildArticleText(aiData);
     },
 
     // Czyta edytowalny tekst z powrotem do this.state.aiData, żeby dało się z niego zregenerować
-    // kod Gutenberga. Akapity, których użytkownik NIE dotknął (tekst identyczny jak poprzednio, po
-    // odjęciu <strong>/<em>), zachowują oryginalne znaczniki AI - tracą je tylko te faktycznie
-    // zmienione (bo nie ma jak zgadnąć, gdzie w przepisanym zdaniu miałoby wrócić pogrubienie).
+    // kod Gutenberga. Akapity TEKSTOWE, których użytkownik NIE dotknął (tekst identyczny jak
+    // poprzednio, po odjęciu <strong>/<em>), zachowują oryginalne znaczniki AI - tracą je tylko te
+    // faktycznie zmienione (bo nie ma jak zgadnąć, gdzie w przepisanym zdaniu miałoby wrócić
+    // pogrubienie). Tabele nie niosą żadnego formatowania HTML, więc ich dane bierzemy zawsze 1:1.
     syncTextViewToAiData() {
         if (!this.state.aiData) return;
         const parsed = this.parseArticleText(this.articleTextInput.value);
@@ -963,16 +1007,21 @@ const App = {
 
         const prevParagraphs = this.state.aiData.paragraphs || [];
         this.state.aiData.paragraphs = parsed.paragraphs.map((para, idx) => {
+            if (para.type === 'table') return para;
+
             const prev = prevParagraphs[idx];
-            if (!prev) return para; // nowy akapit dopisany przez użytkownika - naturalnie bez znaczników
+            if (!prev || prev.type === 'table') return para; // nowy akapit albo tabela podmieniona na tekst
 
             const headingUnchanged = para.heading === (prev.heading || '');
             const textUnchanged = para.text === this.stripFormattingTags(prev.text);
             return {
+                type: 'text',
                 heading: headingUnchanged ? prev.heading : para.heading,
                 text: textUnchanged ? prev.text : para.text
             };
         });
+
+        this.state.aiData.linkButton = parsed.linkButton;
     },
 
     regenerateGutenbergCode() {
@@ -994,11 +1043,21 @@ const App = {
         this.codeViewPanel.classList.toggle('hidden', tab !== 'code');
     },
 
+    // Krok 3 może pokazywać dokładnie jeden z czterech stanów w prawej kolumnie ("pusto" przed
+    // generowaniem / ładowanie / błąd / gotowy wynik) - meta-dane (tytuł/tagi/data/wyróżniające)
+    // i stopka z instrukcjami+akcjami są POZA siatką 2-kolumnową (patrz index.html), ale wizualnie
+    // należą do stanu "gotowy wynik", więc przełączają się razem z resztą przez tę jedną metodę.
+    setResultState(mode) {
+        this.aiEmptyState.classList.toggle('hidden', mode !== 'empty');
+        this.aiLoading.classList.toggle('hidden', mode !== 'loading');
+        this.aiFallback.classList.toggle('hidden', mode !== 'fallback');
+        this.aiOutput.classList.toggle('hidden', mode !== 'output');
+        this.metaSuggestion.classList.toggle('hidden', mode !== 'output');
+        this.aiActionsFooter.classList.toggle('hidden', mode !== 'output');
+    },
+
     async generateArticle() {
-        this.aiEmptyState.classList.add('hidden');
-        this.aiLoading.classList.remove('hidden');
-        this.aiOutput.classList.add('hidden');
-        this.aiFallback.classList.add('hidden');
+        this.setResultState('loading');
 
         const progress = this.startProgressSimulation(
             this.genProgressBar,
@@ -1016,7 +1075,10 @@ const App = {
 
         const cat = this.evtCategory.value;
         const notes = this.finalNotes.value;
-        const prompt = Gemini.getPromptTemplate(cat, notes);
+        const linkUrl = this.articleLinkUrl.value.trim();
+        const linkDesc = this.articleLinkDesc.value.trim();
+        const link = linkUrl ? { url: linkUrl, description: linkDesc } : null;
+        const prompt = Gemini.getPromptTemplate(cat, notes, link);
 
         try {
             const aiJson = await Gemini.callGemini(prompt);
@@ -1049,17 +1111,15 @@ const App = {
             this.regenerateGutenbergCode();
             this.switchOutputTab('text'); // zawsze zaczynamy od tekstu - kod dogeneruje się przy przełączeniu/kopiowaniu
 
-            this.aiLoading.classList.add('hidden');
-            this.aiOutput.classList.remove('hidden');
+            this.setResultState('output');
         } catch (error) {
             progress.stop();
-            this.aiLoading.classList.add('hidden');
             // Fallback: nazwy zdjęć już bazują na tytule z Kroku 1 (patrz renameAllFiles - aiFilenameSlug
             // jest wtedy dalej puste), więc nic tu nie trzeba dodatkowo naprawiać. Użytkownik dostaje
             // za to gotowy, samowystarczalny prompt do wklejenia w dowolnym zewnętrznym czacie AI.
             this._lastPrompt = prompt;
             this.aiFallbackMessage.textContent = `Nie udało się połączyć z wbudowanym AI (${error.message}). Zdjęcia zachowały nazwy na podstawie nazwy wydarzenia z Kroku 1. Możesz skopiować kompletny prompt poniżej i wkleić go do dowolnego zewnętrznego czatu AI (np. ChatGPT, Claude, Gemini) - wynik będzie odpowiadał temu, co wygenerowałby Redaktor SAF.`;
-            this.aiFallback.classList.remove('hidden');
+            this.setResultState('fallback');
         }
     },
 

@@ -35,7 +35,7 @@
             <img src="assets/redaktor-saf-emblem.svg" alt="Redaktor SAFi" class="logo-emblem">
             <span class="logo-text">
                 <span class="logo-line">Redaktor</span>
-                <span class="logo-line">SAFi <span class="logo-version">ver. 1.8.9</span></span>
+                <span class="logo-line">SAFi <span class="logo-version">ver. 1.9.0</span></span>
             </span>
         </a>
         <div class="header-actions">
@@ -143,6 +143,13 @@
                     <h3>Ostateczne Notatki do AI</h3>
                     <p class="info-text">To jest jedyne źródło wiedzy dla sztucznej inteligencji - w razie potrzeby możesz je tu jeszcze poprawić:</p>
                     <textarea id="finalNotes"></textarea>
+
+                    <div class="form-group link-input-group">
+                        <label for="articleLinkUrl">Link do artykułu (opcjonalnie):</label>
+                        <input type="url" id="articleLinkUrl" placeholder="np. https://drive.google.com/... albo https://facebook.com/...">
+                        <input type="text" id="articleLinkDesc" placeholder="Opisz krótko ten link - AI samo zdecyduje, czy pokazać go jako przycisk (np. galeria zdjęć w chmurze), czy wpleść w treść.">
+                    </div>
+
                     <button id="btnTriggerAI" class="btn-primary w-100" style="margin-top: 15px;">★ Uruchom Magię AI</button>
                 </div>
 
@@ -165,31 +172,13 @@
                     </div>
 
                     <div id="aiOutput" class="hidden">
-                        <div class="meta-suggestion">
-                            <p><strong>Sugerowany Tytuł wpisu:</strong></p>
-                            <div class="copy-row">
-                                <input type="text" id="sugTitleInput" readonly>
-                                <button id="btnCopyTitle" class="btn-secondary">Kopiuj tytuł</button>
-                            </div>
-                            <p><strong>Sugerowana Data Publikacji (WP):</strong> <span id="sugDate">-</span></p>
-                            <p><strong>Sugerowane Tagi:</strong></p>
-                            <div class="copy-row">
-                                <input type="text" id="sugTagsInput" readonly placeholder="brak">
-                                <button id="btnCopyTags" class="btn-secondary">Kopiuj tagi</button>
-                            </div>
-                            <p><strong>Obrazek wyróżniający:</strong> <span id="sugFeaturedImage">-</span> <span style="color: var(--text-muted); font-size: 0.8rem;">(ustaw go ręcznie jako "Featured Image" w WordPressie - nie jest wpleciony w treść ani galerię)</span></p>
-                        </div>
-
-                        <p class="info-text">📌 Zanim wkleisz poniższy kod do WordPressa, jeszcze raz przeczytaj go uważnie od początku do końca - AI mogło popełnić błąd rzeczowy, literówkę lub napisać coś w nienaturalny sposób.</p>
-                        <p class="info-text">🧩 Kolejność w WordPressie: 1) przełącz edytor wpisu na <strong>"Edytor kodu"</strong> (menu ⋮), 2) dopiero wtedy wklej poniższy kod, 3) wróć do <strong>"Edytora wizualnego"</strong>, żeby zobaczyć i przeczytać gotowy wpis.</p>
-
                         <div class="output-tabs">
                             <button type="button" id="tabTextView" class="output-tab active">📝 Tekst artykułu</button>
                             <button type="button" id="tabCodeView" class="output-tab">🧩 Kod Gutenberga</button>
                         </div>
 
                         <div id="textViewPanel" class="output-panel">
-                            <p class="info-text" style="margin-top: 10px;">Możesz tu jeszcze poprawić, dopisać lub usunąć fragmenty tekstu przed skopiowaniem - to czysty tekst, bez znaczników HTML i bez zdjęć (te są tylko w kodzie Gutenberga). Zaczynasz od leadu, kolejne akapity oddziel pustą linią; żeby dodać śródtytuł, zacznij akapit od "## Śródtytuł".</p>
+                            <p class="info-text" style="margin-top: 10px;">Możesz tu jeszcze poprawić, dopisać lub usunąć fragmenty tekstu przed skopiowaniem - to czysty tekst, bez znaczników HTML i bez zdjęć (te są tylko w kodzie Gutenberga). Zaczynasz od leadu, kolejne akapity oddziel pustą linią; żeby dodać śródtytuł, zacznij akapit od "## Śródtytuł". Tabelę zapisz wierszami w formie "| komórka | komórka |", a przycisk-link jako ostatni akapit w formie "[PRZYCISK: etykieta -> adres URL]".</p>
                             <textarea id="articleTextInput" rows="14"></textarea>
                         </div>
 
@@ -197,12 +186,33 @@
                             <label for="gutenbergOutput">Kod do wklejenia do Edytora Kodu WordPress (Gutenberg):</label>
                             <textarea id="gutenbergOutput" rows="12" readonly></textarea>
                         </div>
-
-                        <div class="actions" style="margin-top: 10px;">
-                            <button id="btnCopyHtml" class="btn-secondary">📋 Kopiuj artykuł w HTML</button>
-                            <button id="btnRegenerate" class="btn-secondary">Generuj jeszcze raz</button>
-                        </div>
                     </div>
+                </div>
+            </div>
+
+            <div id="metaSuggestion" class="meta-suggestion hidden">
+                <div class="meta-row">
+                    <label for="sugTitleInput">Tytuł:</label>
+                    <input type="text" id="sugTitleInput" readonly>
+                    <button id="btnCopyTitle" class="btn-secondary">Kopiuj</button>
+                </div>
+                <div class="meta-row">
+                    <label for="sugTagsInput">Tagi:</label>
+                    <input type="text" id="sugTagsInput" readonly placeholder="brak">
+                    <button id="btnCopyTags" class="btn-secondary">Kopiuj</button>
+                </div>
+                <div class="meta-row-split">
+                    <span><strong>Data publikacji (WP):</strong> <span id="sugDate">-</span></span>
+                    <span><strong>Obrazek wyróżniający:</strong> <span id="sugFeaturedImage">-</span></span>
+                </div>
+                <p class="info-text" style="margin: 8px 0 0;">ℹ️ Obrazek wyróżniający ustaw ręcznie jako "Featured Image" w WordPressie - nie jest wpleciony w treść ani galerię.</p>
+            </div>
+
+            <div id="aiActionsFooter" class="hidden">
+                <p class="info-text">📌 Zanim wkleisz poniższy kod do WordPressa, jeszcze raz przeczytaj go uważnie od początku do końca - AI mogło popełnić błąd rzeczowy, literówkę lub napisać coś w nienaturalny sposób.<br>🧩 Kolejność w WordPressie: 1) przełącz edytor wpisu na <strong>"Edytor kodu"</strong> (menu ⋮), 2) dopiero wtedy wklej poniższy kod, 3) wróć do <strong>"Edytora wizualnego"</strong>, żeby zobaczyć i przeczytać gotowy wpis.</p>
+                <div class="actions" style="margin-top: 10px;">
+                    <button id="btnCopyHtml" class="btn-secondary">📋 Kopiuj artykuł w HTML</button>
+                    <button id="btnRegenerate" class="btn-secondary">Generuj jeszcze raz</button>
                 </div>
             </div>
 
@@ -225,6 +235,11 @@
             </div>
         </section>
     </main>
+
+    <footer class="site-footer">
+        <p>Admin: Daniel Klach · <a href="mailto:webmaster@klachphoto.com">webmaster@klachphoto.com</a> - w razie pytań, sugestii lub problemów proszę o kontakt.</p>
+        <p>SAF Jamnik © <span id="footerYear"></span> · <a href="https://wa.me/48507584351" target="_blank" rel="noopener noreferrer">💬 WhatsApp</a></p>
+    </footer>
 
     <div id="introModal" class="modal hidden">
         <div class="modal-content intro-modal-content">
@@ -322,7 +337,7 @@
         <button id="btnDismissInstall" class="install-banner-close" aria-label="Zamknij" title="Zamknij">✕</button>
     </div>
 
-    <script type="module" src="js/app.js?v=271"></script>
+    <script type="module" src="js/app.js?v=272"></script>
 
     <!-- Rejestracja Service Workera (PWA) - celowo osobny, zwykły skrypt (nie moduł aplikacji),
          żeby infrastruktura PWA działała niezależnie od ewentualnego błędu w js/app.js. -->
