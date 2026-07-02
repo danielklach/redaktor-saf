@@ -145,9 +145,9 @@
                     <textarea id="finalNotes"></textarea>
 
                     <div class="form-group link-input-group">
-                        <label for="articleLinkUrl">Link do artykułu (opcjonalnie):</label>
-                        <input type="url" id="articleLinkUrl" placeholder="np. https://drive.google.com/... albo https://facebook.com/...">
-                        <input type="text" id="articleLinkDesc" placeholder="Opisz krótko ten link - AI samo zdecyduje, czy pokazać go jako przycisk (np. galeria zdjęć w chmurze), czy wpleść w treść.">
+                        <label>Linki do artykułu (opcjonalnie):</label>
+                        <div id="linkRowsContainer" class="link-rows"></div>
+                        <button type="button" id="btnAddLink" class="btn-secondary btn-add-link">+ Dodaj kolejny link</button>
                     </div>
 
                     <button id="btnTriggerAI" class="btn-primary w-100" style="margin-top: 15px;">★ Uruchom Magię AI</button>
@@ -337,7 +337,7 @@
         <button id="btnDismissInstall" class="install-banner-close" aria-label="Zamknij" title="Zamknij">✕</button>
     </div>
 
-    <script type="module" src="js/app.js?v=272"></script>
+    <script type="module" src="js/app.js?v=273"></script>
 
     <!-- Rejestracja Service Workera (PWA) - celowo osobny, zwykły skrypt (nie moduł aplikacji),
          żeby infrastruktura PWA działała niezależnie od ewentualnego błędu w js/app.js. -->

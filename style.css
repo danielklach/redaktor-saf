@@ -122,7 +122,7 @@ h3 { margin-bottom: 15px; font-size: 1.1rem; color: var(--primary); }
 }
 
 .form-group label { display: block; margin-top: 15px; margin-bottom: 5px; font-weight: 600; font-size: 0.9rem; }
-input[type="text"], input[type="password"], input[type="datetime-local"], select, textarea {
+input[type="text"], input[type="url"], input[type="password"], input[type="datetime-local"], select, textarea {
     width: 100%; padding: 10px; background: #0c0c0e; border: 1px solid var(--border); color: #fff; border-radius: 6px; font-size: 0.95rem;
 }
 input:focus, select:focus, textarea:focus { border-color: var(--primary); outline: none; }
@@ -288,8 +288,26 @@ button:disabled { background: #2e2e38; color: var(--text-muted); cursor: not-all
 .output-panel { flex: 1; display: flex; flex-direction: column; min-height: 0; }
 #articleTextInput, #gutenbergOutput { flex: 1; min-height: 260px; }
 
-/* Pole na opcjonalny link do artykułu (Krok 3) - odstęp między URL-em a jego opisem */
-.link-input-group input + input { margin-top: 8px; }
+/* Pola na opcjonalne linki do artykułu (Krok 3) - dowolna liczba "karteczek", każda z osobnym
+   URL-em, opisem i przyciskiem usuwania w rogu; "+" na dole dokłada kolejną. */
+.link-input-group { margin-top: 15px; }
+.link-rows { display: flex; flex-direction: column; gap: 10px; }
+.link-row {
+    position: relative; display: flex; flex-direction: column; gap: 8px;
+    background: #1c1c22; border: 1px solid var(--border); border-radius: 8px;
+    padding: 12px 40px 12px 12px;
+}
+.btn-remove-link {
+    position: absolute; top: 8px; right: 8px; width: 26px; height: 26px; padding: 0;
+    display: flex; align-items: center; justify-content: center; line-height: 1;
+    background: transparent; color: var(--text-muted); font-size: 1rem; box-shadow: none;
+}
+.btn-remove-link:hover { color: #fff; background: rgba(255,255,255,0.08); transform: none; box-shadow: none; }
+.btn-add-link {
+    margin-top: 10px; width: 100%; background: transparent; border: 1px dashed var(--border);
+    color: var(--text-muted); font-size: 0.85rem; padding: 8px 14px;
+}
+.btn-add-link:hover { border-color: var(--primary); color: var(--primary); background: transparent; transform: none; box-shadow: none; }
 
 /* Przycisk oznaczania zdjęcia jako obrazek wyróżniający (numer "00") na liście w Kroku 2 */
 .btn-feature { background: #2e2e38; color: #fff; }

@@ -59,14 +59,15 @@ export const Gutenberg = {
             }
         });
 
-        // Przycisk-link (np. do zewnętrznej galerii zdjęć w chmurze - patrz gemini.js, pkt 11).
-        // Owinięty w wp:html, bo ".retro-link-btn" to niestandardowa klasa CSS motywu strony, a nie
-        // natywny blok Gutenberga - umieszczony na końcu treści, tuż przed końcową galerią zdjęć.
-        if (aiData.linkButton && aiData.linkButton.url) {
+        // Przyciski-linki (np. do zewnętrznych galerii zdjęć w chmurze - patrz gemini.js, pkt 11).
+        // Owinięte w wp:html, bo ".retro-link-btn" to niestandardowa klasa CSS motywu strony, a nie
+        // natywny blok Gutenberga - umieszczone na końcu treści, tuż przed końcową galerią zdjęć.
+        (aiData.linkButtons || []).forEach((btn) => {
+            if (!btn || !btn.url) return;
             output += `<!-- wp:html -->\n`;
-            output += `<a href="${aiData.linkButton.url}" target="_blank" rel="noopener noreferrer" class="retro-link-btn">${aiData.linkButton.label || 'Zobacz więcej'}</a>\n`;
+            output += `<a href="${btn.url}" target="_blank" rel="noopener noreferrer" class="retro-link-btn">${btn.label || 'Zobacz więcej'}</a>\n`;
             output += `<!-- /wp:html -->\n\n`;
-        }
+        });
 
         // 2. Galeria końcowa dla pozostałych zdjęć (identyczna konstrukcja jak w przykładzie)
         if (imgIndex < images.length) {

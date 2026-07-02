@@ -69,14 +69,15 @@ Bez markdownu, bez wstępów, bez komentarzy poza obiektem JSON.`;
         return Array.isArray(parsed.questions) ? parsed.questions : [];
     },
 
-    getPromptTemplate(category, notes, link = null) {
+    getPromptTemplate(category, notes, links = []) {
         const isAgencyLife = category === 'zycie';
 
-        const linkInstructions = link
-            ? `Autor chce dodać do artykułu ten link: "${link.url}" (autor opisał go tak: "${link.description || 'brak opisu'}"). Na tej podstawie sam zdecyduj, jak go zaprezentować:
-   - Jeśli to link do GALERII ZDJĘĆ w chmurze (np. Dysk/Zdjęcia Google, OneDrive, Dropbox, iCloud) - zaprezentuj go jako WYRÓŻNIONY PRZYCISK: wypełnij pole "linkButton" w schemacie JSON, np. {"url": "${link.url}", "label": "Zobacz pełną galerię zdjęć"} (etykietę dobierz zachęcająco do kontekstu).
-   - W KAŻDYM INNYM przypadku (wydarzenie/profil na Facebooku, strona organizatora, artykuł źródłowy itp.) - NIE wypełniaj "linkButton", tylko wpleć go naturalnie w treść JEDNEGO pasującego akapitu jako zwykły odnośnik HTML: <a href="${link.url}" target="_blank" rel="noopener noreferrer">opisowy tekst linku</a>.`
-            : 'Autor nie podał żadnego dodatkowego linku do artykułu - pomiń całkowicie pole "linkButton" i nie wymyślaj żadnych linków.';
+        const validLinks = (links || []).filter(l => l && l.url);
+        const linkInstructions = validLinks.length
+            ? validLinks.map((link, i) => `   Link ${i + 1}: "${link.url}" (autor opisał go tak: "${link.description || 'brak opisu'}"). Na tej podstawie sam zdecyduj, jak go zaprezentować:
+      - Jeśli to link do GALERII ZDJĘĆ w chmurze (np. Dysk/Zdjęcia Google, OneDrive, Dropbox, iCloud) - zaprezentuj go jako WYRÓŻNIONY PRZYCISK: dopisz obiekt {"url": "${link.url}", "label": "Zobacz pełną galerię zdjęć"} do tablicy "linkButtons" w schemacie JSON (etykietę dobierz zachęcająco do kontekstu).
+      - W KAŻDYM INNYM przypadku (wydarzenie/profil na Facebooku, strona organizatora, artykuł źródłowy itp.) - NIE dodawaj go do "linkButtons", tylko wpleć go naturalnie w treść JEDNEGO pasującego akapitu jako zwykły odnośnik HTML: <a href="${link.url}" target="_blank" rel="noopener noreferrer">opisowy tekst linku</a>.`).join('\n')
+            : 'Autor nie podał żadnych dodatkowych linków do artykułu - pole "linkButtons" zostaw jako pustą tablicę [] i nie wymyślaj żadnych linków.';
 
         return `${AGENCY_CONTEXT}
 
@@ -92,11 +93,11 @@ Schemat JSON do zastosowania:
     {"type": "text", "heading": "Opcjonalny, chwytliwy śródtytuł sekcji", "text": "Treść akapitu, ok. 600 znaków"},
     {"type": "table", "heading": "Opcjonalny śródtytuł", "rows": [["Nagłówek 1", "Nagłówek 2"], ["wiersz 1 - kol. 1", "wiersz 1 - kol. 2"]]}
   ],
-  "linkButton": {"url": "...", "label": "..."},
+  "linkButtons": [{"url": "...", "label": "..."}],
   "tags": ["tag1", "tag2"],
   "filenameSlug": "krotki-czytelny-slug"
 }
-Każdy element "paragraphs" MUSI mieć pole "type" równe "text" albo "table". Pole "linkButton" dodawaj TYLKO zgodnie z punktem 11 poniżej - w przeciwnym razie całkowicie pomiń to pole w odpowiedzi.
+Każdy element "paragraphs" MUSI mieć pole "type" równe "text" albo "table". Tablica "linkButtons" MUSI być obecna (choćby pusta []) - dodawaj do niej wpisy TYLKO zgodnie z punktem 11 poniżej.
 
 WYMAGANIA DOTYCZĄCE TREŚCI:
 1. TYTUŁ - ma być chwytliwy i ciekawy, ale wyważony: nie za długi (maksymalnie ok. 70 znaków) i nie za krótki ani lakoniczny.
@@ -113,7 +114,7 @@ WYMAGANIA DOTYCZĄCE TREŚCI:
    Tekst ma brzmieć tak, jakby napisał go człowiek, a nie system komputerowy - unikaj też dosłownego wypisywania obu identycznych dat w jednym zdaniu, jeśli można to skrócić i uprościć.
 9. MYŚLNIKI - gdy chcesz użyć myślnika lub półpauzy w zdaniu, ZAWSZE używaj wyłącznie zwykłego znaku "-" (dywiz). NIGDY nie używaj długiej kreski "–" ani "—" - te znaki charakterystycznie zdradzają tekst wygenerowany przez AI.
 10. TABELE - jeśli jakieś dane naprawdę lepiej prezentują się w formie tabeli (np. wyniki meczów, tabela grupowa rozgrywek, zestawienie liczb czy statystyk) - użyj akapitu z "type":"table" zamiast "type":"text", z polem "rows" (tablica wierszy - każdy wiersz to tablica komórek tekstowych, PIERWSZY wiersz to nagłówki kolumn). Używaj tabel OSZCZĘDNIE i tylko w naprawdę uzasadnionych przypadkach - zdecydowana większość akapitów powinna zostać zwykłym tekstem ("type":"text").
-11. LINK DODATKOWY - ${linkInstructions}
+11. LINKI DODATKOWE - ${validLinks.length ? `autor podał ${validLinks.length > 1 ? 'kilka linków' : 'link'} do potencjalnego dodania:\n` + linkInstructions : linkInstructions}
 
 Kategoria wpisu: ${category.toUpperCase()}
 Oto pełna treść notatek oraz zebranych informacji o wydarzeniu:

@@ -56,6 +56,7 @@ const App = {
         this.handleCategoryChange();
         this.switchStep(1);
         this.initFileSystemSave();
+        this.resetLinkRows();
         this.footerYear.textContent = new Date().getFullYear();
         if (installPromptPending) {
             installPromptPending = false;
@@ -129,8 +130,8 @@ const App = {
         this.btnSubmitModal = document.getElementById('btnSubmitModal');
 
         this.finalNotes = document.getElementById('finalNotes');
-        this.articleLinkUrl = document.getElementById('articleLinkUrl');
-        this.articleLinkDesc = document.getElementById('articleLinkDesc');
+        this.linkRowsContainer = document.getElementById('linkRowsContainer');
+        this.btnAddLink = document.getElementById('btnAddLink');
         this.aiEmptyState = document.getElementById('aiEmptyState');
         this.aiLoading = document.getElementById('aiLoading');
         this.genProgressBar = document.getElementById('genProgressBar');
@@ -245,6 +246,7 @@ const App = {
         this.btnSubmitModal.addEventListener('click', () => this.closeModal(true));
         this.btnSkipModal.addEventListener('click', () => this.closeModal(false));
 
+        this.btnAddLink.addEventListener('click', () => this.addLinkRow());
         this.btnTriggerAI.addEventListener('click', () => this.generateArticle());
         this.btnCopyHtml.addEventListener('click', () => this.copyGutenbergCode());
         this.btnCopyTitle.addEventListener('click', () => this.copyTitle());
@@ -867,11 +869,45 @@ const App = {
         this.switchStep(3);
     },
 
+    // Dokłada jedną "karteczkę" z polem na URL i jego opis (Krok 3) - dzięki temu autor może
+    // dodać dowolną liczbę linków, każdy z osobnym opisem, na podstawie którego AI decyduje,
+    // czy pokazać go jako przycisk-galerię, czy wpleść naturalnie w treść (patrz gemini.js).
+    addLinkRow(url = '', description = '') {
+        const row = document.createElement('div');
+        row.className = 'link-row';
+        row.innerHTML = `
+            <input type="url" class="link-url-input" placeholder="np. https://drive.google.com/... albo https://facebook.com/...">
+            <input type="text" class="link-desc-input" placeholder="Opisz krótko ten link - AI samo zdecyduje, czy pokazać go jako przycisk (np. galeria zdjęć w chmurze), czy wpleść w treść.">
+            <button type="button" class="btn-remove-link" aria-label="Usuń ten link" title="Usuń ten link">✕</button>
+        `;
+        row.querySelector('.link-url-input').value = url;
+        row.querySelector('.link-desc-input').value = description;
+        row.querySelector('.btn-remove-link').addEventListener('click', () => row.remove());
+        this.linkRowsContainer.appendChild(row);
+    },
+
+    // Usuwa wszystkie "karteczki" linków i dokłada jedną, pustą - stan startowy formularza.
+    resetLinkRows() {
+        this.linkRowsContainer.innerHTML = '';
+        this.addLinkRow();
+    },
+
+    // Zbiera wszystkie wypełnione linki (te bez adresu URL są pomijane - pusta karteczka to
+    // po prostu brak zamiaru dodania linku, nie błąd).
+    getArticleLinks() {
+        return Array.from(this.linkRowsContainer.querySelectorAll('.link-row'))
+            .map(row => ({
+                url: row.querySelector('.link-url-input').value.trim(),
+                description: row.querySelector('.link-desc-input').value.trim()
+            }))
+            .filter(link => link.url);
+    },
+
     // Pełny reset formularza i powrót do Kroku 1 - pozwala napisać kolejny wpis bez ręcznego
     // czyszczenia każdego pola z osobna. Pyta o potwierdzenie tylko, gdy faktycznie jest coś do
     // stracenia (świeży formularz nie musi straszyć użytkownika niepotrzebnym oknem).
     startNewPost() {
-        const hasContent = this.evtTitle.value || this.evtNotes.value || this.articleLinkUrl.value
+        const hasContent = this.evtTitle.value || this.evtNotes.value || this.getArticleLinks().length > 0
             || Compressor.processedFiles.length > 0 || this.state.aiData;
         if (hasContent && !window.confirm('Czy na pewno chcesz zacząć nowy wpis? Obecne dane, zdjęcia i wygenerowana treść zostaną utracone.')) {
             return;
@@ -895,8 +931,7 @@ const App = {
 
         // Krok 3
         this.finalNotes.value = '';
-        this.articleLinkUrl.value = '';
-        this.articleLinkDesc.value = '';
+        this.resetLinkRows();
         this.state.interviewAnswers = '';
         this.state.aiFilenameSlug = null;
         this.state.aiData = null;
@@ -929,10 +964,10 @@ const App = {
         return line.trim().replace(/^\|/, '').replace(/\|$/, '').split('|').map(c => c.trim());
     },
 
-    // Scala lead + akapity (w tym ewentualne tabele i przycisk-link) w JEDNO pole tekstowe: bloki
+    // Scala lead + akapity (w tym ewentualne tabele i przyciski-linki) w JEDNO pole tekstowe: bloki
     // oddzielone pustą linią, opcjonalny śródtytuł jako pierwsza linia bloku w formie "## Śródtytuł".
     // Prosty, czytelny format, który użytkownik może dowolnie edytować (dopisać/usunąć/poprawić
-    // całe akapity, wiersze tabeli czy sam przycisk - nie tylko pojedyncze słowa).
+    // całe akapity, wiersze tabeli czy same przyciski - nie tylko pojedyncze słowa).
     buildArticleText(aiData) {
         const blocks = [this.stripFormattingTags(aiData.lead)];
         (aiData.paragraphs || []).forEach((para) => {
@@ -943,25 +978,25 @@ const App = {
                 blocks.push(headingLine + this.stripFormattingTags(para.text));
             }
         });
-        if (aiData.linkButton && aiData.linkButton.url) {
-            blocks.push(`[PRZYCISK: ${aiData.linkButton.label || 'Zobacz więcej'} -> ${aiData.linkButton.url}]`);
-        }
+        (aiData.linkButtons || []).forEach((btn) => {
+            if (btn && btn.url) blocks.push(`[PRZYCISK: ${btn.label || 'Zobacz więcej'} -> ${btn.url}]`);
+        });
         return blocks.join('\n\n');
     },
 
     // Odwrotność buildArticleText: rozdziela tekst z powrotem na lead + akapity (w tym tabele
-    // i przycisk-link) po pustych liniach.
+    // i przyciski-linki) po pustych liniach.
     parseArticleText(text) {
         const blocks = (text || '').split(/\n\s*\n/).map(b => b.trim()).filter(b => b.length > 0);
         const lead = blocks.shift() || '';
 
-        // Przycisk-link, jeśli obecny, jest ZAWSZE ostatnim blokiem (patrz buildArticleText) -
-        // użytkownik może dowolnie poprawić etykietę/adres albo usunąć całą linię, by go wyłączyć.
-        let linkButton = null;
-        const lastBlock = blocks[blocks.length - 1];
-        const btnMatch = lastBlock && lastBlock.match(/^\[PRZYCISK:\s*(.+?)\s*->\s*(\S+)\]$/i);
-        if (btnMatch) {
-            linkButton = { label: btnMatch[1].trim(), url: btnMatch[2].trim() };
+        // Przyciski-linki, jeśli obecne, są ZAWSZE ostatnimi blokami (patrz buildArticleText) -
+        // użytkownik może dowolnie poprawić etykietę/adres albo usunąć całą linię, by je wyłączyć.
+        const linkButtons = [];
+        while (blocks.length) {
+            const btnMatch = blocks[blocks.length - 1].match(/^\[PRZYCISK:\s*(.+?)\s*->\s*(\S+)\]$/i);
+            if (!btnMatch) break;
+            linkButtons.unshift({ label: btnMatch[1].trim(), url: btnMatch[2].trim() });
             blocks.pop();
         }
 
@@ -982,7 +1017,7 @@ const App = {
             return { type: 'text', heading, text: bodyLines.join('\n').trim() };
         });
 
-        return { lead, paragraphs, linkButton };
+        return { lead, paragraphs, linkButtons };
     },
 
     // Wypełnia edytowalny "widok tekstu" jednym polem, złożonym z leadu, akapitów, ewentualnych
@@ -1021,7 +1056,7 @@ const App = {
             };
         });
 
-        this.state.aiData.linkButton = parsed.linkButton;
+        this.state.aiData.linkButtons = parsed.linkButtons;
     },
 
     regenerateGutenbergCode() {
@@ -1075,10 +1110,8 @@ const App = {
 
         const cat = this.evtCategory.value;
         const notes = this.finalNotes.value;
-        const linkUrl = this.articleLinkUrl.value.trim();
-        const linkDesc = this.articleLinkDesc.value.trim();
-        const link = linkUrl ? { url: linkUrl, description: linkDesc } : null;
-        const prompt = Gemini.getPromptTemplate(cat, notes, link);
+        const links = this.getArticleLinks();
+        const prompt = Gemini.getPromptTemplate(cat, notes, links);
 
         try {
             const aiJson = await Gemini.callGemini(prompt);
