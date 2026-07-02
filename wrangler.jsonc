@@ -1,12 +1,15 @@
 {
   "$schema": "node_modules/wrangler/config-schema.json",
   "name": "redaktor-saf",
+  // Bez tego pola Wrangler nie wie, że ten Worker ma URUCHAMIAĆ kod - bez "main" (i z sekcją
+  // "assets" poniżej, którą celowo USUNIĘTO) traktował cały katalog projektu jako statyczną
+  // stronę do wystawienia, więc żądania do API trafiały w pliki statyczne zamiast do
+  // worker/worker.js. Ten Worker służy WYŁĄCZNIE jako proxy do Gemini API - statyczna strona
+  // (index.html, js/, assets/...) jest hostowana osobno na Netlify, nie tutaj.
+  "main": "worker/worker.js",
   "compatibility_date": "2026-07-02",
   "observability": {
     "enabled": true
-  },
-  "assets": {
-    "directory": "."
   },
   "compatibility_flags": [
     "nodejs_compat"

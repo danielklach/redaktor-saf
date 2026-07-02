@@ -1,8 +1,9 @@
 // Pkt 7: adres bezpiecznego proxy (Cloudflare Worker), które trzyma prawdziwy klucz Gemini
 // po swojej stronie (jako sekret środowiskowy) - klucz NIE trafia do żadnego pliku strony.
-// Po wdrożeniu Workera (patrz worker/worker.js) podmień poniższy placeholder na swój adres,
-// np. "https://saf-jamnik-proxy.twoj-user.workers.dev"
-const PROXY_URL = "https://saf-jamnik-proxy.saf-jamnik.workers.dev";
+// MUSI się IDEALNIE zgadzać z polem "name" w wrangler.jsonc (worker "redaktor-saf" wystawiony
+// jest pod adresem https://<name>.<subdomena-konta>.workers.dev) - jeśli kiedyś zmienisz "name"
+// w wrangler.jsonc, podmień też ten adres, inaczej front-end będzie strzelał w nieistniejący Worker.
+const PROXY_URL = "https://redaktor-saf.saf-jamnik.workers.dev";
 
 // Adres wdrożenia Google Apps Script (Web App), który odbiera anonimowe zgłoszenia usterek
 // i wysyła je mailem (MailApp.sendEmail) na adres webmastera - patrz sendIssueReport niżej.
