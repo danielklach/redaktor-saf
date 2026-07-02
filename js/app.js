@@ -414,8 +414,8 @@ const App = {
         }, 3000);
     },
 
-    // Anonimowe zgłoszenie: użytkownik tylko opisuje problem i klika "Wyślij" - Worker (patrz
-    // js/gemini.js -> sendIssueReport i worker/worker.js) sam przekazuje treść na maila webmastera,
+    // Anonimowe zgłoszenie: użytkownik tylko opisuje problem i klika "Wyślij" - Google Apps
+    // Script (patrz js/gemini.js -> sendIssueReport) sam przekazuje treść na maila webmastera,
     // bez żadnej akcji ze strony użytkownika (bez mailto:, bez jego klienta pocztowego).
     async sendReport() {
         const category = this.reportCategory.value;

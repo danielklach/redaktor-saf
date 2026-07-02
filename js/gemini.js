@@ -4,6 +4,13 @@
 // np. "https://saf-jamnik-proxy.twoj-user.workers.dev"
 const PROXY_URL = "https://saf-jamnik-proxy.saf-jamnik.workers.dev";
 
+// Adres wdrożenia Google Apps Script (Web App), który odbiera anonimowe zgłoszenia usterek
+// i wysyła je mailem (MailApp.sendEmail) na adres webmastera - patrz sendIssueReport niżej.
+// UWAGA: jeśli kiedyś zmienisz kod tego skryptu w Apps Script, wdróż go jako NOWĄ WERSJĘ TEGO
+// SAMEGO wdrożenia ("Manage deployments" -> ikona ołówka -> "New version"), a nie jako zupełnie
+// nowe wdrożenie - inaczej ten adres /exec przestanie działać i trzeba by go tu podmienić.
+const REPORT_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbyvjUUY9QNE8T0bSVqV-_jEw6ZBPtvzEVliTneGTz_eR_Y-RhkD16pcVuuw4pEktrZFBA/exec";
+
 // Pkt 3: kontekst, który uświadamia modelowi, w czym uczestniczy i jakie role tu obowiązują.
 const AGENCY_CONTEXT = `KONTEKST DZIAŁANIA:
 Piszesz artykuł na stronę internetową (dział "Aktualności") Studenckiej Agencji Fotograficznej "Jamnik" (SAF Jamnik), działającej przy Uniwersytecie Warmińsko-Mazurskim w Olsztynie. SAF Jamnik to zespół studentów-fotografów dokumentujących wydarzenia sportowe, kulturalne i naukowe na uczelni oraz w Olsztynie, publikujący relacje wraz z galeriami zdjęć.
@@ -137,20 +144,28 @@ ${notes}`;
     },
 
     // Anonimowe zgłoszenie problemu - użytkownik NIE wysyła niczego sam (żadnego mailto:).
-    // Worker (patrz worker/worker.js) przekazuje treść na adres webmastera przez sekret e-mail.
+    // Trafia do Google Apps Script (Web App), który mailem (MailApp.sendEmail) przekazuje treść
+    // na adres webmastera - żadne dane identyfikujące użytkownika nie są wysyłane.
+    // CELOWO bez nagłówka "Content-Type: application/json": Apps Script nie obsługuje zapytań
+    // "preflight" (OPTIONS) wywoływanych przez przeglądarkę dla JSON-a, więc żądanie musi zostać
+    // "prostym" zapytaniem (text/plain) - stąd brak jawnych headers (fetch domyślnie ustawia
+    // text/plain dla treści-stringa). Skrypt i tak czyta surową treść przez e.postData.contents
+    // i sam parsuje ją jako JSON, więc deklarowany Content-Type nie ma dla niego znaczenia.
     async sendIssueReport(category, description) {
-        if (!PROXY_URL || PROXY_URL.includes('TWOJ-USER')) {
-            throw new Error("Serwer zgłoszeń nie jest jeszcze skonfigurowany (patrz worker/worker.js).");
-        }
-        const response = await fetch(PROXY_URL, {
+        const response = await fetch(REPORT_SCRIPT_URL, {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ type: 'report', category, description })
+            body: JSON.stringify({ category, description })
         });
 
         if (!response.ok) {
-            const errData = await response.json().catch(() => ({}));
-            throw new Error(errData.error?.message || errData.error || response.statusText);
+            throw new Error(`Serwer zgłoszeń odpowiedział błędem (status ${response.status}).`);
+        }
+
+        // Skrypt ZAWSZE odpowiada HTTP 200 (nawet przy błędzie po swojej stronie - patrz blok
+        // catch w kodzie Apps Script), więc o powodzeniu decyduje wyłącznie pole "status" w JSON-ie.
+        const data = await response.json();
+        if (data.status !== 'success') {
+            throw new Error(data.message || 'Nieznany błąd Google Apps Script.');
         }
     },
 
