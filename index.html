@@ -35,21 +35,21 @@
             <img src="assets/redaktor-saf-emblem.svg" alt="Redaktor SAFi" class="logo-emblem">
             <span class="logo-text">
                 <span class="logo-line">Redaktor</span>
-                <span class="logo-line">SAFi <span class="logo-version">ver. 1.8.6</span></span>
+                <span class="logo-line">SAFi <span class="logo-version">ver. 1.8.7</span></span>
             </span>
         </a>
         <div class="header-actions">
-            <a href="https://jamnik.uwm.edu.pl/strefa-czlonka/" target="_blank" rel="noopener noreferrer" class="btn-secondary">🔑 Strefa Członka</a>
             <button type="button" id="btnShowIntro" class="btn-secondary">ℹ️ Jak korzystać?</button>
             <button type="button" id="btnReportIssue" class="btn-secondary">⚠️ Zgłoś problem</button>
+            <a href="https://jamnik.uwm.edu.pl/strefa-czlonka/" target="_blank" rel="noopener noreferrer" class="btn-secondary">🔑 Strefa Członka</a>
         </div>
     </header>
 
     <main class="container">
         <div class="steps-indicator">
             <div class="step active" data-step="1"><span class="step-num">1</span><span class="step-label">Dane wydarzenia</span></div>
-            <div class="step" data-step="2"><span class="step-num">2</span><span class="step-label">Kompresja zdjęć</span></div>
-            <div class="step" data-step="3"><span class="step-num">3</span><span class="step-label">Generowanie wpisu</span></div>
+            <div class="step" data-step="2"><span class="step-num">2</span><span class="step-label">Przekazywanie zdjęć</span></div>
+            <div class="step" data-step="3"><span class="step-num">3</span><span class="step-label">Generowanie treści</span></div>
         </div>
 
         <hr>
@@ -142,8 +142,8 @@
                 <div class="review-zone">
                     <h3>Ostateczne Notatki do AI</h3>
                     <p class="info-text">To jest jedyne źródło wiedzy dla sztucznej inteligencji - w razie potrzeby możesz je tu jeszcze poprawić:</p>
-                    <textarea id="finalNotes" rows="14"></textarea>
-                    <button id="btnTriggerAI" class="btn-primary w-100" style="margin-top: 15px;">✨ Uruchom Magię AI</button>
+                    <textarea id="finalNotes"></textarea>
+                    <button id="btnTriggerAI" class="btn-primary w-100" style="margin-top: 15px;">★ Uruchom Magię AI</button>
                 </div>
 
                 <div class="result-zone">
@@ -178,8 +178,22 @@
                         <p class="info-text">📌 Zanim wkleisz poniższy kod do WordPressa, jeszcze raz przeczytaj go uważnie od początku do końca - AI mogło popełnić błąd rzeczowy, literówkę lub napisać coś w nienaturalny sposób.</p>
                         <p class="info-text">🧩 Kolejność w WordPressie: 1) przełącz edytor wpisu na <strong>"Edytor kodu"</strong> (menu ⋮), 2) dopiero wtedy wklej poniższy kod, 3) wróć do <strong>"Edytora wizualnego"</strong>, żeby zobaczyć i przeczytać gotowy wpis.</p>
 
-                        <label for="gutenbergOutput">Kod do wklejenia do Edytora Kodu WordPress (Gutenberg):</label>
-                        <textarea id="gutenbergOutput" rows="12" readonly></textarea>
+                        <div class="output-tabs">
+                            <button type="button" id="tabTextView" class="output-tab active">📝 Tekst artykułu</button>
+                            <button type="button" id="tabCodeView" class="output-tab">🧩 Kod Gutenberga</button>
+                        </div>
+
+                        <div id="textViewPanel" class="output-panel">
+                            <p class="info-text" style="margin-top: 10px;">Możesz tu jeszcze poprawić, dopisać lub usunąć fragmenty tekstu przed skopiowaniem - zdjęcia celowo nie są tu pokazane (widać je tylko w kodzie Gutenberga).</p>
+                            <label for="leadInput">Lead:</label>
+                            <textarea id="leadInput" rows="3"></textarea>
+                            <div id="paragraphsEditor"></div>
+                        </div>
+
+                        <div id="codeViewPanel" class="output-panel hidden">
+                            <label for="gutenbergOutput">Kod do wklejenia do Edytora Kodu WordPress (Gutenberg):</label>
+                            <textarea id="gutenbergOutput" rows="12" readonly></textarea>
+                        </div>
 
                         <div class="actions" style="margin-top: 10px;">
                             <button id="btnCopyHtml" class="btn-secondary">📋 Kopiuj artykuł w HTML</button>
@@ -192,16 +206,13 @@
             <div class="download-photos-cta">
                 <p><strong>Nie zapomnij zapisać zdjęć!</strong> To jedyne miejsce, w którym można je pobrać - te same nazwy plików muszą trafić do WordPressa, żeby zdjęcia w artykule się wyświetliły. Zdjęcia zapisują się w folderze nazwanym jak wpis (np. "2026-05-koncert").</p>
 
-                <!-- Zapis bezpośrednio na dysk (bez ZIP-a) - dostępny tylko w przeglądarkach z File
-                     System Access API (Chrome/Edge na komputerze i Androidzie). Safari/iOS tego nie
-                     wspiera, więc dla nich zostaje wyłącznie paczka ZIP niżej (patrz fsUnsupportedNote). -->
-                <div id="fsSaveButtons" class="hidden fs-save-buttons">
-                    <button id="btnSaveLastFolder" class="btn-download hidden">💾 Zapisz w: <span id="lastFolderLabel"></span></button>
-                    <button id="btnSaveDownloads" class="btn-download">⬇️ Zapisz w "Pobranych"</button>
-                    <button id="btnSaveCustomFolder" class="btn-secondary">📁 Wybierz inny folder...</button>
+                <div class="download-options">
+                    <!-- Zapis bezpośrednio na dysk (bez ZIP-a) - dostępny tylko w przeglądarkach z File
+                         System Access API (Chrome/Edge na komputerze i Androidzie). Safari/iOS tego nie
+                         wspiera, więc dla nich zostaje wyłącznie paczka ZIP obok (patrz fsUnsupportedNote). -->
+                    <button id="btnSaveToComputer" class="btn-download hidden">⬇️ Zapisz na swoim komputerze</button>
+                    <button id="btnDownloadPhotosStep3" class="btn-download">📚 Pobierz jako .zip</button>
                 </div>
-
-                <button id="btnDownloadPhotosStep3" class="btn-download">⬇️ Pobierz paczkę ZIP ze zdjęciami</button>
                 <p id="fsUnsupportedNote" class="hidden info-text" style="margin-top: 10px; margin-bottom: 0;">ℹ️ Ta przeglądarka (typowo Safari/iOS) nie pozwala zapisywać plików wprost na dysk - pobierz paczkę ZIP powyżej. Na iPhonie/iPadzie rozpakujesz ją stuknięciem w aplikacji Pliki, bez instalowania czegokolwiek.</p>
             </div>
 
@@ -307,7 +318,7 @@
         <button id="btnDismissInstall" class="install-banner-close" aria-label="Zamknij" title="Zamknij">✕</button>
     </div>
 
-    <script type="module" src="js/app.js?v=250"></script>
+    <script type="module" src="js/app.js?v=260"></script>
 
     <!-- Rejestracja Service Workera (PWA) - celowo osobny, zwykły skrypt (nie moduł aplikacji),
          żeby infrastruktura PWA działała niezależnie od ewentualnego błędu w js/app.js. -->

@@ -44,7 +44,10 @@ const App = {
     state: {
         currentStep: 1,
         interviewAnswers: "",
-        aiFilenameSlug: null
+        aiFilenameSlug: null,
+        // Ostatnio wygenerowane dane artykułu (title/lead/paragraphs/tags) - przechowywane, żeby
+        // dało się je edytować w widoku tekstu i zregenerować z nich kod Gutenberga przed skopiowaniem.
+        aiData: null
     },
 
     init() {
@@ -108,11 +111,7 @@ const App = {
         this.btnGoToStep3 = document.getElementById('btnGoToStep3');
         this.btnBackToStep2 = document.getElementById('btnBackToStep2');
         this.btnDownloadPhotosStep3 = document.getElementById('btnDownloadPhotosStep3');
-        this.fsSaveButtons = document.getElementById('fsSaveButtons');
-        this.btnSaveLastFolder = document.getElementById('btnSaveLastFolder');
-        this.lastFolderLabel = document.getElementById('lastFolderLabel');
-        this.btnSaveDownloads = document.getElementById('btnSaveDownloads');
-        this.btnSaveCustomFolder = document.getElementById('btnSaveCustomFolder');
+        this.btnSaveToComputer = document.getElementById('btnSaveToComputer');
         this.fsUnsupportedNote = document.getElementById('fsUnsupportedNote');
         this.btnTriggerAI = document.getElementById('btnTriggerAI');
         this.btnCopyHtml = document.getElementById('btnCopyHtml');
@@ -135,6 +134,12 @@ const App = {
         this.aiFallbackMessage = document.getElementById('aiFallbackMessage');
         this.btnCopyFallbackPrompt = document.getElementById('btnCopyFallbackPrompt');
         this.aiOutput = document.getElementById('aiOutput');
+        this.tabTextView = document.getElementById('tabTextView');
+        this.tabCodeView = document.getElementById('tabCodeView');
+        this.textViewPanel = document.getElementById('textViewPanel');
+        this.codeViewPanel = document.getElementById('codeViewPanel');
+        this.leadInput = document.getElementById('leadInput');
+        this.paragraphsEditor = document.getElementById('paragraphsEditor');
         this.gutenbergOutput = document.getElementById('gutenbergOutput');
         this.sugTitleInput = document.getElementById('sugTitleInput');
         this.sugDate = document.getElementById('sugDate');
@@ -212,9 +217,10 @@ const App = {
         });
 
         this.btnDownloadPhotosStep3.addEventListener('click', () => this.downloadPhotosZip());
-        this.btnSaveDownloads.addEventListener('click', () => this.saveViaDirectoryPicker({ id: 'safDownloads', startIn: 'downloads' }));
-        this.btnSaveCustomFolder.addEventListener('click', () => this.saveViaDirectoryPicker({ id: 'safCustom' }));
-        this.btnSaveLastFolder.addEventListener('click', () => this.saveToRememberedFolder());
+        this.btnSaveToComputer.addEventListener('click', () => this.saveToComputer());
+
+        this.tabTextView.addEventListener('click', () => this.switchOutputTab('text'));
+        this.tabCodeView.addEventListener('click', () => this.switchOutputTab('code'));
 
         this.btnGoToStep3.addEventListener('click', () => {
             const hasFeaturedCandidate = Compressor.processedFiles.some(f => f.isFeatured || this.canBeFeatured(f));
@@ -304,36 +310,26 @@ const App = {
             this.fsUnsupportedNote.classList.remove('hidden');
             return;
         }
-        this.fsSaveButtons.classList.remove('hidden');
+        this.btnSaveToComputer.classList.remove('hidden');
 
         const remembered = await getRememberedHandle();
-        if (remembered) {
-            this._rememberedDirHandle = remembered;
-            this.lastFolderLabel.textContent = remembered.name;
-            this.btnSaveLastFolder.classList.remove('hidden');
-        }
+        if (remembered) this._rememberedDirHandle = remembered;
     },
 
-    async saveViaDirectoryPicker(options) {
+    // Jeden przycisk, jedna decyzja: jeśli mamy już zapamiętany (i wciąż ważny) folder z
+    // poprzedniego zapisu, używamy go od razu bez dodatkowych pytań. W przeciwnym razie (albo
+    // gdy uprawnienia wygasły) pokazujemy natywny wybór folderu i zapamiętujemy go na przyszłość -
+    // celowo BEZ osobnego, drugiego przycisku "zapisz w tym samym miejscu", żeby nie mnożyć opcji.
+    async saveToComputer() {
         try {
-            const dirHandle = await window.showDirectoryPicker(options);
+            if (this._rememberedDirHandle && await verifyPermission(this._rememberedDirHandle)) {
+                await this.performDirectorySave(this._rememberedDirHandle);
+                return;
+            }
+            const dirHandle = await window.showDirectoryPicker({ id: 'safPhotos', startIn: 'downloads' });
             await this.performDirectorySave(dirHandle);
         } catch (err) {
             if (err.name === 'AbortError') return; // użytkownik zamknął okno wyboru - nic się nie stało
-            alert('Nie udało się zapisać zdjęć: ' + err.message);
-        }
-    },
-
-    async saveToRememberedFolder() {
-        if (!this._rememberedDirHandle) return;
-        const ok = await verifyPermission(this._rememberedDirHandle);
-        if (!ok) {
-            alert('Brak uprawnień do zapamiętanego folderu - wybierz go ponownie przyciskiem "Wybierz inny folder".');
-            return;
-        }
-        try {
-            await this.performDirectorySave(this._rememberedDirHandle);
-        } catch (err) {
             alert('Nie udało się zapisać zdjęć: ' + err.message);
         }
     },
@@ -348,8 +344,6 @@ const App = {
 
         await rememberHandle(dirHandle);
         this._rememberedDirHandle = dirHandle;
-        this.lastFolderLabel.textContent = dirHandle.name;
-        this.btnSaveLastFolder.classList.remove('hidden');
 
         this.showToast(`Zapisano ${count} ${count === 1 ? 'zdjęcie' : 'zdjęć'} w folderze "${folderName}"!`);
     },
@@ -860,6 +854,59 @@ const App = {
         this.switchStep(3);
     },
 
+    // Wypełnia edytowalny "widok tekstu" (lead + śródtytuły/treść akapitów) danymi z ostatniej
+    // odpowiedzi AI. Zdjęcia CELOWO nie są tu pokazywane - to tylko podgląd/edycja samego tekstu,
+    // żeby dało się coś dopisać, usunąć lub poprawić przed skopiowaniem (zdjęcia widać w kodzie).
+    renderTextView(aiData) {
+        this.leadInput.value = aiData.lead || '';
+
+        this.paragraphsEditor.innerHTML = '';
+        (aiData.paragraphs || []).forEach((para, idx) => {
+            const block = document.createElement('div');
+            block.className = 'paragraph-editor-block';
+            block.innerHTML = `
+                <label>Śródtytuł (opcjonalnie):</label>
+                <input type="text" class="paragraph-heading-input" data-index="${idx}">
+                <label>Treść akapitu:</label>
+                <textarea class="paragraph-text-input" data-index="${idx}" rows="4"></textarea>
+            `;
+            block.querySelector('.paragraph-heading-input').value = para.heading || '';
+            block.querySelector('.paragraph-text-input').value = para.text || '';
+            this.paragraphsEditor.appendChild(block);
+        });
+    },
+
+    // Czyta aktualne (ewentualnie poprawione przez użytkownika) wartości z widoku tekstu z powrotem
+    // do this.state.aiData, żeby kod Gutenberga dało się zregenerować z uwzględnieniem tych zmian.
+    syncTextViewToAiData() {
+        if (!this.state.aiData) return;
+        this.state.aiData.lead = this.leadInput.value;
+        this.paragraphsEditor.querySelectorAll('.paragraph-editor-block').forEach((block, idx) => {
+            if (!this.state.aiData.paragraphs[idx]) return;
+            this.state.aiData.paragraphs[idx].heading = block.querySelector('.paragraph-heading-input').value;
+            this.state.aiData.paragraphs[idx].text = block.querySelector('.paragraph-text-input').value;
+        });
+    },
+
+    regenerateGutenbergCode() {
+        if (!this.state.aiData) return;
+        this.gutenbergOutput.value = Gutenberg.generateBlockCode(this.state.aiData, Compressor.processedFiles);
+    },
+
+    // Przełącznik "Tekst artykułu" / "Kod Gutenberga". Przy przejściu na kod NAJPIERW zapisujemy
+    // ewentualne edycje tekstu i dopiero potem odświeżamy kod - dzięki temu poprawki zrobione
+    // w widoku tekstu zawsze trafiają do finalnego kodu do wklejenia w WordPressie.
+    switchOutputTab(tab) {
+        if (tab === 'code') {
+            this.syncTextViewToAiData();
+            this.regenerateGutenbergCode();
+        }
+        this.tabTextView.classList.toggle('active', tab === 'text');
+        this.tabCodeView.classList.toggle('active', tab === 'code');
+        this.textViewPanel.classList.toggle('hidden', tab !== 'text');
+        this.codeViewPanel.classList.toggle('hidden', tab !== 'code');
+    },
+
     async generateArticle() {
         this.aiLoading.classList.remove('hidden');
         this.aiOutput.classList.add('hidden');
@@ -909,8 +956,10 @@ const App = {
             const featured = Compressor.processedFiles.find(f => f.isFeatured);
             this.sugFeaturedImage.textContent = featured ? featured.name : 'brak';
 
-            const finalGutenbergHTML = Gutenberg.generateBlockCode(aiJson, Compressor.processedFiles);
-            this.gutenbergOutput.value = finalGutenbergHTML;
+            this.state.aiData = aiJson;
+            this.renderTextView(aiJson);
+            this.regenerateGutenbergCode();
+            this.switchOutputTab('text'); // zawsze zaczynamy od tekstu - kod dogeneruje się przy przełączeniu/kopiowaniu
 
             this.aiLoading.classList.add('hidden');
             this.aiOutput.classList.remove('hidden');
@@ -929,6 +978,11 @@ const App = {
     // Pkt 5: korzystamy z asynchronicznego Clipboard API zamiast select()+execCommand,
     // co dodatkowo ogranicza ryzyko dziwnych "heurystyk" przeglądarki przy kopiowaniu.
     async copyGutenbergCode() {
+        // Niezależnie od tego, na której zakładce akurat jest użytkownik - kopiujemy zawsze
+        // NAJŚWIEŻSZY kod, uwzględniający ewentualne poprawki wprowadzone w widoku tekstu.
+        this.syncTextViewToAiData();
+        this.regenerateGutenbergCode();
+
         const text = this.gutenbergOutput.value;
         try {
             await navigator.clipboard.writeText(text);
