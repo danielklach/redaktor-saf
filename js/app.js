@@ -127,6 +127,7 @@ const App = {
         this.aiProgressWrap = document.getElementById('aiProgressWrap');
         this.aiProgressBar = document.getElementById('aiProgressBar');
         this.aiProgressLabel = document.getElementById('aiProgressLabel');
+        this.aiRetryNotice = document.getElementById('aiRetryNotice');
         this.aiQuestionsContainer = document.getElementById('aiQuestionsContainer');
         this.btnSkipModal = document.getElementById('btnSkipModal');
         this.btnSubmitModal = document.getElementById('btnSubmitModal');
@@ -138,6 +139,7 @@ const App = {
         this.aiLoading = document.getElementById('aiLoading');
         this.genProgressBar = document.getElementById('genProgressBar');
         this.genProgressLabel = document.getElementById('genProgressLabel');
+        this.genRetryNotice = document.getElementById('genRetryNotice');
         this.aiFallback = document.getElementById('aiFallback');
         this.aiFallbackMessage = document.getElementById('aiFallbackMessage');
         this.btnCopyFallbackPrompt = document.getElementById('btnCopyFallbackPrompt');
@@ -246,12 +248,20 @@ const App = {
             this.goToStep3();
         });
         this.btnBackToStep2.addEventListener('click', () => {
+            // Jeśli AI właśnie generuje artykuł (albo ponawia próbę) - przerywamy to żądanie,
+            // żeby nie płacić za odpowiedź, której i tak nikt już nie zobaczy (patrz generateArticle).
+            this._articleAbortController?.abort();
             this.switchStep(2);
             this.renderFileList(); // odśwież listę - nazwy mogły się zmienić po Kroku 3 (slug od AI)
         });
 
         this.btnSubmitModal.addEventListener('click', () => this.closeModal(true));
-        this.btnSkipModal.addEventListener('click', () => this.closeModal(false));
+        this.btnSkipModal.addEventListener('click', () => {
+            // "Pomiń" musi działać NATYCHMIAST, nawet w trakcie oczekiwania na AI/ponawiania prób
+            // (patrz handleStep1Submit) - stąd przerwanie żądania przez AbortController.
+            this._interviewAbortController?.abort();
+            this.closeModal(false);
+        });
 
         this.btnAddLink.addEventListener('click', () => this.addLinkRow());
         this.btnTriggerAI.addEventListener('click', () => this.generateArticle());
@@ -561,6 +571,18 @@ const App = {
         };
     },
 
+    // Komunikat o ponawianiu próby przy przeciążeniu API Google (patrz js/gemini.js ->
+    // callGeminiRaw) - CELOWO osobny element od rotującej etykiety etapu (aiProgressLabel/
+    // genProgressLabel), żeby interval z startProgressSimulation go od razu nie nadpisał.
+    showRetryNotice(noticeEl, message) {
+        noticeEl.textContent = message;
+        noticeEl.classList.remove('hidden');
+    },
+
+    hideRetryNotice(noticeEl) {
+        noticeEl.classList.add('hidden');
+    },
+
     // Pkt 2: buduje ponumerowane pytania, każde z własnym polem odpowiedzi TUŻ pod nim.
     renderQuestions(questions) {
         this.aiQuestionsContainer.innerHTML = "";
@@ -622,8 +644,13 @@ const App = {
 
         this.aiModal.classList.remove('hidden');
         this.btnSubmitModal.disabled = true;
-        this.btnSkipModal.disabled = true;
+        // "Pomiń" CELOWO zostaje aktywny przez cały czas oczekiwania (nawet w trakcie ponawiania
+        // prób przy przeciążeniu API) - użytkownik może przerwać czekanie w dowolnym momencie
+        // (patrz handler btnSkipModal w bindEvents, który przerywa to żądanie przez AbortController).
         this.aiQuestionsContainer.innerHTML = "";
+
+        this._interviewAbortController = new AbortController();
+        const { signal } = this._interviewAbortController;
 
         const progress = this.startProgressSimulation(
             this.aiProgressBar,
@@ -638,18 +665,28 @@ const App = {
         );
 
         try {
-            const questions = await Gemini.askForMissingDetails(cat, title, loc, start, end, notes);
+            const questions = await Gemini.askForMissingDetails(cat, title, loc, start, end, notes, {
+                signal,
+                onRetry: (attempt, maxAttempts, isFallback) => this.showRetryNotice(
+                    this.aiRetryNotice,
+                    isFallback
+                        ? '⚠️ Nadal duże obciążenie serwerów Google - próbuję z alternatywnym modelem...'
+                        : `⚠️ Serwery Google są mocno obciążone - ponawiam próbę (${attempt}/${maxAttempts})...`
+                )
+            });
             progress.finish("Gotowe!");
             this.renderQuestions(questions);
         } catch (error) {
             progress.stop();
+            if (error.name === 'AbortError') return; // użytkownik kliknął "Pomiń" - nic więcej nie rób
             this.renderQuestions([
                 `Nie udało się połączyć z AI (${error.message}). Czy chcesz samodzielnie dodać jakieś kluczowe szczegóły, o których zapomniałeś w notatkach?`
             ]);
+        } finally {
+            this.hideRetryNotice(this.aiRetryNotice);
         }
 
         this.btnSubmitModal.disabled = false;
-        this.btnSkipModal.disabled = false;
     },
 
     closeModal(saveData) {
@@ -948,6 +985,11 @@ const App = {
             return;
         }
 
+        // "Generuj kolejny wpis" jest dostępny na dole strony przez cały czas, więc mogło zostać
+        // kliknięte W TRAKCIE generowania artykułu - przerywamy je, żeby nie płacić za odpowiedź,
+        // której już nikt nie zobaczy.
+        this._articleAbortController?.abort();
+
         // Krok 1
         this.evtCategory.value = '';
         this.handleCategoryChange();
@@ -1129,6 +1171,9 @@ const App = {
     async generateArticle() {
         this.setResultState('loading');
 
+        this._articleAbortController = new AbortController();
+        const { signal } = this._articleAbortController;
+
         const progress = this.startProgressSimulation(
             this.genProgressBar,
             this.genProgressLabel,
@@ -1149,7 +1194,15 @@ const App = {
         const prompt = Gemini.getPromptTemplate(cat, notes, links);
 
         try {
-            const aiJson = await Gemini.callGemini(prompt);
+            const aiJson = await Gemini.callGemini(prompt, {
+                signal,
+                onRetry: (attempt, maxAttempts, isFallback) => this.showRetryNotice(
+                    this.genRetryNotice,
+                    isFallback
+                        ? '⚠️ Nadal duże obciążenie serwerów Google - próbuję z alternatywnym modelem...'
+                        : `⚠️ Serwery Google są mocno obciążone - ponawiam próbę (${attempt}/${maxAttempts})...`
+                )
+            });
             progress.finish("Gotowe!");
 
             const endVal = this.evtEnd.value;
@@ -1182,12 +1235,15 @@ const App = {
             this.setResultState('output');
         } catch (error) {
             progress.stop();
+            if (error.name === 'AbortError') return; // użytkownik wyszedł z Kroku 3 w trakcie generowania
             // Fallback: nazwy zdjęć już bazują na tytule z Kroku 1 (patrz renameAllFiles - aiFilenameSlug
             // jest wtedy dalej puste), więc nic tu nie trzeba dodatkowo naprawiać. Użytkownik dostaje
             // za to gotowy, samowystarczalny prompt do wklejenia w dowolnym zewnętrznym czacie AI.
             this._lastPrompt = prompt;
             this.aiFallbackMessage.textContent = `Nie udało się połączyć z wbudowanym AI (${error.message}). Zdjęcia zachowały nazwy na podstawie nazwy wydarzenia z Kroku 1. Możesz skopiować kompletny prompt poniżej i wkleić go do dowolnego zewnętrznego czatu AI (np. ChatGPT, Claude, Gemini) - wynik będzie odpowiadał temu, co wygenerowałby Redaktor SAF.`;
             this.setResultState('fallback');
+        } finally {
+            this.hideRetryNotice(this.genRetryNotice);
         }
     },
 

@@ -39,7 +39,9 @@ const AGENCY_LIFE_TAGS = [
 export const Gemini = {
     // Dynamiczny wywiad AI na podstawie wpisanych danych - zwraca TABLICĘ pytań (JSON),
     // żeby dało się je łatwo i niezawodnie ponumerować w interfejsie (pkt 2).
-    async askForMissingDetails(category, title, location, start, end, notes) {
+    // "options" ({onRetry, signal}) jest tu wyłącznie przekazywane dalej do callGeminiRaw -
+    // patrz tam pełen opis mechanizmu ponawiania prób i przerywania żądania.
+    async askForMissingDetails(category, title, location, start, end, notes, options = {}) {
         const prompt = `${AGENCY_CONTEXT}
 
 Jesteś dociekliwym redaktorem naczelnym SAF Jamnik. Twój fotoreporter właśnie wrócił z wydarzenia i wrzucił do systemu takie surowe notatki:
@@ -62,7 +64,7 @@ Bez markdownu, bez wstępów, bez komentarzy poza obiektem JSON.`;
             // przyspieszenie tego etapu. Jeśli Twoje konto/model zwróci błąd walidacji przez
             // to pole, po prostu usuń całą linię "thinkingConfig".
             thinkingConfig: { thinkingBudget: 0 }
-        });
+        }, options);
 
         const jsonMatch = raw.match(/\{[\s\S]*\}/);
         const jsonStr = jsonMatch ? jsonMatch[0] : raw;
@@ -122,27 +124,91 @@ Oto pełna treść notatek oraz zebranych informacji o wydarzeniu:
 ${notes}`;
     },
 
+    // Rozpoznaje błędy PRZECIĄŻENIA serwerów Google (zbyt duży ruch, "high demand") - odróżniamy
+    // je celowo od innych błędów (zły klucz, brak promptu, nieznany model), bo TYLKO przeciążenie
+    // ma sens ponawiać automatycznie - każdy inny błąd i tak powtórzyłby się identycznie,
+    // więc ponawianie tylko zwiększyłoby koszt zapytań bez szans na sukces.
+    isOverloadError(status, message) {
+        return status === 429 || status === 503 || /high demand|overloaded|resource.*exhausted|unavailable/i.test(message || '');
+    },
+
+    // Odczekuje "ms" milisekund, z możliwością przerwania przez AbortSignal (np. użytkownik
+    // kliknął "Pomiń" w trakcie odliczania do kolejnej próby - patrz callGeminiRaw).
+    delay(ms, signal) {
+        return new Promise((resolve, reject) => {
+            if (signal?.aborted) {
+                reject(this._abortError());
+                return;
+            }
+            let onAbort;
+            const timer = setTimeout(() => {
+                signal?.removeEventListener('abort', onAbort);
+                resolve();
+            }, ms);
+            onAbort = () => {
+                clearTimeout(timer);
+                reject(this._abortError());
+            };
+            signal?.addEventListener('abort', onAbort, { once: true });
+        });
+    },
+
+    _abortError() {
+        return new DOMException('Przerwano przez użytkownika.', 'AbortError');
+    },
+
     // Surowe wywołanie API - zawsze przez bezpieczne proxy (Cloudflare Worker), które trzyma
     // klucz Gemini po swojej stronie jako sekret środowiskowy (patrz worker/worker.js).
-    async callGeminiRaw(prompt, generationConfig = {}) {
+    //
+    // Mechanizm ponawiania prób przy przeciążeniu ("high demand"/429/503) - optymalizacja kosztów:
+    // - Próby 1-3: zawsze na najtańszym, DOMYŚLNYM modelu (patrz GEMINI_MODELS w worker.js),
+    //   w odstępach 3 sekund - to pokrywa zdecydowaną większość chwilowych przeciążeń.
+    // - Próba 4 (OSTATECZNA): jeśli domyślny model nadal jest przeciążony po 3 próbach, Worker
+    //   dostaje flagę "useOverloadFallback" i sam, jednorazowo, przełącza się na alternatywny,
+    //   stabilniejszy model (wciąż z tańszej rodziny Flash, NIGDY Pro - patrz worker.js).
+    // Każdy inny błąd (zły klucz, brak promptu itp.) jest rzucany OD RAZU, bez ponawiania.
+    //
+    // "options.onRetry(nextAttempt, maxDefaultAttempts, isFallbackAttempt)" pozwala UI pokazać
+    // komunikat o ponawianiu (patrz app.js), a "options.signal" (AbortSignal) pozwala użytkownikowi
+    // przerwać oczekiwanie/żądanie w dowolnym momencie (np. przyciskiem "Pomiń").
+    async callGeminiRaw(prompt, generationConfig = {}, { onRetry, signal } = {}) {
         if (!PROXY_URL || PROXY_URL.includes('TWOJ-USER')) {
             throw new Error("Bezpieczne proxy z kluczem API redakcji nie jest jeszcze skonfigurowane (patrz worker/worker.js i komentarz w js/gemini.js). Skontaktuj się z administratorem strony.");
         }
-        const response = await fetch(PROXY_URL, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ prompt, generationConfig })
-        });
 
-        if (!response.ok) {
+        const MAX_DEFAULT_ATTEMPTS = 3;
+        const TOTAL_ATTEMPTS = MAX_DEFAULT_ATTEMPTS + 1; // + 1 ostateczna próba z modelem zapasowym
+        const RETRY_DELAY_MS = 3000;
+
+        for (let attempt = 1; attempt <= TOTAL_ATTEMPTS; attempt++) {
+            const isFallbackAttempt = attempt > MAX_DEFAULT_ATTEMPTS;
+
+            const response = await fetch(PROXY_URL, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ prompt, generationConfig, useOverloadFallback: isFallbackAttempt }),
+                signal
+            });
+
+            if (response.ok) {
+                const data = await response.json();
+                if (!data.candidates || data.candidates.length === 0) throw new Error("Brak odpowiedzi od modelu AI.");
+                return data.candidates[0].content.parts[0].text.trim();
+            }
+
             const errData = await response.json().catch(() => ({}));
-            throw new Error(errData.error?.message || errData.error || response.statusText);
+            const message = errData.error?.message || errData.error || response.statusText;
+            const hasMoreAttempts = attempt < TOTAL_ATTEMPTS;
+
+            if (this.isOverloadError(response.status, message) && hasMoreAttempts) {
+                const nextAttempt = attempt + 1;
+                onRetry?.(nextAttempt, MAX_DEFAULT_ATTEMPTS, nextAttempt > MAX_DEFAULT_ATTEMPTS);
+                await this.delay(RETRY_DELAY_MS, signal);
+                continue;
+            }
+
+            throw new Error(message);
         }
-
-        const data = await response.json();
-        if (!data.candidates || data.candidates.length === 0) throw new Error("Brak odpowiedzi od modelu AI.");
-
-        return data.candidates[0].content.parts[0].text.trim();
     },
 
     // Anonimowe zgłoszenie problemu - użytkownik NIE wysyła niczego sam (żadnego mailto:).
@@ -171,13 +237,13 @@ ${notes}`;
         }
     },
 
-    async callGemini(prompt) {
+    async callGemini(prompt, options = {}) {
         let textResult = await this.callGeminiRaw(prompt, {
             temperature: 0.85,
             // Pełniejszy "namysł" modelu dla długiego, wyczerpującego artykułu = lepsza jakość.
             // Jeśli Twoje konto/model zwróci błąd walidacji przez to pole, usuń całą linię.
             thinkingConfig: { thinkingBudget: 1024 }
-        });
+        }, options);
 
         // Zabezpieczenie: sztuczna inteligencja zawsze musi zwrócić parsowalny JSON
         const jsonMatch = textResult.match(/\{[\s\S]*\}/);

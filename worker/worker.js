@@ -6,6 +6,12 @@ const ALLOWED_ORIGIN = "https://redaktor-safi.netlify.app";
 // dopisać go na początku tej listy (jedno miejsce w całym projekcie do zmiany).
 const GEMINI_MODELS = ["gemini-3.5-flash", "gemini-2.5-flash", "gemini-2.0-flash", "gemini-1.5-flash"];
 
+// Model używany WYŁĄCZNIE jako ostateczna, 4. próba przy przeciążeniu domyślnego modelu (patrz
+// front-end: js/gemini.js -> callGeminiRaw, flaga "useOverloadFallback"). Celowo NIE z serii
+// "Pro" (znacznie droższa) - to nadal tania rodzina Flash, tylko historycznie rzadziej
+// przeciążona niż najnowszy model domyślny z GEMINI_MODELS[0].
+const OVERLOAD_FALLBACK_MODEL = "gemini-1.5-flash-latest";
+
 export default {
     async fetch(request, env) {
         if (request.method === "OPTIONS") {
@@ -23,7 +29,7 @@ export default {
             return jsonResponse({ error: "Nieprawidłowy JSON w żądaniu" }, 400);
         }
 
-        const { prompt, generationConfig } = body;
+        const { prompt, generationConfig, useOverloadFallback } = body;
         if (!prompt || typeof prompt !== "string") {
             return jsonResponse({ error: "Brak pola 'prompt' w żądaniu" }, 400);
         }
@@ -36,23 +42,31 @@ export default {
             return jsonResponse({ error: "Worker nie ma skonfigurowanego sekretu GEMINI_API_KEY" }, 500);
         }
 
+        // Front-end wysyła "useOverloadFallback: true" WYŁĄCZNIE jako swoją ostatnią, 4. próbę,
+        // gdy domyślny model 3 razy z rzędu zwrócił błąd przeciążenia (429/503) - wtedy próbujemy
+        // JEDNEGO, konkretnego alternatywnego modelu zamiast całej listy GEMINI_MODELS.
+        const modelsToTry = useOverloadFallback ? [OVERLOAD_FALLBACK_MODEL] : GEMINI_MODELS;
+
         try {
-            return await callGeminiWithFallback(prompt, generationConfig, apiKey);
+            return await callGeminiWithFallback(prompt, generationConfig, apiKey, modelsToTry);
         } catch (err) {
             return jsonResponse({ error: "Nie udało się połączyć z Gemini API: " + err.message }, 502);
         }
     }
 };
 
-// Próbuje kolejnych modeli z GEMINI_MODELS. Do następnego przechodzi TYLKO, jeśli błąd wygląda na
-// "ten model już nie istnieje/nie jest wspierany" (404 albo komunikat o nieznanym modelu) - każdy
-// inny błąd (zły klucz, przekroczony limit itp.) powtórzyłby się identycznie dla każdego modelu,
-// więc nie ma sensu marnować na to czasu i zwracamy go od razu.
-async function callGeminiWithFallback(prompt, generationConfig, apiKey) {
+// Próbuje kolejnych modeli z podanej listy (domyślnie GEMINI_MODELS, albo pojedynczy
+// OVERLOAD_FALLBACK_MODEL przy 4. próbie - patrz wywołanie w fetch() wyżej). Do następnego modelu
+// z listy przechodzi TYLKO, jeśli błąd wygląda na "ten model już nie istnieje/nie jest wspierany"
+// (404 albo komunikat o nieznanym modelu) - każdy inny błąd (zły klucz, przekroczony limit itp.)
+// powtórzyłby się identycznie dla każdego modelu, więc nie ma sensu marnować na to czasu i
+// zwracamy go od razu (o przeciążenie 429/503 i automatyczne PONOWIENIA całego żądania dba już
+// front-end - patrz js/gemini.js -> callGeminiRaw).
+async function callGeminiWithFallback(prompt, generationConfig, apiKey, models = GEMINI_MODELS) {
     let lastResponse = null;
 
-    for (let i = 0; i < GEMINI_MODELS.length; i++) {
-        const model = GEMINI_MODELS[i];
+    for (let i = 0; i < models.length; i++) {
+        const model = models[i];
         const geminiUrl = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
 
         const geminiRes = await fetch(geminiUrl, {
@@ -74,7 +88,7 @@ async function callGeminiWithFallback(prompt, generationConfig, apiKey) {
 
         const message = data.error?.message || "";
         const isModelIssue = geminiRes.status === 404 || /not found|is not supported|not available/i.test(message);
-        const hasNextModel = i < GEMINI_MODELS.length - 1;
+        const hasNextModel = i < models.length - 1;
         if (isModelIssue && hasNextModel) {
             continue; // ten konkretny model już nie działa - próbujemy następnego z listy
         }
@@ -88,7 +102,7 @@ async function callGeminiWithFallback(prompt, generationConfig, apiKey) {
     if (lastResponse.data.error?.status === "PERMISSION_DENIED" || /unregistered callers/i.test(message)) {
         message += " [Sprawdź: 1) czy GEMINI_API_KEY w ustawieniach Workera to prawdziwy klucz z aistudio.google.com/apikey (zaczyna się od 'AIzaSy'), 2) czy w Google AI Studio / Cloud Console ten klucz NIE ma ustawionych 'Website restrictions' - serwer Workera nie wysyła nagłówka Referer, więc taki klucz zostanie odrzucony.]";
     } else if (lastResponse.status === 404 || /not found|is not supported|not available/i.test(message)) {
-        message += " [Wygląda na to, że WSZYSTKIE modele z listy GEMINI_MODELS w worker.js przestały działać - dopisz na początku tej listy aktualną nazwę modelu z ai.google.dev/gemini-api/docs/models.]";
+        message += " [Wygląda na to, że model(e) wypróbowane w tym żądaniu (" + models.join(", ") + ") już nie działają - sprawdź i zaktualizuj GEMINI_MODELS / OVERLOAD_FALLBACK_MODEL w worker.js aktualną nazwą modelu z ai.google.dev/gemini-api/docs/models.]";
     }
     return jsonResponse({ error: message }, lastResponse.status);
 }

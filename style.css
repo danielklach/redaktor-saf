@@ -7,6 +7,7 @@
     --primary-hover: #bb882a;
     --success: #10b981;
     --danger: #ef4444;
+    --warning: #f0a020;
     --border: #2e2e38;
 }
 
@@ -261,6 +262,16 @@ button:disabled { background: #2e2e38; color: var(--text-muted); cursor: not-all
     transition: width 0.3s ease;
 }
 .progress-label { font-size: 0.85rem; color: var(--text-muted); text-align: center; margin-bottom: 10px; }
+
+/* Komunikat o przeciążeniu serwerów Google i automatycznym ponawianiu próby (patrz gemini.js
+   -> callGeminiRaw) - CELOWO osobny element od .progress-label: ten drugi jest nadpisywany co
+   300ms przez startProgressSimulation, więc komunikat o retry musiał dostać własne miejsce,
+   żeby nie znikał natychmiast po pojawieniu się. */
+.retry-notice {
+    font-size: 0.85rem; font-weight: 700; text-align: center; margin-bottom: 10px;
+    color: var(--warning); background: rgba(240, 160, 32, 0.12);
+    border: 1px solid rgba(240, 160, 32, 0.35); border-radius: 6px; padding: 8px 12px;
+}
 
 /* Pkt 2: numerowane pytania agenta, z polem odpowiedzi bezpośrednio pod każdym z nich */
 .question-block {
