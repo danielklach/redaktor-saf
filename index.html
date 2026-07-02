@@ -212,28 +212,34 @@
     </main>
 
     <div id="introModal" class="modal hidden">
-        <div class="modal-content" style="max-width: 700px;">
-            <h3>👋 Witaj w Redaktorze SAF Jamnik!</h3>
-            <p>Żeby wrzucać wpisy na stronę SAF, nie trzeba być wybitnym pisarzem ani szczególnie poruszać się po sztucznej inteligencji. Wpisz wszystko, co wiesz o wydarzeniu, w wyznaczone pola, a na końcu wklej gotowy artykuł na stronę SAF w WordPressie.</p>
-            <ol style="margin: 12px 0 12px 20px; line-height: 1.7;">
-                <li><strong>Krok 1 - Dane wydarzenia:</strong> opisz, co się działo, gdzie i kiedy. Możesz też wkleić tekst zewnętrznego artykułu o tym wydarzeniu - AI wyciągnie z niego fakty (np. oficjalne nazwy tras koncertowych), których mogli nie znać nasi fotografowie.</li>
-                <li><strong>Krok 2 - Zdjęcia:</strong> wgraj zdjęcia w dowolnym profesjonalnym formacie - aplikacja sama je skompresuje i przygotuje pod stronę. Możesz oznaczyć jedno zdjęcie jako "wyróżniające".</li>
-                <li><strong>Krok 3 - Generowanie:</strong> uruchom AI, pobierz paczkę ZIP ze zdjęciami, a potem skopiuj tytuł, tagi i gotowy kod bloku Gutenberg prosto do edytora kodu wpisu w WordPressie. <strong>Zawsze przeczytaj wygenerowaną treść, zanim ją opublikujesz</strong> - AI to tylko maszyna i czasem się myli.</li>
-            </ol>
-            <p style="margin-bottom: 10px;">🧩 Jak wkleić gotowy kod do WordPressa:</p>
-            <ol style="margin: 0 0 12px 20px; line-height: 1.7;">
-                <li>W edytorze wpisu WordPress kliknij menu (⋮) w prawym górnym rogu i wybierz <strong>"Edytor kodu"</strong> (Code editor) - dopiero wtedy wklej skopiowany kod.</li>
-                <li>Wróć tym samym menu do <strong>"Edytora wizualnego"</strong> (Visual editor), żeby zobaczyć wpis tak, jak wyświetli się na stronie, i przeczytać go jeszcze raz.</li>
-            </ol>
-            <p style="margin-bottom: 10px;">🎥 Poradnik wideo jak obsługiwać Redaktor SAF:</p>
-            <!-- TODO: gdy będzie gotowy film, zamień poniższy placeholder na osadzony iframe, np.:
-            <div style="position:relative; padding-bottom:56.25%; height:0;">
-                <iframe src="https://www.youtube.com/embed/TWOJE_ID_FILMU" style="position:absolute; top:0; left:0; width:100%; height:100%; border:0; border-radius:8px;" allowfullscreen title="Poradnik wideo Redaktor SAF"></iframe>
+        <div class="modal-content intro-modal-content">
+            <div class="intro-header">
+                <span class="intro-emoji">👋</span>
+                <div>
+                    <h3>Witaj w Redaktorze SAFi!</h3>
+                    <p>Nie musisz być pisarzem ani ekspertem od AI - wypełnij pola, resztę zrobi aplikacja.</p>
+                </div>
             </div>
-            -->
-            <div style="padding: 30px; text-align: center; background: #0c0c0e; border: 1px dashed var(--border); border-radius: 8px; color: var(--text-muted); font-size: 0.85rem;">
-                Film poradnikowy pojawi się tutaj wkrótce.
+
+            <div class="intro-steps">
+                <div class="intro-step">
+                    <span class="intro-step-num">1</span>
+                    <div><strong>Dane wydarzenia</strong><p>Opisz co, gdzie i kiedy - możesz też wkleić tekst z innego portalu jako źródło faktów.</p></div>
+                </div>
+                <div class="intro-step">
+                    <span class="intro-step-num">2</span>
+                    <div><strong>Zdjęcia</strong><p>Wgraj zdjęcia w dowolnym formacie - aplikacja sama je skompresuje i przygotuje.</p></div>
+                </div>
+                <div class="intro-step">
+                    <span class="intro-step-num">3</span>
+                    <div><strong>Generowanie</strong><p>Uruchom AI, pobierz zdjęcia i skopiuj gotowy kod wpisu do WordPressa.</p></div>
+                </div>
             </div>
+
+            <p class="intro-tip">🧩 <strong>W WordPressie:</strong> przełącz się na "Edytor kodu", wklej kod, wróć do "Edytora wizualnego", by zobaczyć efekt. I zawsze <strong>przeczytaj tekst</strong> przed publikacją - AI czasem się myli.</p>
+
+            <!-- TODO: gdy będzie gotowy film, dodaj tu link/osadzony iframe z poradnikiem wideo. -->
+
             <div class="modal-actions">
                 <button id="btnCloseIntro" class="btn-primary">Rozumiem, zaczynajmy!</button>
             </div>

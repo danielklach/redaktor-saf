@@ -187,6 +187,34 @@ button:disabled { background: #2e2e38; color: var(--text-muted); cursor: not-all
     .modal-actions button { flex: 1 1 auto; }
 }
 
+/* Instrukcja startowa (introModal) - zwarty, skanowalny układ zamiast ściany tekstu,
+   bo to pierwsza rzecz, jaką widzi każdy odwiedzający. */
+.intro-modal-content { max-width: 600px; }
+
+.intro-header { display: flex; align-items: flex-start; gap: 14px; margin-bottom: 18px; }
+.intro-emoji { font-size: 1.8rem; line-height: 1; flex-shrink: 0; }
+.intro-header h3 { margin-bottom: 4px; }
+.intro-header p { margin-bottom: 0; color: var(--text-muted); font-size: 0.9rem; }
+
+.intro-steps { display: flex; flex-direction: column; gap: 10px; margin-bottom: 16px; }
+.intro-step {
+    display: flex; gap: 12px; align-items: flex-start; background: #1c1c22;
+    border: 1px solid var(--border); border-radius: 8px; padding: 10px 14px;
+}
+.intro-step-num {
+    width: 22px; height: 22px; flex-shrink: 0; margin-top: 1px; border-radius: 50%;
+    background: var(--primary); color: #000; display: flex; align-items: center;
+    justify-content: center; font-weight: 700; font-size: 0.8rem;
+}
+.intro-step strong { display: block; color: #fff; font-size: 0.9rem; margin-bottom: 2px; }
+.intro-step p { font-size: 0.8rem; color: var(--text-muted); line-height: 1.4; }
+
+.intro-tip {
+    background: #241c0d; border: 1px solid var(--border); border-left: 3px solid var(--primary);
+    border-radius: 6px; padding: 10px 12px; font-size: 0.8rem; color: var(--text-muted);
+}
+.intro-tip strong { color: var(--text-color); }
+
 .hidden { display: none !important; }
 
 .loading-spinner { padding: 30px 10px; text-align: center; color: var(--primary); font-weight: 600; }
