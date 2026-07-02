@@ -94,8 +94,10 @@ h3 { margin-bottom: 15px; font-size: 1.1rem; color: var(--primary); }
 
 /* Krok 3: obie kolumny mają równą wysokość (domyślne "stretch" siatki), a #finalNotes
    rozciąga się, żeby wypełnić dostępną przestrzeń - dzięki temu lewa kolumna ("Ostateczne
-   notatki") wygląda tak samo wysoko jak prawa ("Wynik działania systemu") po wygenerowaniu treści. */
-.review-zone, .result-zone { display: flex; flex-direction: column; }
+   notatki") wygląda tak samo wysoko jak prawa ("Wynik działania systemu") po wygenerowaniu treści.
+   min-width:0 naprawia klasyczny "grid blowout": bez tego zawartość prawej kolumny (po wygenerowaniu
+   treści) potrafiła wymusić na siatce szerszy tor niż 1fr, przez co kolumny przestawały być równe. */
+.review-zone, .result-zone { display: flex; flex-direction: column; min-width: 0; }
 #finalNotes { flex: 1; min-height: 260px; }
 
 /* Gdy pole "Nazwa wydarzenia/Miejsce/Daty" jest ukryte (kategorie bez tych pól), druga kolumna
@@ -260,13 +262,7 @@ button:disabled { background: #2e2e38; color: var(--text-muted); cursor: not-all
 .output-tab:hover { background: #1c1c22; color: var(--text-color); transform: none; box-shadow: none; }
 .output-tab.active { background: #1c1c22; color: var(--primary); font-weight: 700; }
 
-.paragraph-editor-block {
-    background: #1c1c22; border: 1px solid var(--border); border-radius: 6px;
-    padding: 12px 15px; margin-top: 12px;
-}
-.paragraph-editor-block label { font-size: 0.8rem; }
-.paragraph-heading-input { font-weight: 600; }
-.paragraph-text-input { resize: vertical; }
+#articleTextInput { min-height: 260px; }
 
 /* Przycisk oznaczania zdjęcia jako obrazek wyróżniający (numer "00") na liście w Kroku 2 */
 .btn-feature { background: #2e2e38; color: #fff; }
@@ -286,25 +282,32 @@ button:disabled { background: #2e2e38; color: var(--text-muted); cursor: not-all
 }
 .toast.show { opacity: 1; transform: translateY(0); }
 
-/* Bardzo widoczny popup instalacji PWA (patrz js/app.js - beforeinstallprompt) */
+/* Bardzo widoczny (celowo "agresywny") popup instalacji PWA - większy, z pulsującą poświatą,
+   pojawia się na KAŻDE odświeżenie strony, dopóki aplikacja nie jest zainstalowana
+   (patrz js/app.js - beforeinstallprompt / onInstallPromptAvailable). */
 .install-banner {
-    position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%);
-    z-index: 1500; display: flex; align-items: center; gap: 14px;
-    background: var(--card-bg); border: 2px solid var(--primary); border-radius: 12px;
-    padding: 16px 18px; box-shadow: 0 10px 40px rgba(0,0,0,0.5);
-    max-width: 480px; width: calc(100% - 32px);
-    animation: installBannerIn 0.3s ease;
+    position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%);
+    z-index: 1500; display: flex; align-items: center; gap: 16px;
+    background: var(--card-bg); border: 3px solid var(--primary); border-radius: 14px;
+    padding: 20px 24px; box-shadow: 0 12px 48px rgba(0,0,0,0.6);
+    max-width: 560px; width: calc(100% - 32px);
+    animation: installBannerIn 0.35s ease, installBannerPulse 2.2s ease-in-out 0.35s infinite;
 }
 @keyframes installBannerIn {
-    from { opacity: 0; transform: translateX(-50%) translateY(20px); }
-    to { opacity: 1; transform: translateX(-50%) translateY(0); }
+    from { opacity: 0; transform: translateX(-50%) translateY(30px) scale(0.96); }
+    to { opacity: 1; transform: translateX(-50%) translateY(0) scale(1); }
 }
-.install-banner-icon { font-size: 2rem; flex-shrink: 0; line-height: 1; }
+@keyframes installBannerPulse {
+    0%, 100% { box-shadow: 0 12px 48px rgba(0,0,0,0.6), 0 0 0 0 rgba(220, 160, 50, 0.35); }
+    50% { box-shadow: 0 12px 48px rgba(0,0,0,0.6), 0 0 0 10px rgba(220, 160, 50, 0); }
+}
+.install-banner-icon { font-size: 2.5rem; flex-shrink: 0; line-height: 1; }
 .install-banner-text { flex: 1; display: flex; flex-direction: column; gap: 2px; min-width: 0; }
-.install-banner-text strong { color: #fff; font-size: 0.95rem; }
-.install-banner-text span { color: var(--text-muted); font-size: 0.8rem; }
+.install-banner-text strong { color: #fff; font-size: 1.05rem; }
+.install-banner-text span { color: var(--text-muted); font-size: 0.85rem; }
+#btnInstallApp { font-size: 1rem; padding: 12px 22px; box-shadow: 0 4px 16px rgba(220, 160, 50, 0.4); }
 .install-banner-close {
-    background: transparent; padding: 4px 8px; font-size: 1.1rem; color: var(--text-muted);
+    background: transparent; padding: 4px 8px; font-size: 1.2rem; color: var(--text-muted);
     box-shadow: none;
 }
 .install-banner-close:hover { color: #fff; background: transparent; transform: none; box-shadow: none; }

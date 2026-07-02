@@ -35,7 +35,7 @@
             <img src="assets/redaktor-saf-emblem.svg" alt="Redaktor SAFi" class="logo-emblem">
             <span class="logo-text">
                 <span class="logo-line">Redaktor</span>
-                <span class="logo-line">SAFi <span class="logo-version">ver. 1.8.7</span></span>
+                <span class="logo-line">SAFi <span class="logo-version">ver. 1.8.8</span></span>
             </span>
         </a>
         <div class="header-actions">
@@ -184,10 +184,8 @@
                         </div>
 
                         <div id="textViewPanel" class="output-panel">
-                            <p class="info-text" style="margin-top: 10px;">Możesz tu jeszcze poprawić, dopisać lub usunąć fragmenty tekstu przed skopiowaniem - zdjęcia celowo nie są tu pokazane (widać je tylko w kodzie Gutenberga).</p>
-                            <label for="leadInput">Lead:</label>
-                            <textarea id="leadInput" rows="3"></textarea>
-                            <div id="paragraphsEditor"></div>
+                            <p class="info-text" style="margin-top: 10px;">Możesz tu jeszcze poprawić, dopisać lub usunąć fragmenty tekstu przed skopiowaniem - to czysty tekst, bez znaczników HTML i bez zdjęć (te są tylko w kodzie Gutenberga). Zaczynasz od leadu, kolejne akapity oddziel pustą linią; żeby dodać śródtytuł, zacznij akapit od "## Śródtytuł".</p>
+                            <textarea id="articleTextInput" rows="14"></textarea>
                         </div>
 
                         <div id="codeViewPanel" class="output-panel hidden">
@@ -204,13 +202,13 @@
             </div>
 
             <div class="download-photos-cta">
-                <p><strong>Nie zapomnij zapisać zdjęć!</strong> To jedyne miejsce, w którym można je pobrać - te same nazwy plików muszą trafić do WordPressa, żeby zdjęcia w artykule się wyświetliły. Zdjęcia zapisują się w folderze nazwanym jak wpis (np. "2026-05-koncert").</p>
+                <p><strong>Nie zapomnij zapisać zdjęć!</strong> To jedyne miejsce, w którym można je pobrać! Po pobraniu wrzuć je w biblioteki multimediów w Wordpressie.</p>
 
                 <div class="download-options">
                     <!-- Zapis bezpośrednio na dysk (bez ZIP-a) - dostępny tylko w przeglądarkach z File
                          System Access API (Chrome/Edge na komputerze i Androidzie). Safari/iOS tego nie
                          wspiera, więc dla nich zostaje wyłącznie paczka ZIP obok (patrz fsUnsupportedNote). -->
-                    <button id="btnSaveToComputer" class="btn-download hidden">⬇️ Zapisz na swoim komputerze</button>
+                    <button id="btnSaveToComputer" class="btn-download hidden">⬇️ Zapisz na komputerze</button>
                     <button id="btnDownloadPhotosStep3" class="btn-download">📚 Pobierz jako .zip</button>
                 </div>
                 <p id="fsUnsupportedNote" class="hidden info-text" style="margin-top: 10px; margin-bottom: 0;">ℹ️ Ta przeglądarka (typowo Safari/iOS) nie pozwala zapisywać plików wprost na dysk - pobierz paczkę ZIP powyżej. Na iPhonie/iPadzie rozpakujesz ją stuknięciem w aplikacji Pliki, bez instalowania czegokolwiek.</p>
@@ -282,7 +280,7 @@
                 <label for="reportCategory">Co nie działa?</label>
                 <select id="reportCategory">
                     <option value="Kompresja / wgrywanie zdjęć">Kompresja / wgrywanie zdjęć</option>
-                    <option value="Generowanie artykułu przez AI">Generowanie artykułu przez AI</option>
+                    <option value="Generowanie artykułu przez AI">Generowanie artykułu i agent AI</option>
                     <option value="Kod Gutenberg / WordPress">Kod Gutenberg / WordPress</option>
                     <option value="Interfejs / wygląd strony">Interfejs / wygląd strony</option>
                     <option value="Inne">Inne</option>
@@ -318,7 +316,7 @@
         <button id="btnDismissInstall" class="install-banner-close" aria-label="Zamknij" title="Zamknij">✕</button>
     </div>
 
-    <script type="module" src="js/app.js?v=260"></script>
+    <script type="module" src="js/app.js?v=270"></script>
 
     <!-- Rejestracja Service Workera (PWA) - celowo osobny, zwykły skrypt (nie moduł aplikacji),
          żeby infrastruktura PWA działała niezależnie od ewentualnego błędu w js/app.js. -->

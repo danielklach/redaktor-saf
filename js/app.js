@@ -138,8 +138,7 @@ const App = {
         this.tabCodeView = document.getElementById('tabCodeView');
         this.textViewPanel = document.getElementById('textViewPanel');
         this.codeViewPanel = document.getElementById('codeViewPanel');
-        this.leadInput = document.getElementById('leadInput');
-        this.paragraphsEditor = document.getElementById('paragraphsEditor');
+        this.articleTextInput = document.getElementById('articleTextInput');
         this.gutenbergOutput = document.getElementById('gutenbergOutput');
         this.sugTitleInput = document.getElementById('sugTitleInput');
         this.sugDate = document.getElementById('sugDate');
@@ -165,11 +164,10 @@ const App = {
         });
 
         this.btnInstallApp.addEventListener('click', () => this.triggerInstallPrompt());
+        // Zamknięcie chowa popup TYLKO do końca bieżącego wczytania strony - żadnej trwałej pamięci
+        // (patrz komentarz w onInstallPromptAvailable), więc przy odświeżeniu wyskoczy ponownie.
         this.btnDismissInstall.addEventListener('click', () => {
             this.installBanner.classList.add('hidden');
-            // Tylko na bieżącą sesję przeglądarki - przy kolejnej wizycie (jeśli nadal
-            // niezainstalowana) popup może się pojawić ponownie, ale nie spamuje w kółko.
-            sessionStorage.setItem('saf_install_dismissed', '1');
         });
 
         this.btnReportIssue.addEventListener('click', () => {
@@ -272,7 +270,9 @@ const App = {
         const shownImmediately = await this.triggerInstallPrompt();
         if (shownImmediately) return;
 
-        if (sessionStorage.getItem('saf_install_dismissed')) return;
+        // Celowo BEZ zapamiętywania odrzucenia (ani w localStorage, ani w sessionStorage) -
+        // popup ma się pokazywać przy KAŻDYM odświeżeniu strony, dopóki aplikacja nie zostanie
+        // zainstalowana. Zamknięcie przyciskiem "✕" chowa go tylko do końca bieżącego wczytania strony.
         this.installBanner.classList.remove('hidden');
     },
 
@@ -854,37 +854,70 @@ const App = {
         this.switchStep(3);
     },
 
-    // Wypełnia edytowalny "widok tekstu" (lead + śródtytuły/treść akapitów) danymi z ostatniej
-    // odpowiedzi AI. Zdjęcia CELOWO nie są tu pokazywane - to tylko podgląd/edycja samego tekstu,
-    // żeby dało się coś dopisać, usunąć lub poprawić przed skopiowaniem (zdjęcia widać w kodzie).
-    renderTextView(aiData) {
-        this.leadInput.value = aiData.lead || '';
-
-        this.paragraphsEditor.innerHTML = '';
-        (aiData.paragraphs || []).forEach((para, idx) => {
-            const block = document.createElement('div');
-            block.className = 'paragraph-editor-block';
-            block.innerHTML = `
-                <label>Śródtytuł (opcjonalnie):</label>
-                <input type="text" class="paragraph-heading-input" data-index="${idx}">
-                <label>Treść akapitu:</label>
-                <textarea class="paragraph-text-input" data-index="${idx}" rows="4"></textarea>
-            `;
-            block.querySelector('.paragraph-heading-input').value = para.heading || '';
-            block.querySelector('.paragraph-text-input').value = para.text || '';
-            this.paragraphsEditor.appendChild(block);
-        });
+    // Usuwa znaczniki <strong>/<em>, których AI używa w treści akapitów (patrz gemini.js) - w
+    // "czystym" widoku tekstu mają być całkowicie niewidoczne, zostają tylko w kodzie Gutenberga.
+    stripFormattingTags(text) {
+        return (text || '').replace(/<\/?(strong|em)>/gi, '');
     },
 
-    // Czyta aktualne (ewentualnie poprawione przez użytkownika) wartości z widoku tekstu z powrotem
-    // do this.state.aiData, żeby kod Gutenberga dało się zregenerować z uwzględnieniem tych zmian.
+    // Scala lead + akapity w JEDNO pole tekstowe: akapity oddzielone pustą linią, opcjonalny
+    // śródtytuł jako pierwsza linia akapitu w formie "## Śródtytuł" - prosty, czytelny format,
+    // który użytkownik może dowolnie edytować (dopisać/usunąć/poprawić całe akapity, nie tylko słowa).
+    buildArticleText(aiData) {
+        const blocks = [this.stripFormattingTags(aiData.lead)];
+        (aiData.paragraphs || []).forEach((para) => {
+            const headingLine = para.heading ? `## ${para.heading}\n` : '';
+            blocks.push(headingLine + this.stripFormattingTags(para.text));
+        });
+        return blocks.join('\n\n');
+    },
+
+    // Odwrotność buildArticleText: rozdziela tekst z powrotem na lead + akapity po pustych liniach.
+    parseArticleText(text) {
+        const blocks = (text || '').split(/\n\s*\n/).map(b => b.trim()).filter(b => b.length > 0);
+        const lead = blocks.shift() || '';
+        const paragraphs = blocks.map((block) => {
+            const lines = block.split('\n');
+            let heading = '';
+            let bodyLines = lines;
+            if (lines[0] && lines[0].trim().startsWith('## ')) {
+                heading = lines[0].trim().slice(3).trim();
+                bodyLines = lines.slice(1);
+            }
+            return { heading, text: bodyLines.join('\n').trim() };
+        });
+        return { lead, paragraphs };
+    },
+
+    // Wypełnia edytowalny "widok tekstu" jednym polem, złożonym z leadu i akapitów - CELOWO bez
+    // znaczników HTML i bez zdjęć, żeby dało się swobodnie dopisać, usunąć lub poprawić treść
+    // przed skopiowaniem (zdjęcia i formatowanie widać wyłącznie w kodzie Gutenberga).
+    renderTextView(aiData) {
+        this.articleTextInput.value = this.buildArticleText(aiData);
+    },
+
+    // Czyta edytowalny tekst z powrotem do this.state.aiData, żeby dało się z niego zregenerować
+    // kod Gutenberga. Akapity, których użytkownik NIE dotknął (tekst identyczny jak poprzednio, po
+    // odjęciu <strong>/<em>), zachowują oryginalne znaczniki AI - tracą je tylko te faktycznie
+    // zmienione (bo nie ma jak zgadnąć, gdzie w przepisanym zdaniu miałoby wrócić pogrubienie).
     syncTextViewToAiData() {
         if (!this.state.aiData) return;
-        this.state.aiData.lead = this.leadInput.value;
-        this.paragraphsEditor.querySelectorAll('.paragraph-editor-block').forEach((block, idx) => {
-            if (!this.state.aiData.paragraphs[idx]) return;
-            this.state.aiData.paragraphs[idx].heading = block.querySelector('.paragraph-heading-input').value;
-            this.state.aiData.paragraphs[idx].text = block.querySelector('.paragraph-text-input').value;
+        const parsed = this.parseArticleText(this.articleTextInput.value);
+
+        const prevLeadPlain = this.stripFormattingTags(this.state.aiData.lead);
+        this.state.aiData.lead = (parsed.lead === prevLeadPlain) ? this.state.aiData.lead : parsed.lead;
+
+        const prevParagraphs = this.state.aiData.paragraphs || [];
+        this.state.aiData.paragraphs = parsed.paragraphs.map((para, idx) => {
+            const prev = prevParagraphs[idx];
+            if (!prev) return para; // nowy akapit dopisany przez użytkownika - naturalnie bez znaczników
+
+            const headingUnchanged = para.heading === (prev.heading || '');
+            const textUnchanged = para.text === this.stripFormattingTags(prev.text);
+            return {
+                heading: headingUnchanged ? prev.heading : para.heading,
+                text: textUnchanged ? prev.text : para.text
+            };
         });
     },
 
