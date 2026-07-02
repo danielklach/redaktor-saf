@@ -35,7 +35,7 @@
             <img src="assets/redaktor-saf-emblem.svg" alt="Redaktor SAFi" class="logo-emblem">
             <span class="logo-text">
                 <span class="logo-line">Redaktor</span>
-                <span class="logo-line">SAFi <span class="logo-version">ver. 1.8.8</span></span>
+                <span class="logo-line">SAFi <span class="logo-version">ver. 1.8.9</span></span>
             </span>
         </a>
         <div class="header-actions">
@@ -149,6 +149,11 @@
                 <div class="result-zone">
                     <h3>Wynik działania systemu</h3>
 
+                    <div id="aiEmptyState" class="ai-empty-state">
+                        <span class="ai-empty-icon">🪄</span>
+                        <p>Tutaj pojawi się gotowy artykuł - uzupełnij notatki obok i kliknij <strong>"Uruchom Magię AI"</strong>.</p>
+                    </div>
+
                     <div id="aiLoading" class="loading-spinner hidden">
                         <div class="progress-wrap"><div class="progress-bar" id="genProgressBar"></div></div>
                         <p id="genProgressLabel" class="progress-label">Inicjalizacja generowania...</p>
@@ -216,6 +221,7 @@
 
             <div class="actions">
                 <button id="btnBackToStep2" class="btn-secondary">&larr; Wstecz</button>
+                <button id="btnStartNew" class="btn-primary">🔄 Generuj kolejny wpis</button>
             </div>
         </section>
     </main>
@@ -316,7 +322,7 @@
         <button id="btnDismissInstall" class="install-banner-close" aria-label="Zamknij" title="Zamknij">✕</button>
     </div>
 
-    <script type="module" src="js/app.js?v=270"></script>
+    <script type="module" src="js/app.js?v=271"></script>
 
     <!-- Rejestracja Service Workera (PWA) - celowo osobny, zwykły skrypt (nie moduł aplikacji),
          żeby infrastruktura PWA działała niezależnie od ewentualnego błędu w js/app.js. -->

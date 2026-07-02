@@ -100,6 +100,18 @@ h3 { margin-bottom: 15px; font-size: 1.1rem; color: var(--primary); }
 .review-zone, .result-zone { display: flex; flex-direction: column; min-width: 0; }
 #finalNotes { flex: 1; min-height: 260px; }
 
+/* Zajmowniki przestrzeni w prawej kolumnie (przed/w trakcie generowania, oraz błąd) - z tym samym
+   flex:1 + min-height co #finalNotes, żeby obie kolumny wyglądały tak samo "wypełnione", zamiast
+   pustej przestrzeni pod samym nagłówkiem "Wynik działania systemu" (patrz #aiOutput bez zmian -
+   jego naturalna zawartość po wygenerowaniu treści jest i tak wystarczająco długa). */
+#aiEmptyState, #aiLoading, #aiFallback { flex: 1; min-height: 260px; }
+.ai-empty-state {
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    gap: 10px; text-align: center; border: 2px dashed var(--border); border-radius: 8px;
+    padding: 20px; color: var(--text-muted);
+}
+.ai-empty-icon { font-size: 2.2rem; }
+
 /* Gdy pole "Nazwa wydarzenia/Miejsce/Daty" jest ukryte (kategorie bez tych pól), druga kolumna
    (notatki) ma zająć całą szerokość zamiast zostawiać pustą, "zepsutą" połowę siatki. */
 #step1Grid.single-col { grid-template-columns: 1fr; }

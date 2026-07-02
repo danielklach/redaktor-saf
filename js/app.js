@@ -117,6 +117,7 @@ const App = {
         this.btnCopyHtml = document.getElementById('btnCopyHtml');
         this.btnCopyTitle = document.getElementById('btnCopyTitle');
         this.btnRegenerate = document.getElementById('btnRegenerate');
+        this.btnStartNew = document.getElementById('btnStartNew');
 
         this.aiModal = document.getElementById('aiModal');
         this.aiProgressWrap = document.getElementById('aiProgressWrap');
@@ -127,6 +128,7 @@ const App = {
         this.btnSubmitModal = document.getElementById('btnSubmitModal');
 
         this.finalNotes = document.getElementById('finalNotes');
+        this.aiEmptyState = document.getElementById('aiEmptyState');
         this.aiLoading = document.getElementById('aiLoading');
         this.genProgressBar = document.getElementById('genProgressBar');
         this.genProgressLabel = document.getElementById('genProgressLabel');
@@ -241,7 +243,12 @@ const App = {
         this.btnCopyTitle.addEventListener('click', () => this.copyTitle());
         this.btnCopyTags.addEventListener('click', () => this.copyTags());
         this.btnCopyFallbackPrompt.addEventListener('click', () => this.copyFallbackPrompt());
-        this.btnRegenerate.addEventListener('click', () => { this.aiOutput.classList.add('hidden'); this.finalNotes.focus(); });
+        this.btnRegenerate.addEventListener('click', () => {
+            this.aiOutput.classList.add('hidden');
+            this.aiEmptyState.classList.remove('hidden');
+            this.finalNotes.focus();
+        });
+        this.btnStartNew.addEventListener('click', () => this.startNewPost());
     },
 
     // Jedyne miejsce pobierania zdjęć jest w Kroku 3 (po ewentualnym przemianowaniu przez AI),
@@ -854,6 +861,53 @@ const App = {
         this.switchStep(3);
     },
 
+    // Pełny reset formularza i powrót do Kroku 1 - pozwala napisać kolejny wpis bez ręcznego
+    // czyszczenia każdego pola z osobna. Pyta o potwierdzenie tylko, gdy faktycznie jest coś do
+    // stracenia (świeży formularz nie musi straszyć użytkownika niepotrzebnym oknem).
+    startNewPost() {
+        const hasContent = this.evtTitle.value || this.evtNotes.value
+            || Compressor.processedFiles.length > 0 || this.state.aiData;
+        if (hasContent && !window.confirm('Czy na pewno chcesz zacząć nowy wpis? Obecne dane, zdjęcia i wygenerowana treść zostaną utracone.')) {
+            return;
+        }
+
+        // Krok 1
+        this.evtCategory.value = '';
+        this.handleCategoryChange();
+        this.evtTitle.value = '';
+        this.evtLocation.value = '';
+        this.evtStart.value = '';
+        this.evtEnd.value = '';
+        this.evtNotes.value = '';
+        this.evtExternalArticle.value = '';
+
+        // Krok 2 - zwalniamy podglądy zdjęć (previewUrl), żeby nie zostawić wycieku pamięci
+        Compressor.processedFiles.forEach(f => { if (f.previewUrl) URL.revokeObjectURL(f.previewUrl); });
+        Compressor.processedFiles = [];
+        this.fileInput.value = '';
+        this.renderFileList();
+
+        // Krok 3
+        this.finalNotes.value = '';
+        this.state.interviewAnswers = '';
+        this.state.aiFilenameSlug = null;
+        this.state.aiData = null;
+        this.sugTitleInput.value = '';
+        this.sugTagsInput.value = '';
+        this.sugDate.innerText = '-';
+        this.sugFeaturedImage.textContent = '-';
+        this.articleTextInput.value = '';
+        this.gutenbergOutput.value = '';
+        this.aiOutput.classList.add('hidden');
+        this.aiFallback.classList.add('hidden');
+        this.aiLoading.classList.add('hidden');
+        this.aiEmptyState.classList.remove('hidden');
+        this.switchOutputTab('text');
+
+        this.switchStep(1);
+        this.showToast('Możesz zacząć pisać nowy wpis!');
+    },
+
     // Usuwa znaczniki <strong>/<em>, których AI używa w treści akapitów (patrz gemini.js) - w
     // "czystym" widoku tekstu mają być całkowicie niewidoczne, zostają tylko w kodzie Gutenberga.
     stripFormattingTags(text) {
@@ -941,6 +995,7 @@ const App = {
     },
 
     async generateArticle() {
+        this.aiEmptyState.classList.add('hidden');
         this.aiLoading.classList.remove('hidden');
         this.aiOutput.classList.add('hidden');
         this.aiFallback.classList.add('hidden');
