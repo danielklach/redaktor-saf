@@ -55,27 +55,27 @@ export const Compressor = {
         return worker;
     },
 
-    // Limit dotyczy WYŁĄCZNIE realnego czasu przetwarzania POJEDYNCZEGO pliku przez worker -
-    // NIE liczy się czas oczekiwania w kolejce (patrz _onWorkerMessage: timer startuje dopiero
-    // przy PIERWSZYM komunikacie "progress", czyli gdy worker faktycznie zaczął ten plik).
-    // Dzięki temu wgranie np. 150 zdjęć na małej puli workerów nie generuje fałszywych błędów
-    // "za długo się przetwarzał" tylko dlatego, że plik długo czekał w kolejce.
-    PER_FILE_TIMEOUT_MS: 30000,
+    // WATCHDOG "KROCZĄCY" (rolling), nie limit na CAŁKOWITY czas pliku: timer resetuje się przy
+    // KAŻDYM sygnale postępu (nie tylko pierwszym) - liczy się WYŁĄCZNIE brak jakiegokolwiek
+    // postępu przez PER_FILE_TIMEOUT_MS z rzędu, a nie łączny czas od startu do końca. To ważne,
+    // bo przy dużej paczce (np. 150 zdjęć) wiele plików "startuje" niemal jednocześnie na tej
+    // samej, małej puli workerów i faktycznie dzieli między sobą procesor - pojedynczy plik może
+    // więc legalnie potrzebować więcej niż PER_FILE_TIMEOUT_MS od swojego startu do końca, o ile
+    // w międzyczasie regularnie zgłasza kolejne etapy postępu. Zanim JAKIKOLWIEK progress w ogóle
+    // przyjdzie (plik wciąż czeka w kolejce na wolny worker), timer w ogóle nie jest uzbrojony -
+    // czas oczekiwania w kolejce NIGDY się nie liczy.
+    PER_FILE_TIMEOUT_MS: 45000,
 
     _onWorkerMessage(data) {
         const pending = this._pending.get(data.id);
         if (!pending) return;
 
         if (data.type === 'progress') {
-            // Pierwszy sygnał od workera dla TEGO pliku = realny start przetwarzania - dopiero
-            // teraz uzbrajamy timeout (patrz komentarz przy PER_FILE_TIMEOUT_MS wyżej).
-            if (!pending.started) {
-                pending.started = true;
-                pending.timeoutId = setTimeout(() => {
-                    this._pending.delete(data.id);
-                    pending.reject(new Error(`"${pending.fileName}" przetwarzał się dłużej niż 30 sekund i został pominięty (prawdopodobnie nieobsługiwany lub uszkodzony plik).`));
-                }, this.PER_FILE_TIMEOUT_MS);
-            }
+            clearTimeout(pending.timeoutId);
+            pending.timeoutId = setTimeout(() => {
+                this._pending.delete(data.id);
+                pending.reject(new Error(`"${pending.fileName}" nie zrobił żadnego postępu przez ${this.PER_FILE_TIMEOUT_MS / 1000} sekund i został pominięty (prawdopodobnie nieobsługiwany lub uszkodzony plik).`));
+            }, this.PER_FILE_TIMEOUT_MS);
             pending.onProgress?.(data.stage, data.pct);
             return;
         }
@@ -102,7 +102,6 @@ export const Compressor = {
             this._pending.set(id, {
                 workerSlot,
                 timeoutId: null,
-                started: false,
                 fileName: file.name,
                 onProgress,
                 resolve: (result) => resolve(this._nameResult(result, targetIndex, eventTitle, eventDateStr)),

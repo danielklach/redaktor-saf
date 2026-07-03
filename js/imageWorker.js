@@ -44,7 +44,7 @@ function report(id, index, stage, pct) {
     self.postMessage({ type: 'progress', id, index, stage, pct });
 }
 
-async function decodeTiffLike(file) {
+async function decodeTiffLike(file, id, index) {
     try {
         ensureUTIF();
     } catch (err) {
@@ -53,6 +53,11 @@ async function decodeTiffLike(file) {
     if (typeof UTIF === 'undefined') {
         throw new Error(`"${file.name}": biblioteka do odczytu TIFF/DNG nie została poprawnie wczytana.`);
     }
+    // Zgłaszamy postęp TUŻ PO ewentualnym (potencjalnie wolnym, pierwszorazowym) pobraniu
+    // biblioteki z CDN, PRZED właściwym, ciężkim dekodowaniem - dzięki temu watchdog w
+    // compressor.js (patrz PER_FILE_TIMEOUT_MS) ma dodatkowy punkt kontrolny do zresetowania
+    // się w trakcie tego etapu, zamiast jednej długiej "cichej" przerwy między 5% a 30%.
+    report(id, index, 'dekodowanie', 15);
 
     const buf = await file.arrayBuffer();
     let ifds;
@@ -85,7 +90,7 @@ async function decodeTiffLike(file) {
     throw new Error(`"${file.name}": nie udało się zdekodować obrazu z pliku TIFF/DNG (prawdopodobnie surowy plik RAW bez osadzonego podglądu lub nieobsługiwana kompresja). Wyeksportuj podgląd jako JPG/TIFF i spróbuj ponownie.${lastErr ? ' [' + (lastErr.message || lastErr) + ']' : ''}`);
 }
 
-async function decodeHeic(file) {
+async function decodeHeic(file, id, index) {
     let mod;
     try {
         mod = ensureHeif();
@@ -95,6 +100,7 @@ async function decodeHeic(file) {
     if (!mod || typeof mod.HeifDecoder !== 'function') {
         throw new Error(`"${file.name}": biblioteka do odczytu HEIC/HEIF nie została poprawnie wczytana.`);
     }
+    report(id, index, 'dekodowanie', 15); // patrz komentarz w decodeTiffLike
 
     const buf = await file.arrayBuffer();
     const decoder = new mod.HeifDecoder();
@@ -153,9 +159,9 @@ async function processFile(id, index, file) {
 
     let bitmap;
     if (ext === 'tiff' || ext === 'tif' || ext === 'dng') {
-        bitmap = await decodeTiffLike(file);
+        bitmap = await decodeTiffLike(file, id, index);
     } else if (ext === 'heic' || ext === 'heif') {
-        bitmap = await decodeHeic(file);
+        bitmap = await decodeHeic(file, id, index);
     } else {
         bitmap = await decodeStandard(file);
     }

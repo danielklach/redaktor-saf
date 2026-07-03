@@ -274,10 +274,10 @@ Bez markdownu, bez wstępów, bez komentarzy poza obiektem JSON.`;
         const prompt = `${AGENCY_CONTEXT}
 
 Jesteś redaktorem naczelnym SAF Jamnik sprawdzającym gotowy tekst przed publikacją. Poniżej znajduje się artykuł napisany samodzielnie przez redaktora. Sprawdź:
-1. Czy w tekście NIE brakuje istotnych informacji dziennikarskich, takich jak: data/czas wydarzenia, miejsce, organizator, przebieg/atmosfera wydarzenia.
+1. Czy w tekście NIE brakuje istotnych informacji dziennikarskich, takich jak: data/czas wydarzenia, miejsce, organizator, przebieg/atmosfera wydarzenia. UWAGA przy dacie: jeśli podano choćby dzień i miesiąc, to WYSTARCZY - NIE zgłaszaj braku roku (artykuł i tak wyświetla się z datą publikacji nad treścią, więc rok wynika z kontekstu).
 2. ${linkCheck}
 
-WAŻNE: bądź wyrozumiały, nie czepiaj się drobiazgów - zgłaszaj TYLKO wyraźne, realne braki, które faktycznie zubażają tekst jako relację z wydarzenia. Jeśli tekst jest kompletny (albo brakujące elementy są nieistotne), zwróć pustą tablicę.
+WAŻNE: to blog studencki, a nie poważny serwis informacyjny (Reuters) - bądź wyrozumiały i nieformalny, nie czepiaj się drobiazgów. Zgłaszaj TYLKO wyraźne, realne braki, które faktycznie zubażają tekst jako relację z wydarzenia. Jeśli tekst jest kompletny (albo brakujące elementy są nieistotne lub domyślne z kontekstu), zwróć pustą tablicę.
 
 Treść artykułu:
 ${articleText}
@@ -423,12 +423,12 @@ ${this._externalOutputFormatSpec(images, links)}`;
         const numbered = strings.map((s, i) => `[${i}] ${s}`).join('\n');
         const prompt = `Jesteś tłumaczem interfejsu aplikacji webowej. Przetłumacz poniższe polskie teksty interfejsu użytkownika na naturalny, poprawny angielski (styl zwięzły, jak w interfejsach aplikacji). Zachowaj wszelkie znaczniki HTML, symbole (np. emoji) i formatowanie dokładnie w tym samym miejscu co w oryginale.
 
-Teksty do przetłumaczenia (każdy oznaczony numerem w nawiasach kwadratowych):
+Teksty do przetłumaczenia (każdy oznaczony numerem w nawiasach kwadratowych - ten numer to WYŁĄCZNIE pomoc w odczycie tej listy, NIE jest częścią tekstu):
 ${numbered}
 
 ODPOWIEDZ WYŁĄCZNIE CZYSTYM, SUROWYM KODEM JSON w formacie:
 {"translations": ["translation 0", "translation 1"]}
-Tablica "translations" MUSI mieć DOKŁADNIE ${strings.length} elementów, w tej samej kolejności co powyżej. Bez markdownu, bez wstępów, bez komentarzy poza obiektem JSON.`;
+WAŻNE: każdy element tablicy "translations" MA ZAWIERAĆ WYŁĄCZNIE sam przetłumaczony tekst - NIGDY nie dopisuj do niego numeru ani nawiasów kwadratowych (to było tylko oznaczenie wejścia, nie ma go w oryginalnych tekstach). Tablica "translations" MUSI mieć DOKŁADNIE ${strings.length} elementów, w tej samej kolejności co powyżej. Bez markdownu, bez wstępów, bez komentarzy poza obiektem JSON.`;
 
         const raw = await this.callGeminiRaw(prompt, {
             temperature: 0.2, thinkingConfig: { thinkingBudget: 0 }
@@ -437,7 +437,12 @@ Tablica "translations" MUSI mieć DOKŁADNIE ${strings.length} elementów, w tej
         const jsonMatch = raw.match(/\{[\s\S]*\}/);
         const parsed = JSON.parse(jsonMatch ? jsonMatch[0] : raw);
         const translations = Array.isArray(parsed.translations) ? parsed.translations : [];
-        return strings.map((s, i) => translations[i] ?? s);
+        // Zabezpieczenie: niezależnie od instrukcji w prompcie, niektóre modele i tak potrafią
+        // echo'ować numer porządkowy z wejścia z powrotem w odpowiedzi (np. "[0] Editor" zamiast
+        // "Editor") - usuwamy taki ewentualny prefiks, żeby na stronie nigdy nie pojawił się
+        // dosłowny "[N]" przed tekstem.
+        const stripIndexPrefix = (text) => typeof text === 'string' ? text.replace(/^\s*\[\d+\]\s*/, '') : text;
+        return strings.map((s, i) => stripIndexPrefix(translations[i]) || s);
     },
 
     // Rozpoznaje błędy PRZECIĄŻENIA serwerów Google (zbyt duży ruch, "high demand") - odróżniamy
