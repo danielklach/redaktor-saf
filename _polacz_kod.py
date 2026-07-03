@@ -11,7 +11,7 @@ EXCLUDE_DIRS = {
 
 # Pełne ścieżki do konkretnych plików, które mają być całkowicie zignorowane
 EXCLUDE_FILE_PATHS = {
-    r"C:\Users\DELL\Documents\GitHub\redaktor-saf\#polacz_kod.py",
+    r"C:\Users\DELL\Documents\GitHub\redaktor-saf\_polacz_kod.py",
 }
 
 # Rozszerzenia plików binarnych/niepotrzebnych, których NIE chcemy scalać ani czytać
