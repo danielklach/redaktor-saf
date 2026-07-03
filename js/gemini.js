@@ -118,6 +118,7 @@ WYMAGANIA DOTYCZĄCE TREŚCI:
 9. MYŚLNIKI - gdy chcesz użyć myślnika lub półpauzy w zdaniu, ZAWSZE używaj wyłącznie zwykłego znaku "-" (dywiz). NIGDY nie używaj długiej kreski "–" ani "—" - te znaki charakterystycznie zdradzają tekst wygenerowany przez AI.
 10. TABELE - jeśli jakieś dane naprawdę lepiej prezentują się w formie tabeli (np. wyniki meczów, tabela grupowa rozgrywek, zestawienie liczb czy statystyk) - użyj akapitu z "type":"table" zamiast "type":"text", z polem "rows" (tablica wierszy - każdy wiersz to tablica komórek tekstowych, PIERWSZY wiersz to nagłówki kolumn). Używaj tabel OSZCZĘDNIE i tylko w naprawdę uzasadnionych przypadkach - zdecydowana większość akapitów powinna zostać zwykłym tekstem ("type":"text").
 11. LINKI DODATKOWE - ${validLinks.length ? `autor podał ${validLinks.length > 1 ? 'kilka linków' : 'link'} do potencjalnego dodania:\n` + linkInstructions : linkInstructions}
+12. JĘZYK - artykuł MUSI być napisany WYŁĄCZNIE po polsku, niezależnie od tego, w jakim języku autor wpisał notatki poniżej (nawet jeśli notatki są np. po angielsku). To niezależne od ustawień interfejsu - dotyczy wyłącznie treści artykułu.
 
 Kategoria wpisu: ${category.toUpperCase()}
 Oto pełna treść notatek oraz zebranych informacji o wydarzeniu:
@@ -143,6 +144,7 @@ Otrzymujesz GOTOWY, w całości napisany przez człowieka artykuł dla portalu S
 2. Dodać znaczniki <strong> i <em> tam, gdzie faktycznie warto podkreślić ważną informację, liczbę, cytat lub nazwę własną.
 3. NIC WIĘCEJ. Zabronione jest: zmienianie znaczenia zdań, dodawanie nowych zdań, usuwanie zdań, przestawianie kolejności, zmiana faktów, "ulepszanie" stylu ponad to, co napisał autor. Tekst MA pozostać w 99% dosłownie tym, co napisał autor - Twoja ingerencja ma być NIEZAUWAŻALNA poza poprawkami literówek i pogrubieniami.
 4. Myślniki: jeśli musisz cokolwiek dopisać/poprawić w tym zakresie, używaj WYŁĄCZNIE zwykłego znaku "-", nigdy "–" ani "—".
+5. JĘZYK - wynik MUSI być po polsku, niezależnie od tego, w jakim języku autor napisał tekst poniżej (jeśli notatki/tekst są w innym języku, przetłumacz je na polski, zachowując zasady z punktu 3).
 
 LEAD:
 ${lead}
@@ -231,6 +233,60 @@ Bez markdownu, bez wstępów, bez komentarzy poza obiektem JSON.`;
         const jsonMatch = raw.match(/\{[\s\S]*\}/);
         const parsed = JSON.parse(jsonMatch ? jsonMatch[0] : raw);
         return Array.isArray(parsed.tags) ? parsed.tags : [];
+    },
+
+    // Pkt 7 (tryb pół-automatyczny): tania, szybka kontrola "kompletności" tekstu PRZED konwersją
+    // na kod Wordpressa - czy autor nie zapomniał o istotnych informacjach dziennikarskich
+    // (data, miejsce, organizator, atmosfera/przebieg). Celowo BEZ czepialstwa - zwraca sugestie
+    // TYLKO gdy czegoś naprawdę istotnego brakuje, pusta tablica = tekst uznany za kompletny.
+    async checkArticleCompleteness(articleText, options = {}) {
+        const prompt = `${AGENCY_CONTEXT}
+
+Jesteś redaktorem naczelnym SAF Jamnik sprawdzającym gotowy tekst przed publikacją. Poniżej znajduje się artykuł napisany samodzielnie przez redaktora. Sprawdź, czy w tekście NIE brakuje istotnych informacji dziennikarskich, takich jak: data/czas wydarzenia, miejsce, organizator, przebieg/atmosfera wydarzenia.
+
+WAŻNE: bądź wyrozumiały, nie czepiaj się drobiazgów - zgłaszaj TYLKO wyraźne, realne braki, które faktycznie zubażają tekst jako relację z wydarzenia. Jeśli tekst jest kompletny (albo brakujące elementy są nieistotne), zwróć pustą tablicę.
+
+Treść artykułu:
+${articleText}
+
+ODPOWIEDZ WYŁĄCZNIE CZYSTYM, SUROWYM KODEM JSON w formacie:
+{"suggestions": ["krótka porada 1", "krótka porada 2"]}
+Bez markdownu, bez wstępów, bez komentarzy poza obiektem JSON.`;
+
+        const raw = await this.callGeminiRaw(prompt, {
+            temperature: 0.3, maxOutputTokens: 400, thinkingConfig: { thinkingBudget: 0 }
+        }, options);
+
+        const jsonMatch = raw.match(/\{[\s\S]*\}/);
+        const parsed = JSON.parse(jsonMatch ? jsonMatch[0] : raw);
+        return Array.isArray(parsed.suggestions) ? parsed.suggestions : [];
+    },
+
+    // Pkt 11 (przełącznik języka interfejsu): zbiorcze tłumaczenie listy polskich tekstów UI na
+    // angielski, w JEDNYM wywołaniu (żeby nie mnożyć kosztu/czasu na każdy pojedynczy string).
+    // Wymusza DOKŁADNIE tyle samo elementów w odpowiedzi co na wejściu (wynik jest mapowany
+    // pozycyjnie z powrotem na oryginalne stringi w app.js).
+    async translateStrings(strings, options = {}) {
+        if (!strings || strings.length === 0) return [];
+
+        const numbered = strings.map((s, i) => `[${i}] ${s}`).join('\n');
+        const prompt = `Jesteś tłumaczem interfejsu aplikacji webowej. Przetłumacz poniższe polskie teksty interfejsu użytkownika na naturalny, poprawny angielski (styl zwięzły, jak w interfejsach aplikacji). Zachowaj wszelkie znaczniki HTML, symbole (np. emoji) i formatowanie dokładnie w tym samym miejscu co w oryginale.
+
+Teksty do przetłumaczenia (każdy oznaczony numerem w nawiasach kwadratowych):
+${numbered}
+
+ODPOWIEDZ WYŁĄCZNIE CZYSTYM, SUROWYM KODEM JSON w formacie:
+{"translations": ["translation 0", "translation 1"]}
+Tablica "translations" MUSI mieć DOKŁADNIE ${strings.length} elementów, w tej samej kolejności co powyżej. Bez markdownu, bez wstępów, bez komentarzy poza obiektem JSON.`;
+
+        const raw = await this.callGeminiRaw(prompt, {
+            temperature: 0.2, thinkingConfig: { thinkingBudget: 0 }
+        }, options);
+
+        const jsonMatch = raw.match(/\{[\s\S]*\}/);
+        const parsed = JSON.parse(jsonMatch ? jsonMatch[0] : raw);
+        const translations = Array.isArray(parsed.translations) ? parsed.translations : [];
+        return strings.map((s, i) => translations[i] ?? s);
     },
 
     // Rozpoznaje błędy PRZECIĄŻENIA serwerów Google (zbyt duży ruch, "high demand") - odróżniamy

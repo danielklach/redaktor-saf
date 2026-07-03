@@ -35,15 +35,15 @@
             <img src="assets/redaktor-saf-emblem.svg" alt="Redaktor SAFi" class="logo-emblem">
             <span class="logo-text">
                 <span class="logo-line">Redaktor</span>
-                <span class="logo-line">SAFi <span class="logo-version" data-release-date="2026-07-03">ver. 1.11.0</span></span>
+                <span class="logo-line">SAFi <span class="logo-version" data-release-date="2026-07-03">ver. 1.11.1</span></span>
             </span>
         </a>
         <div class="mode-switcher-wrap">
             <label for="modeSwitcher" class="mode-switcher-label">🛠️ Tryb pracy:</label>
             <select id="modeSwitcher">
-                <option value="auto">🤖 Automatyczny (AI pisze całość)</option>
-                <option value="semi">✍️ Pół-automatyczny (Ty piszesz, AI formatuje)</option>
-                <option value="manual">🔧 Manualny (bez AI, tylko zdjęcia)</option>
+                <option value="auto">🤖 Automatyczny</option>
+                <option value="semi">✍️ Pół-automatyczny</option>
+                <option value="manual">🔧 Manualny</option>
             </select>
         </div>
 
@@ -51,6 +51,7 @@
             <button type="button" id="btnShowIntro" class="btn-secondary">ℹ️ Jak korzystać?</button>
             <button type="button" id="btnReportIssue" class="btn-secondary">⚠️ Zgłoś problem</button>
             <a href="https://jamnik.uwm.edu.pl/strefa-czlonka/" target="_blank" rel="noopener noreferrer" class="btn-secondary">🔑 Strefa Członka</a>
+            <button type="button" id="btnLangSwitch" class="btn-lang-switch" title="Change interface language" data-no-translate>🌐 EN</button>
         </div>
     </header>
 
@@ -159,15 +160,8 @@
             <div id="fileStatus" class="file-status"></div>
 
             <div id="manualInstructions" class="manual-instructions hidden">
-                <h3>🔧 Jak samodzielnie sformatować wpis w WordPressie</h3>
-                <p class="info-text">Bez AI - po prostu wklej poniższe elementy w Edytorze Kodu WordPressa, zachowując tę strukturę:</p>
-                <ul>
-                    <li><strong>Lead</strong> (pierwszy akapit, zajawka) - zawsze jako blok <code>generateblocks/text</code> z <code>tagName: "h6"</code>.</li>
-                    <li><strong>Śródtytuły</strong> (nagłówki sekcji) - zawsze jako blok <code>generateblocks/text</code> z <code>tagName: "h5"</code>.</li>
-                    <li><strong>Zwykłe akapity</strong> - standardowy blok <code>wp:paragraph</code>.</li>
-                    <li><strong>Obrazek wyróżniający</strong> (ten oznaczony ⭐ na liście wyżej) - ustaw go ręcznie jako "Featured Image" w ustawieniach wpisu. NIE wklejaj go w treść ani w galerię - wyświetli się automatycznie nad leadem.</li>
-                    <li><strong>Pozostałe zdjęcia</strong> - wklej jako bloki <code>wp:image</code> w odpowiednich miejscach treści (albo jako galerię na końcu), używając adresów z listy plików wyżej - każde zdjęcie po wgraniu do Biblioteki Mediów trafi pod adres <code>{adres strony}/wp-content/uploads/{nazwa-pliku}</code>, dokładnie taki, jak nazwa widoczna na liście powyżej.</li>
-                </ul>
+                <h3>🔧 Tryb manualny</h3>
+                <p class="info-text">To opcja dla zaawansowanych redaktorów - przyjrzyj się, jak wyglądają inne wpisy na stronie SAF Jamnik, i twórz w podobnym stylu. Pamiętaj: lead zawsze piszemy w atrybucie h6, a śródtytuły w h5. Przed publikacją nie zapomnij dodać obrazka wyróżniającego, kategorii i tagów! Żeby zobaczyć, jak to wygląda w praktyce, wygeneruj najpierw próbny wpis w trybie automatycznym, a potem twórz własne w pełni manualnie.</p>
             </div>
 
             <div class="actions">
@@ -216,25 +210,19 @@
                     </div>
 
                     <div id="aiOutput" class="hidden">
-                        <!-- Pkt "stonuj edycję w trybie auto": zakładki tekst/kod są domyślnie zwinięte -
-                             można to samo poprawić wygodniej bezpośrednio w edytorze blokowym WordPressa. -->
-                        <button type="button" id="btnToggleEditPanel" class="btn-toggle-edit">✏️ Chcesz coś jeszcze poprawić przed skopiowaniem? <span class="btn-toggle-edit-hint">(zwykle wygodniej zrobić to bezpośrednio w edytorze WordPressa)</span></button>
+                        <div class="output-tabs">
+                            <button type="button" id="tabCodeView" class="output-tab active">🧩 Kod Gutenberga</button>
+                            <button type="button" id="tabTextView" class="output-tab">📝 Tekst artykułu</button>
+                        </div>
 
-                        <div id="editPanelWrap" class="hidden">
-                            <div class="output-tabs">
-                                <button type="button" id="tabTextView" class="output-tab active">📝 Tekst artykułu</button>
-                                <button type="button" id="tabCodeView" class="output-tab">🧩 Kod Gutenberga</button>
-                            </div>
+                        <div id="codeViewPanel" class="output-panel">
+                            <label for="gutenbergOutput">Kod do wklejenia do Edytora Kodu WordPress (Gutenberg):</label>
+                            <textarea id="gutenbergOutput" rows="12" readonly></textarea>
+                        </div>
 
-                            <div id="textViewPanel" class="output-panel">
-                                <p class="info-text" style="margin-top: 10px;">Możesz tu jeszcze poprawić, dopisać lub usunąć fragmenty tekstu przed skopiowaniem - to czysty tekst, bez znaczników HTML i bez zdjęć (te są tylko w kodzie Gutenberga). Zaczynasz od leadu, kolejne akapity oddziel pustą linią; żeby dodać śródtytuł, zacznij akapit od "## Śródtytuł". Tabelę zapisz wierszami w formie "| komórka | komórka |", a przycisk-link jako ostatni akapit w formie "[PRZYCISK: etykieta -> adres URL]".</p>
-                                <textarea id="articleTextInput" rows="14"></textarea>
-                            </div>
-
-                            <div id="codeViewPanel" class="output-panel hidden">
-                                <label for="gutenbergOutput">Kod do wklejenia do Edytora Kodu WordPress (Gutenberg):</label>
-                                <textarea id="gutenbergOutput" rows="12" readonly></textarea>
-                            </div>
+                        <div id="textViewPanel" class="output-panel hidden">
+                            <p class="info-text" style="margin-top: 10px;">Możesz tu jeszcze poprawić, dopisać lub usunąć fragmenty tekstu przed skopiowaniem - to czysty tekst, bez znaczników HTML i bez zdjęć (te są tylko w kodzie Gutenberga). Zaczynasz od leadu, kolejne akapity oddziel pustą linią; żeby dodać śródtytuł, zacznij akapit od "## Śródtytuł". Tabelę zapisz wierszami w formie "| komórka | komórka |", a przycisk-link jako ostatni akapit w formie "[PRZYCISK: etykieta -> adres URL]".</p>
+                            <textarea id="articleTextInput" rows="14"></textarea>
                         </div>
                     </div>
                 </div>
@@ -252,7 +240,7 @@
                     <button id="btnCopyTags" class="btn-secondary">Kopiuj</button>
                 </div>
                 <div class="meta-row-split">
-                    <span><strong>Data publikacji (WP):</strong> <span id="sugDate">-</span></span>
+                    <span id="metaDateItem"><strong>Data publikacji (WP):</strong> <span id="sugDate">-</span></span>
                     <span><strong>Obrazek wyróżniający:</strong> <span id="sugFeaturedImage">-</span></span>
                 </div>
                 <p class="info-text" style="margin: 8px 0 0;">ℹ️ Obrazek wyróżniający ustaw ręcznie jako "Featured Image" w WordPressie - nie jest wpleciony w treść ani galerię.</p>
@@ -290,46 +278,52 @@
             <h2>Piszesz Artykuł Samodzielnie</h2>
             <p class="info-text">Treść w całości piszesz Ty - AI tylko dostosuje formatowanie (śródtytuły, pogrubienia) i poprawi ewentualne literówki, bez zmiany treści ani sensu.</p>
 
-            <div class="form-group" style="margin-bottom: 20px;">
-                <label for="semiCategory"><strong>Kategoria wpisu</strong> (pomaga dobrać trafne tagi):</label>
-                <select id="semiCategory">
-                    <option value="kultura">Kultura</option>
-                    <option value="nauka">Nauka</option>
-                    <option value="sport">Sport</option>
-                    <option value="zapowiedzi">Zapowiedzi</option>
-                    <option value="zycie">Z życia agencji</option>
-                </select>
-            </div>
+            <div class="grid-2col">
+                <div class="review-zone">
+                    <h3>Piszesz Artykuł</h3>
 
-            <div class="form-group">
-                <label for="semiTitleInput">Tytuł wpisu:</label>
-                <div class="input-with-assist">
-                    <input type="text" id="semiTitleInput" placeholder="Wymyśl chwytliwy tytuł...">
-                    <button type="button" id="btnSuggestTitle" class="btn-secondary">🪄 AI zasugeruj</button>
-                </div>
-            </div>
+                    <div class="form-group" style="margin-top: 0;">
+                        <label for="semiCategory"><strong>Kategoria wpisu</strong> (pomaga dobrać trafne tagi):</label>
+                        <select id="semiCategory">
+                            <option value="kultura">Kultura</option>
+                            <option value="nauka">Nauka</option>
+                            <option value="sport">Sport</option>
+                            <option value="zapowiedzi">Zapowiedzi</option>
+                            <option value="zycie">Z życia agencji</option>
+                        </select>
+                    </div>
 
-            <div class="form-group">
-                <label for="semiTagsInput">Tagi (opcjonalnie, oddziel przecinkami):</label>
-                <div class="input-with-assist">
-                    <input type="text" id="semiTagsInput" placeholder="np. kultura, koncert, kortowo">
-                    <button type="button" id="btnSuggestTags" class="btn-secondary">🪄 AI zasugeruj</button>
-                </div>
-            </div>
+                    <div class="form-group">
+                        <label for="semiTitleInput">Tytuł wpisu:</label>
+                        <div class="input-with-assist">
+                            <input type="text" id="semiTitleInput" placeholder="Wymyśl chwytliwy tytuł...">
+                            <button type="button" id="btnSuggestTitle" class="btn-secondary">🪄 AI zasugeruj</button>
+                        </div>
+                    </div>
 
-            <div class="form-group">
-                <label for="semiArticleInput">Treść artykułu:</label>
-                <p class="info-text">Zaczynasz od leadu, kolejne akapity oddziel pustą linią; żeby dodać śródtytuł, zacznij akapit od "## Śródtytuł". Tabelę zapisz wierszami w formie "| komórka | komórka |", a przycisk-link jako ostatni akapit w formie "[PRZYCISK: etykieta -> adres URL]". AI doda tu tylko pogrubienia/kursywę tam, gdzie warto, i poprawi literówki - NIE zmieni treści ani sensu.</p>
-                <textarea id="semiArticleInput" rows="16" placeholder="Lead artykułu (2-4 zdania)...
+                    <div class="form-group">
+                        <label for="semiTagsInput">Tagi (opcjonalnie, oddziel przecinkami):</label>
+                        <div class="input-with-assist">
+                            <input type="text" id="semiTagsInput" placeholder="np. kultura, koncert, kortowo">
+                            <button type="button" id="btnSuggestTags" class="btn-secondary">🪄 AI zasugeruj</button>
+                        </div>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="semiArticleInput">Treść artykułu:</label>
+                        <p class="info-text">Zaczynasz od leadu, kolejne akapity oddziel pustą linią; żeby dodać śródtytuł, zacznij akapit od "## Śródtytuł". Tabelę zapisz wierszami w formie "| komórka | komórka |", a przycisk-link jako ostatni akapit w formie "[PRZYCISK: etykieta -> adres URL]". AI doda tu tylko pogrubienia/kursywę tam, gdzie warto, i poprawi literówki - NIE zmieni treści ani sensu.</p>
+                        <textarea id="semiArticleInput" rows="14" placeholder="Lead artykułu (2-4 zdania)...
 
 Pierwszy akapit treści...
 
 ## Śródtytuł (opcjonalnie)
 Kolejny akapit..."></textarea>
-            </div>
+                    </div>
 
-            <button id="btnConvertSemi" class="btn-primary w-100" style="margin-top: 15px;">✨ Konwertuj na kod WordPress</button>
-            <button type="button" id="btnCopyExternalPromptSemi" class="btn-copy-external-subtle">Wolisz użyć innego AI? Skopiuj gotowy prompt</button>
+                    <button id="btnConvertSemi" class="btn-primary w-100" style="margin-top: 15px;">✨ Konwertuj na kod WordPress</button>
+                    <button type="button" id="btnCopyExternalPromptSemi" class="btn-copy-external-subtle">Wolisz użyć innego AI? Skopiuj gotowy prompt</button>
+                </div>
+            </div>
 
             <div class="actions">
                 <button id="btnBackToStep2FromSemi" class="btn-secondary">&larr; Wstecz</button>
@@ -406,6 +400,20 @@ Kolejny akapit..."></textarea>
         </div>
     </div>
 
+    <div id="semiAdviceModal" class="modal hidden">
+        <div class="modal-content">
+            <h3>💡 Zanim wygenerujemy kod...</h3>
+            <p class="info-text">AI zauważyło, że w Twoim tekście może brakować kilku istotnych informacji:</p>
+
+            <ul id="semiAdviceList"></ul>
+
+            <div class="modal-actions">
+                <button id="btnSemiAdviceFix" class="btn-secondary">Poprawiam tekst</button>
+                <button id="btnSemiAdviceIgnore" class="btn-primary">Ignoruj porady i konwertuj</button>
+            </div>
+        </div>
+    </div>
+
     <div id="reportModal" class="modal hidden">
         <div class="modal-content">
             <h3>⚠️ Zgłoś problem</h3>
@@ -450,7 +458,7 @@ Kolejny akapit..."></textarea>
         <button id="btnDismissInstall" class="install-banner-close" aria-label="Zamknij" title="Zamknij">✕</button>
     </div>
 
-    <script type="module" src="js/app.js?v=278"></script>
+    <script type="module" src="js/app.js?v=279"></script>
 
     <!-- Rejestracja Service Workera (PWA) - celowo osobny, zwykły skrypt (nie moduł aplikacji),
          żeby infrastruktura PWA działała niezależnie od ewentualnego błędu w js/app.js. -->

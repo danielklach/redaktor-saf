@@ -13,6 +13,14 @@ const WP_SITE_URL = "https://jamnik.uwm.edu.pl";
 const FEATURED_RATIO_TARGET = 3 / 2;
 const RATIO_TOLERANCE = 0.03;
 
+// Pkt 2 (v1.11.1): skróty nawigacyjne w adresie strony, osobne dla każdego trybu pracy, bo
+// numeracja kroków 1-3 nie jest wspólna między trybami (patrz handleHashNavigation).
+const HASH_ROUTES = {
+    a1: ['auto', 'step1'], a2: ['auto', 'step2'], a3: ['auto', 'step3'],
+    s1: ['semi', 'step2'], s2: ['semi', 'semiWriteStep'],
+    m1: ['manual', 'step2']
+};
+
 // Zdarzenie beforeinstallprompt trzeba przechwycić NA POZIOMIE MODUŁU (nie wewnątrz App.init,
 // które odpala się dopiero na DOMContentLoaded) - przeglądarka może je wysłać w dowolnym
 // momencie ładowania strony i dostajemy tylko jedną szansę, żeby je złapać i zablokować
@@ -49,7 +57,9 @@ const App = {
         aiFilenameSlug: null,
         // Ostatnio wygenerowane dane artykułu (title/lead/paragraphs/tags) - przechowywane, żeby
         // dało się je edytować w widoku tekstu i zregenerować z nich kod Gutenberga przed skopiowaniem.
-        aiData: null
+        aiData: null,
+        // Pkt 11: język interfejsu ('pl'|'en') - dotyczy WYŁĄCZNIE UI, nigdy treści artykułu (patrz App.t).
+        lang: localStorage.getItem('saf_lang') || 'pl'
     },
 
     init() {
@@ -64,6 +74,10 @@ const App = {
         this.updateFileNamePreview();
         this.applyModeUI();
         this.handleHashNavigation();
+        if (this.state.lang === 'en') {
+            this.btnLangSwitch.textContent = '🌐 PL';
+            this.collectAndTranslateStatic().catch(err => console.warn('[i18n] Nie udało się odtworzyć zapisanego języka:', err.message));
+        }
         if (installPromptPending) {
             installPromptPending = false;
             this.onInstallPromptAvailable();
@@ -165,8 +179,6 @@ const App = {
         this.aiFallbackMessage = document.getElementById('aiFallbackMessage');
         this.btnCopyFallbackPrompt = document.getElementById('btnCopyFallbackPrompt');
         this.aiOutput = document.getElementById('aiOutput');
-        this.btnToggleEditPanel = document.getElementById('btnToggleEditPanel');
-        this.editPanelWrap = document.getElementById('editPanelWrap');
         this.tabTextView = document.getElementById('tabTextView');
         this.tabCodeView = document.getElementById('tabCodeView');
         this.textViewPanel = document.getElementById('textViewPanel');
@@ -179,10 +191,12 @@ const App = {
         this.btnCopyTags = document.getElementById('btnCopyTags');
         this.sugFeaturedImage = document.getElementById('sugFeaturedImage');
         this.metaSuggestion = document.getElementById('metaSuggestion');
+        this.metaDateItem = document.getElementById('metaDateItem');
         this.aiActionsFooter = document.getElementById('aiActionsFooter');
 
         // Krok pisania w trybie pół-automatycznym
         this.semiWriteStep = document.getElementById('semiWriteStep');
+        this.semiGrid = document.querySelector('#semiWriteStep .grid-2col');
         this.semiCategory = document.getElementById('semiCategory');
         this.semiTitleInput = document.getElementById('semiTitleInput');
         this.btnSuggestTitle = document.getElementById('btnSuggestTitle');
@@ -193,6 +207,14 @@ const App = {
         this.btnCopyExternalPromptSemi = document.getElementById('btnCopyExternalPromptSemi');
         this.btnBackToStep2FromSemi = document.getElementById('btnBackToStep2FromSemi');
         this.btnStartNewSemi = document.getElementById('btnStartNewSemi');
+
+        // Pkt 7 (v1.11.1): "porady" przed konwersją w trybie pół-automatycznym
+        this.semiAdviceModal = document.getElementById('semiAdviceModal');
+        this.semiAdviceList = document.getElementById('semiAdviceList');
+        this.btnSemiAdviceFix = document.getElementById('btnSemiAdviceFix');
+        this.btnSemiAdviceIgnore = document.getElementById('btnSemiAdviceIgnore');
+
+        this.btnLangSwitch = document.getElementById('btnLangSwitch');
 
         this.footerYear = document.getElementById('footerYear');
         this.footerVersion = document.getElementById('footerVersion');
@@ -210,8 +232,14 @@ const App = {
         window.addEventListener('hashchange', () => this.handleHashNavigation());
 
         this.modeSwitcher.addEventListener('change', (e) => this.switchMode(e.target.value));
-        this.fileNameMonth.addEventListener('input', () => this.updateFileNamePreview());
-        this.fileNameEventName.addEventListener('input', () => this.updateFileNamePreview());
+        this.fileNameMonth.addEventListener('input', () => {
+            this.updateFileNamePreview();
+            if (Compressor.processedFiles.length > 0) this.renderFileList();
+        });
+        this.fileNameEventName.addEventListener('input', () => {
+            this.updateFileNamePreview();
+            if (Compressor.processedFiles.length > 0) this.renderFileList();
+        });
 
         this.btnShowIntro.addEventListener('click', () => this.introModal.classList.remove('hidden'));
         this.btnCloseIntro.addEventListener('click', () => {
@@ -278,14 +306,13 @@ const App = {
 
         this.tabTextView.addEventListener('click', () => this.switchOutputTab('text'));
         this.tabCodeView.addEventListener('click', () => this.switchOutputTab('code'));
-        this.btnToggleEditPanel.addEventListener('click', () => this.editPanelWrap.classList.toggle('hidden'));
 
         this.btnGoToStep3.addEventListener('click', () => {
             // Ta walidacja obrazka wyróżniającego dotyczy WSZYSTKICH trybów - zawsze potrzebny
             // jest jeden poziomy plik 3:2, niezależnie od tego, kto/co napisze treść.
             const hasFeaturedCandidate = Compressor.processedFiles.some(f => f.isFeatured || this.canBeFeatured(f));
             if (!hasFeaturedCandidate) {
-                alert('Żadne z wgranych zdjęć nie nadaje się na obrazek wyróżniający - musi być zdjęciem POZIOMYM w proporcjach 3:2. Dodaj przynajmniej jedno takie zdjęcie, zanim przejdziesz dalej.');
+                alert(this.t('Żadne z wgranych zdjęć nie nadaje się na obrazek wyróżniający - musi być zdjęciem POZIOMYM w proporcjach 3:2. Dodaj przynajmniej jedno takie zdjęcie, zanim przejdziesz dalej.'));
                 return;
             }
             if (this.state.mode === 'semi') {
@@ -335,6 +362,18 @@ const App = {
         this.btnSuggestTitle.addEventListener('click', () => this.suggestSemiTitle());
         this.btnSuggestTags.addEventListener('click', () => this.suggestSemiTags());
         this.btnConvertSemi.addEventListener('click', () => this.convertSemiArticle());
+
+        this.btnSemiAdviceFix.addEventListener('click', () => {
+            this.semiAdviceModal.classList.add('hidden');
+            this.semiArticleInput.focus();
+        });
+        this.btnSemiAdviceIgnore.addEventListener('click', () => {
+            this.semiAdviceModal.classList.add('hidden');
+            const pending = this._pendingSemiConversion;
+            if (pending) this.runSemiConversion(pending.title, pending.articleRaw);
+        });
+
+        this.btnLangSwitch.addEventListener('click', () => this.switchLanguage(this.state.lang === 'pl' ? 'en' : 'pl'));
     },
 
     // Jedyne miejsce pobierania zdjęć jest w Kroku 3 (po ewentualnym przemianowaniu przez AI),
@@ -390,7 +429,7 @@ const App = {
 
     onAppInstalled() {
         this.installBanner?.classList.add('hidden');
-        this.showToast('Aplikacja została zainstalowana! 🎉');
+        this.showToast(this.t('Aplikacja została zainstalowana! 🎉'));
     },
 
     // File System Access API pozwala zapisać zdjęcia BEZPOŚREDNIO na dysk, bez ZIP-a i bez
@@ -422,7 +461,7 @@ const App = {
             await this.performDirectorySave(dirHandle);
         } catch (err) {
             if (err.name === 'AbortError') return; // użytkownik zamknął okno wyboru - nic się nie stało
-            alert('Nie udało się zapisać zdjęć: ' + err.message);
+            alert(this.t('Nie udało się zapisać zdjęć:') + ' ' + err.message);
         }
     },
 
@@ -436,7 +475,7 @@ const App = {
         await rememberHandle(dirHandle);
         this._rememberedDirHandle = dirHandle;
 
-        this.showToast(`Zapisano ${count} ${count === 1 ? 'zdjęcie' : 'zdjęć'} w folderze "${folderName}"!`);
+        this.showToast(`${this.t('Zapisano')} ${count} ${count === 1 ? this.t('zdjęcie') : this.t('zdjęć')} ${this.t('w folderze')} "${folderName}"!`);
     },
 
     // Sprawdza proporcje oryginalnego zdjęcia (3:2, poziomo) z tolerancją na drobne niedokładności.
@@ -479,6 +518,170 @@ const App = {
         this.setFeaturedImage(pick.i);
     },
 
+    // Pkt 11: klucz cache tłumaczeń zawiera numer wersji aplikacji (czytany z nagłówka) - dzięki
+    // temu aktualizacja treści strony w nowej wersji automatycznie unieważnia stare tłumaczenia.
+    getI18nCacheKey() {
+        const versionEl = document.querySelector('.logo-version');
+        return 'saf_i18n_en_' + (versionEl ? versionEl.textContent.trim() : 'unknown');
+    },
+
+    getTranslationCache() {
+        try {
+            return JSON.parse(localStorage.getItem(this.getI18nCacheKey()) || '{}');
+        } catch {
+            return {};
+        }
+    },
+
+    saveTranslationCache(cache) {
+        try {
+            localStorage.setItem(this.getI18nCacheKey(), JSON.stringify(cache));
+        } catch (e) {
+            console.warn('[i18n] Nie udało się zapisać cache tłumaczeń:', e.message);
+        }
+    },
+
+    // Tłumaczenie tekstów DYNAMICZNYCH (alert/toast/komunikaty), których nie da się złapać
+    // przez chodzenie po DOM (patrz collectAndTranslateStatic) - w trybie PL zwraca oryginał
+    // bez zmian; w trybie EN zwraca wersję z cache'u, jeśli już przetłumaczona, w przeciwnym
+    // razie zwraca oryginał i dopisuje string do kolejki tłumaczenia w tle (zbiorczo, patrz
+    // _flushDynamicQueue) - kolejne wywołanie z tym samym tekstem skorzysta już z cache'u.
+    t(text) {
+        if (this.state.lang === 'pl' || !text) return text;
+        if (!this._translationCache) this._translationCache = this.getTranslationCache();
+        const cached = this._translationCache[text];
+        if (cached) return cached;
+        this._queueDynamicTranslation(text);
+        return text;
+    },
+
+    _queueDynamicTranslation(text) {
+        if (!this._dynamicQueue) this._dynamicQueue = new Set();
+        this._dynamicQueue.add(text);
+        clearTimeout(this._dynamicQueueTimer);
+        this._dynamicQueueTimer = setTimeout(() => this._flushDynamicQueue(), 400);
+    },
+
+    async _flushDynamicQueue() {
+        if (!this._dynamicQueue || this._dynamicQueue.size === 0) return;
+        const strings = Array.from(this._dynamicQueue);
+        this._dynamicQueue.clear();
+        try {
+            const translations = await Gemini.translateStrings(strings);
+            if (!this._translationCache) this._translationCache = this.getTranslationCache();
+            strings.forEach((s, i) => { this._translationCache[s] = translations[i]; });
+            this.saveTranslationCache(this._translationCache);
+        } catch (e) {
+            console.warn('[i18n] Nie udało się przetłumaczyć tekstów dynamicznych:', e.message);
+        }
+    },
+
+    // Chodzi po CAŁYM document.body i zbiera węzły tekstowe + atrybuty placeholder/title/aria-label
+    // do przetłumaczenia - pomijając <textarea>/<input>/<script>/<style> (wartości pól to dane
+    // użytkownika/AI, MAJĄ zostać po polsku niezależnie od języka interfejsu) oraz elementy
+    // oznaczone data-no-translate. Wywoływane TYLKO raz - lista węzłów (z zapamiętanym oryginalnym,
+    // polskim tekstem) jest cache'owana w this._i18nNodes, żeby powrót na PL nie wymagał AI.
+    collectTranslatableNodes() {
+        if (this._i18nNodes) return this._i18nNodes;
+
+        const nodes = [];
+        const isSkipped = (el) => !!(el.closest && el.closest('[data-no-translate]'));
+
+        const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT, {
+            acceptNode: (node) => {
+                if (!node.textContent || !node.textContent.trim()) return NodeFilter.FILTER_REJECT;
+                const parent = node.parentElement;
+                if (!parent) return NodeFilter.FILTER_REJECT;
+                if (parent.closest('textarea, input, script, style')) return NodeFilter.FILTER_REJECT;
+                if (isSkipped(parent)) return NodeFilter.FILTER_REJECT;
+                return NodeFilter.FILTER_ACCEPT;
+            }
+        });
+
+        let node;
+        while ((node = walker.nextNode())) {
+            nodes.push({ type: 'text', node, original: node.textContent });
+        }
+
+        document.body.querySelectorAll('[placeholder], [title], [aria-label]').forEach(el => {
+            if (isSkipped(el)) return;
+            ['placeholder', 'title', 'aria-label'].forEach(attr => {
+                const val = el.getAttribute(attr);
+                if (val && val.trim()) nodes.push({ type: 'attr', node: el, attr, original: val });
+            });
+        });
+
+        this._i18nNodes = nodes;
+        return nodes;
+    },
+
+    // Tłumaczy (jeśli trzeba) i podmienia CAŁĄ statyczną treść strony na angielską - w JEDNYM
+    // zbiorczym wywołaniu Gemini.translateStrings dla wszystkich jeszcze nieprzetłumaczonych
+    // tekstów (patrz cache w getTranslationCache/saveTranslationCache).
+    async collectAndTranslateStatic() {
+        const nodes = this.collectTranslatableNodes();
+        if (!this._translationCache) this._translationCache = this.getTranslationCache();
+        const cache = this._translationCache;
+
+        const missing = [];
+        const seen = new Set();
+        nodes.forEach(n => {
+            if (!cache[n.original] && !seen.has(n.original)) {
+                seen.add(n.original);
+                missing.push(n.original);
+            }
+        });
+
+        if (missing.length > 0) {
+            this.showToast('Translating interface...');
+            const translations = await Gemini.translateStrings(missing);
+            missing.forEach((s, i) => { cache[s] = translations[i]; });
+            this.saveTranslationCache(cache);
+        }
+
+        nodes.forEach(n => {
+            const translated = cache[n.original];
+            if (!translated) return;
+            if (n.type === 'text') n.node.textContent = translated;
+            else n.node.setAttribute(n.attr, translated);
+        });
+    },
+
+    // Powrót na polski jest błyskawiczny i BEZ żadnego wywołania AI - po prostu przywraca
+    // zapamiętany oryginalny tekst każdego węzła (this._i18nNodes).
+    restoreStaticOriginals() {
+        if (!this._i18nNodes) return;
+        this._i18nNodes.forEach(n => {
+            if (n.type === 'text') n.node.textContent = n.original;
+            else n.node.setAttribute(n.attr, n.original);
+        });
+    },
+
+    async switchLanguage(lang) {
+        if (lang === this.state.lang) return;
+        this.state.lang = lang;
+        localStorage.setItem('saf_lang', lang);
+
+        if (lang === 'pl') {
+            this.restoreStaticOriginals();
+            this.btnLangSwitch.textContent = '🌐 EN';
+            if (Compressor.processedFiles.length > 0) this.renderFileList(); // odśwież treść dynamiczną (np. listę plików)
+            return;
+        }
+
+        this.btnLangSwitch.textContent = '🌐 PL';
+        try {
+            await this.collectAndTranslateStatic();
+        } catch (error) {
+            alert('Could not translate the interface: ' + error.message);
+            this.state.lang = 'pl';
+            localStorage.setItem('saf_lang', 'pl');
+            this.btnLangSwitch.textContent = '🌐 EN';
+            return;
+        }
+        if (Compressor.processedFiles.length > 0) this.renderFileList();
+    },
+
     // Toast notification nienachalny popup na dole ekranu, zamiast systemowego alert() (pkt UI/UX).
     showToast(message) {
         const toast = document.createElement('div');
@@ -499,7 +702,7 @@ const App = {
         const category = this.reportCategory.value;
         const description = this.reportDescription.value.trim();
         if (!description) {
-            alert('Opisz proszę, na czym polega problem.');
+            alert(this.t('Opisz proszę, na czym polega problem.'));
             return;
         }
 
@@ -508,9 +711,9 @@ const App = {
             await Gemini.sendIssueReport(category, description);
             this.reportModal.classList.add('hidden');
             this.reportDescription.value = '';
-            this.showToast('Dzięki za zgłoszenie, zajmę się tym jak najszybciej!');
+            this.showToast(this.t('Dzięki za zgłoszenie, zajmę się tym jak najszybciej!'));
         } catch (error) {
-            alert('Nie udało się wysłać zgłoszenia: ' + error.message);
+            alert(this.t('Nie udało się wysłać zgłoszenia:') + ' ' + error.message);
         } finally {
             this.btnSendReport.disabled = false;
         }
@@ -569,15 +772,26 @@ const App = {
         if (targetIndicator) { targetIndicator.classList.add('active'); }
     },
 
-    // W adresie strony można wkleić np. "#3", żeby od razu przeskoczyć do Kroku 3 trybu
-    // automatycznego - wygodne przy testowaniu, żeby nie trzeba było za każdym razem ręcznie
-    // przechodzić przez Kroki 1 i 2. Celowo pomija normalną walidację (handleStep1Submit/goToStep3)
-    // - to skrót WYŁĄCZNIE nawigacyjny, więc pola danego kroku mogą zostać puste.
+    // W adresie strony można wkleić np. "#a3"/"#s2"/"#m1", żeby od razu przeskoczyć do danego
+    // kroku danego trybu - wygodne przy testowaniu, żeby nie trzeba było za każdym razem ręcznie
+    // przechodzić przez wcześniejsze kroki. Celowo pomija normalną walidację (handleStep1Submit/
+    // goToStep3) i resetAllFormState - to skrót WYŁĄCZNIE nawigacyjny, więc pola danego kroku
+    // mogą zostać puste, a dane z innych trybów NIE są czyszczone.
     handleHashNavigation() {
-        const match = window.location.hash.match(/^#([1-3])$/);
-        if (match) {
-            this.switchStep(`step${match[1]}`);
+        const match = window.location.hash.match(/^#([asm][0-9]+)$/);
+        if (!match) return;
+        const route = HASH_ROUTES[match[1]];
+        if (!route) return;
+
+        const [mode, step] = route;
+        if (mode !== this.state.mode) {
+            this.state.mode = mode;
+            this.modeSwitcher.value = mode;
+            this.updateStepsIndicatorForMode();
+            this.updateStep2FieldsForMode();
+            this.repositionSharedBlocks();
         }
+        this.switchStep(step);
     },
 
     // Wersja i data jej wprowadzenia w stopce - czytane BEZPOŚREDNIO z nagłówka (.logo-version
@@ -652,7 +866,7 @@ const App = {
         this.aiQuestionsContainer.innerHTML = "";
 
         if (!questions || questions.length === 0) {
-            this.aiQuestionsContainer.innerHTML = `<p class="info-text">Agent nie ma dodatkowych pytań - możesz przejść dalej.</p>`;
+            this.aiQuestionsContainer.innerHTML = `<p class="info-text">${this.t('Agent nie ma dodatkowych pytań - możesz przejść dalej.')}</p>`;
             return;
         }
 
@@ -667,7 +881,7 @@ const App = {
             const answer = document.createElement('textarea');
             answer.className = 'question-answer';
             answer.rows = 3;
-            answer.placeholder = "Twoja odpowiedź (opcjonalnie)...";
+            answer.placeholder = this.t("Twoja odpowiedź (opcjonalnie)...");
             answer.dataset.question = q;
 
             block.appendChild(qTitle);
@@ -686,22 +900,22 @@ const App = {
         const notes = this.evtNotes.value.trim();
 
         if (!cat) {
-            alert("BŁĄD: Musisz najpierw wybrać kategorię wpisu z listy.");
+            alert(this.t("BŁĄD: Musisz najpierw wybrać kategorię wpisu z listy."));
             return;
         }
 
         if (cat === 'kultura' || cat === 'sport' || cat === 'nauka') {
             if (!title || !loc || !start || !end || !notes) {
-                alert("BŁĄD: Musisz najpierw wypełnić WSZYSTKIE pola, aby przejść do wgrywania zdjęć.");
+                alert(this.t("BŁĄD: Musisz najpierw wypełnić WSZYSTKIE pola, aby przejść do wgrywania zdjęć."));
                 return;
             }
             if (new Date(end) < new Date(start)) {
-                alert("BŁĄD: Data zakończenia wydarzenia nie może być wcześniejsza niż data rozpoczęcia. Popraw daty i spróbuj ponownie.");
+                alert(this.t("BŁĄD: Data zakończenia wydarzenia nie może być wcześniejsza niż data rozpoczęcia. Popraw daty i spróbuj ponownie."));
                 return;
             }
         } else {
             if (!notes) {
-                alert("BŁĄD: Musisz najpierw wypełnić pole notatek.");
+                alert(this.t("BŁĄD: Musisz najpierw wypełnić pole notatek."));
                 return;
             }
         }
@@ -734,17 +948,17 @@ const App = {
                 onRetry: (attempt, maxAttempts, isFallback) => this.showRetryNotice(
                     this.aiRetryNotice,
                     isFallback
-                        ? '⚠️ Nadal duże obciążenie serwerów Google - próbuję z alternatywnym modelem...'
-                        : `⚠️ Serwery Google są mocno obciążone - ponawiam próbę (${attempt}/${maxAttempts})...`
+                        ? this.t('⚠️ Nadal duże obciążenie serwerów Google - próbuję z alternatywnym modelem...')
+                        : `${this.t('⚠️ Serwery Google są mocno obciążone - ponawiam próbę')} (${attempt}/${maxAttempts})...`
                 )
             });
-            progress.finish("Gotowe!");
+            progress.finish(this.t("Gotowe!"));
             this.renderQuestions(questions);
         } catch (error) {
             progress.stop();
             if (error.name === 'AbortError') return; // użytkownik kliknął "Pomiń" - nic więcej nie rób
             this.renderQuestions([
-                `Nie udało się połączyć z AI (${error.message}). Czy chcesz samodzielnie dodać jakieś kluczowe szczegóły, o których zapomniałeś w notatkach?`
+                `${this.t('Nie udało się połączyć z AI')} (${error.message}). ${this.t('Czy chcesz samodzielnie dodać jakieś kluczowe szczegóły, o których zapomniałeś w notatkach?')}`
             ]);
         } finally {
             this.hideRetryNotice(this.aiRetryNotice);
@@ -786,7 +1000,7 @@ const App = {
         });
 
         if (rejected.length > 0) {
-            alert(`Błędny format pliku - pominięto ${rejected.length} ${rejected.length === 1 ? 'plik' : 'plików'}:\n\n- ${rejected.join('\n- ')}\n\nObsługiwane formaty: JPG, PNG, TIFF, DNG, WEBP, HEIC, HEIF, GIF, AVIF, BMP.`);
+            alert(`${this.t('Błędny format pliku - pominięto')} ${rejected.length} ${rejected.length === 1 ? this.t('plik') : this.t('plików')}:\n\n- ${rejected.join('\n- ')}\n\n${this.t('Obsługiwane formaty: JPG, PNG, TIFF, DNG, WEBP, HEIC, HEIF, GIF, AVIF, BMP.')}`);
         }
 
         if (valid.length === 0) {
@@ -806,7 +1020,7 @@ const App = {
         this.uploadProgressWrap.classList.remove('hidden');
         this.uploadProgressLabel.classList.remove('hidden');
         this.uploadProgressBar.style.width = '0%';
-        this.uploadProgressLabel.textContent = `Przygotowywanie ${total} ${total === 1 ? 'zdjęcia' : 'zdjęć'}...`;
+        this.uploadProgressLabel.textContent = `${this.t('Przygotowywanie')} ${total} ${total === 1 ? this.t('zdjęcia') : this.t('zdjęć')}...`;
 
         // Wymuszenie natychmiastowego przerysowania strony PRZED zleceniem pracy workerom.
         await new Promise(resolve => requestAnimationFrame(resolve));
@@ -819,7 +1033,7 @@ const App = {
             const sum = fileProgress.reduce((a, b) => a + b, 0);
             const pct = Math.round(sum / total);
             this.uploadProgressBar.style.width = pct + '%';
-            this.uploadProgressLabel.textContent = `Przetwarzanie ${total} ${total === 1 ? 'zdjęcia' : 'zdjęć'}... (${pct}%)`;
+            this.uploadProgressLabel.textContent = `${this.t('Przetwarzanie')} ${total} ${total === 1 ? this.t('zdjęcia') : this.t('zdjęć')}... (${pct}%)`;
         };
 
         const tasks = valid.map((file, i) => {
@@ -854,7 +1068,7 @@ const App = {
         this.renderFileList();
 
         if (skipped.length > 0) {
-            alert(`Nie udało się przetworzyć ${skipped.length} z ${total} plików:\n\n- ${skipped.join('\n- ')}`);
+            alert(`${this.t('Nie udało się przetworzyć')} ${skipped.length} ${this.t('z')} ${total} ${this.t('plików')}:\n\n- ${skipped.join('\n- ')}`);
         }
     },
 
@@ -895,7 +1109,7 @@ const App = {
         this.fileStatus.innerHTML = "";
 
         if (Compressor.processedFiles.length === 0) {
-            this.fileStatus.innerHTML = "<p style='text-align:center; padding: 20px; color: var(--text-muted); border: 1px dashed var(--border); border-radius: 6px;'>Brak dodanych zdjęć. Przeciągnij pliki wyżej, aby je dodać.</p>";
+            this.fileStatus.innerHTML = `<p style='text-align:center; padding: 20px; color: var(--text-muted); border: 1px dashed var(--border); border-radius: 6px;'>${this.t('Brak dodanych zdjęć. Przeciągnij pliki wyżej, aby je dodać.')}</p>`;
             this.btnGoToStep3.disabled = true;
             return;
         }
@@ -910,25 +1124,25 @@ const App = {
             const statusIcon = file.isFeatured ? '⭐' : '✅';
             const ratioInfo = this.getRatioInfo(file);
             const ratioWarning = ratioInfo.known && !ratioInfo.acceptable
-                ? `<div style="color: var(--danger); font-size: 0.75rem; margin-top: 2px;">⚠️ Nietypowe proporcje (zalecane 3:2, 2:3 lub pion 4:5)</div>`
+                ? `<div style="color: var(--danger); font-size: 0.75rem; margin-top: 2px;">⚠️ ${this.t('Nietypowe proporcje (zalecane 3:2, 2:3 lub pion 4:5)')}</div>`
                 : '';
             const featureBtnDisabled = !file.isFeatured && !ratioInfo.featuredEligible;
-            const featureBtnTitle = featureBtnDisabled ? ' title="Obrazek wyróżniający musi być zdjęciem poziomym w proporcjach 3:2"' : '';
+            const featureBtnTitle = featureBtnDisabled ? ` title="${this.t('Obrazek wyróżniający musi być zdjęciem poziomym w proporcjach 3:2')}"` : '';
 
             item.innerHTML = `
                 <div style="display: flex; align-items: center; gap: 15px;">
                     <img src="${file.previewUrl}" style="width: 55px; height: 55px; object-fit: cover; border-radius: 4px; border: 1px solid #3e3e4a;">
                     <div>
                         <span style="font-weight: 500; color: #fff; display: block;">${statusIcon} ${file.name}</span>
-                        <span style="color: var(--text-muted); font-size: 0.8rem;">Waga: ${sizeKB} KB</span>
+                        <span style="color: var(--text-muted); font-size: 0.8rem;">${this.t('Waga:')} ${sizeKB} KB</span>
                         ${ratioWarning}
                     </div>
                 </div>
                 <div style="display: flex; gap: 6px; flex-wrap: wrap;">
-                    <button class="btn-feature${file.isFeatured ? ' active' : ''}"${featureBtnTitle} ${featureBtnDisabled ? 'disabled' : ''} style="padding: 8px 12px; font-size: 0.85rem; border-radius: 4px; border: none; cursor: pointer;">${file.isFeatured ? '⭐ Wyróżniające' : '☆ Ustaw jako wyróżniające'}</button>
+                    <button class="btn-feature${file.isFeatured ? ' active' : ''}"${featureBtnTitle} ${featureBtnDisabled ? 'disabled' : ''} style="padding: 8px 12px; font-size: 0.85rem; border-radius: 4px; border: none; cursor: pointer;">${file.isFeatured ? '⭐ ' + this.t('Wyróżniające') : '☆ ' + this.t('Ustaw jako wyróżniające')}</button>
                     <button class="btn-up" style="background: #2e2e38; color: #fff; padding: 8px 12px; font-size: 0.85rem; border-radius: 4px; border: none; cursor: pointer;">▲</button>
                     <button class="btn-down" style="background: #2e2e38; color: #fff; padding: 8px 12px; font-size: 0.85rem; border-radius: 4px; border: none; cursor: pointer;">▼</button>
-                    <button class="btn-del" style="background: var(--danger); color: white; padding: 8px 12px; font-size: 0.85rem; border-radius: 4px; font-weight: bold; border: none; cursor: pointer;">Usuń</button>
+                    <button class="btn-del" style="background: var(--danger); color: white; padding: 8px 12px; font-size: 0.85rem; border-radius: 4px; font-weight: bold; border: none; cursor: pointer;">${this.t('Usuń')}</button>
                 </div>
             `;
 
@@ -1094,6 +1308,7 @@ const App = {
         this.sugTitleInput.value = '';
         this.sugTagsInput.value = '';
         this.sugDate.innerText = '-';
+        this.metaDateItem.classList.remove('hidden');
         this.sugFeaturedImage.textContent = '-';
         this.articleTextInput.value = '';
         this.gutenbergOutput.value = '';
@@ -1105,12 +1320,12 @@ const App = {
     // kolejny wpis bez ręcznego czyszczenia każdego pola z osobna. Pyta o potwierdzenie tylko,
     // gdy faktycznie jest coś do stracenia (świeży formularz nie musi straszyć niepotrzebnym oknem).
     startNewPost() {
-        if (this.hasUnsavedContent() && !window.confirm('Czy na pewno chcesz zacząć nowy wpis? Obecne dane, zdjęcia i wygenerowana treść zostaną utracone.')) {
+        if (this.hasUnsavedContent() && !window.confirm(this.t('Czy na pewno chcesz zacząć nowy wpis? Obecne dane, zdjęcia i wygenerowana treść zostaną utracone.'))) {
             return;
         }
         this.resetAllFormState();
         this.switchStep({ auto: 'step1', semi: 'step2', manual: 'step2' }[this.state.mode]);
-        this.showToast('Możesz zacząć pisać nowy wpis!');
+        this.showToast(this.t('Możesz zacząć pisać nowy wpis!'));
     },
 
     // Zmiana trybu pracy z górnego przełącznika - struktura kroków różni się między trybami
@@ -1119,7 +1334,7 @@ const App = {
     switchMode(newMode) {
         if (newMode === this.state.mode) return;
 
-        if (this.hasUnsavedContent() && !window.confirm('Zmiana trybu pracy zresetuje formularz - obecne dane, zdjęcia i wygenerowana treść zostaną utracone. Kontynuować?')) {
+        if (this.hasUnsavedContent() && !window.confirm(this.t('Zmiana trybu pracy zresetuje formularz - obecne dane, zdjęcia i wygenerowana treść zostaną utracone. Kontynuować?'))) {
             this.modeSwitcher.value = this.state.mode; // cofnij wizualną zmianę w <select>
             return;
         }
@@ -1172,9 +1387,9 @@ const App = {
     repositionSharedBlocks() {
         if (this.state.mode === 'semi') {
             this.semiArticleInput.insertAdjacentElement('afterend', this.linkInputGroup);
-            this.btnConvertSemi.insertAdjacentElement('afterend', this.aiActionsFooter);
-            this.btnConvertSemi.insertAdjacentElement('afterend', this.metaSuggestion);
-            this.btnConvertSemi.insertAdjacentElement('afterend', this.resultZone);
+            this.semiGrid.appendChild(this.resultZone);
+            this.semiGrid.insertAdjacentElement('afterend', this.aiActionsFooter);
+            this.semiGrid.insertAdjacentElement('afterend', this.metaSuggestion);
         } else if (this.state.mode === 'auto') {
             this.finalNotes.insertAdjacentElement('afterend', this.linkInputGroup);
             this.step3Grid.appendChild(this.resultZone);
@@ -1392,11 +1607,11 @@ const App = {
                 onRetry: (attempt, maxAttempts, isFallback) => this.showRetryNotice(
                     this.genRetryNotice,
                     isFallback
-                        ? '⚠️ Nadal duże obciążenie serwerów Google - próbuję z alternatywnym modelem...'
-                        : `⚠️ Serwery Google są mocno obciążone - ponawiam próbę (${attempt}/${maxAttempts})...`
+                        ? this.t('⚠️ Nadal duże obciążenie serwerów Google - próbuję z alternatywnym modelem...')
+                        : `${this.t('⚠️ Serwery Google są mocno obciążone - ponawiam próbę')} (${attempt}/${maxAttempts})...`
                 )
             });
-            progress.finish("Gotowe!");
+            progress.finish(this.t("Gotowe!"));
 
             const endVal = this.evtEnd.value;
             let pubDate = new Date();
@@ -1406,6 +1621,7 @@ const App = {
             }
 
             this.sugTitleInput.value = aiJson.title || '';
+            this.metaDateItem.classList.remove('hidden');
             this.sugDate.innerText = pubDate.toLocaleString('pl-PL');
             // Pkt "łatwe kopiowanie tagów": każdy tag zakończony przecinkiem, gotowy do wklejenia w WordPressie.
             this.sugTagsInput.value = aiJson.tags && aiJson.tags.length ? aiJson.tags.map(t => `${t},`).join(' ') : '';
@@ -1422,8 +1638,7 @@ const App = {
 
             this.state.aiData = aiJson;
             this.renderTextView(aiJson);
-            this.regenerateGutenbergCode();
-            this.switchOutputTab('text'); // zawsze zaczynamy od tekstu - kod dogeneruje się przy przełączeniu/kopiowaniu
+            this.switchOutputTab('code'); // domyślnie pokazujemy gotowy kod Gutenberga (regeneruje się przy przełączeniu)
 
             this.setResultState('output');
         } catch (error) {
@@ -1434,7 +1649,7 @@ const App = {
             // za to gotowy, samowystarczalny prompt do wklejenia w dowolnym zewnętrznym czacie AI
             // (patrz copyExternalPrompt - liczony na nowo z aktualnego stanu formularza, a nie z
             // zapamiętanej zmiennej, więc działa niezależnie od tego, co się stało z tym wywołaniem).
-            this.aiFallbackMessage.textContent = `Nie udało się połączyć z wbudowanym AI (${error.message}). Zdjęcia zachowały nazwy na podstawie nazwy wydarzenia z Kroku 1. Możesz skopiować kompletny prompt poniżej i wkleić go do dowolnego zewnętrznego czatu AI (np. ChatGPT, Claude, Gemini) - wynik będzie odpowiadał temu, co wygenerowałby Redaktor SAF.`;
+            this.aiFallbackMessage.textContent = `${this.t('Nie udało się połączyć z wbudowanym AI')} (${error.message}). ${this.t('Zdjęcia zachowały nazwy na podstawie nazwy wydarzenia z Kroku 1. Możesz skopiować kompletny prompt poniżej i wkleić go do dowolnego zewnętrznego czatu AI (np. ChatGPT, Claude, Gemini) - wynik będzie odpowiadał temu, co wygenerowałby Redaktor SAF.')}`;
             this.setResultState('fallback');
         } finally {
             this.hideRetryNotice(this.genRetryNotice);
@@ -1456,7 +1671,7 @@ const App = {
             this.gutenbergOutput.select();
             document.execCommand('copy');
         }
-        this.showToast('Skopiowano do schowka!');
+        this.showToast(this.t('Skopiowano do schowka!'));
     },
 
     // Pkt 6: osobny przycisk kopiujący sam tytuł wpisu
@@ -1468,7 +1683,7 @@ const App = {
             this.sugTitleInput.select();
             document.execCommand('copy');
         }
-        this.showToast('Skopiowano do schowka!');
+        this.showToast(this.t('Skopiowano do schowka!'));
     },
 
     // Osobny przycisk kopiujący tagi (każdy zakończony przecinkiem - gotowe do wklejenia w WordPressie)
@@ -1480,7 +1695,7 @@ const App = {
             this.sugTagsInput.select();
             document.execCommand('copy');
         }
-        this.showToast('Skopiowano do schowka!');
+        this.showToast(this.t('Skopiowano do schowka!'));
     },
 
     // Buduje TEN SAM prompt, który poszedłby do wbudowanego AI (pełne generowanie w trybie auto,
@@ -1527,14 +1742,14 @@ const App = {
             document.execCommand('copy');
             ta.remove();
         }
-        this.showToast('Skopiowano do schowka!');
+        this.showToast(this.t('Skopiowano do schowka!'));
     },
 
     // Tryb pół-automatyczny: przycisk "AI zasugeruj" dla tytułu, na podstawie już napisanej treści.
     async suggestSemiTitle() {
         const articleText = this.semiArticleInput.value.trim();
         if (!articleText) {
-            alert('Najpierw napisz treść artykułu, żeby AI mogło zaproponować tytuł.');
+            alert(this.t('Najpierw napisz treść artykułu, żeby AI mogło zaproponować tytuł.'));
             return;
         }
         this.btnSuggestTitle.disabled = true;
@@ -1542,7 +1757,7 @@ const App = {
             const title = await Gemini.suggestTitle(articleText);
             if (title) this.semiTitleInput.value = title;
         } catch (error) {
-            alert('Nie udało się zaproponować tytułu: ' + error.message);
+            alert(this.t('Nie udało się zaproponować tytułu:') + ' ' + error.message);
         } finally {
             this.btnSuggestTitle.disabled = false;
         }
@@ -1551,7 +1766,7 @@ const App = {
     async suggestSemiTags() {
         const articleText = this.semiArticleInput.value.trim();
         if (!articleText) {
-            alert('Najpierw napisz treść artykułu, żeby AI mogło zaproponować tagi.');
+            alert(this.t('Najpierw napisz treść artykułu, żeby AI mogło zaproponować tagi.'));
             return;
         }
         this.btnSuggestTags.disabled = true;
@@ -1559,7 +1774,7 @@ const App = {
             const tags = await Gemini.suggestTags(this.semiCategory.value, articleText);
             if (tags.length) this.semiTagsInput.value = tags.join(', ');
         } catch (error) {
-            alert('Nie udało się zaproponować tagów: ' + error.message);
+            alert(this.t('Nie udało się zaproponować tagów:') + ' ' + error.message);
         } finally {
             this.btnSuggestTags.disabled = false;
         }
@@ -1573,14 +1788,40 @@ const App = {
         const title = this.semiTitleInput.value.trim();
         const articleRaw = this.semiArticleInput.value.trim();
         if (!title) {
-            alert('Wpisz tytuł wpisu (albo kliknij "AI zasugeruj").');
+            alert(this.t('Wpisz tytuł wpisu (albo kliknij "AI zasugeruj").'));
             return;
         }
         if (!articleRaw) {
-            alert('Napisz treść artykułu, zanim spróbujesz go przekonwertować.');
+            alert(this.t('Napisz treść artykułu, zanim spróbujesz go przekonwertować.'));
             return;
         }
 
+        // Pkt 7: tania kontrola kompletności PRZED właściwą konwersją - jeśli AI uzna tekst za
+        // kompletny (albo kontrola się nie powiedzie z jakiegokolwiek powodu - fail-open, nie
+        // blokujemy użytkownika), od razu przechodzimy do runSemiConversion.
+        this.btnConvertSemi.disabled = true;
+        let suggestions = [];
+        try {
+            suggestions = await Gemini.checkArticleCompleteness(articleRaw);
+        } catch (error) {
+            console.warn('[Porady] Nie udało się sprawdzić kompletności tekstu:', error.message);
+        }
+        this.btnConvertSemi.disabled = false;
+
+        if (suggestions.length > 0) {
+            this._pendingSemiConversion = { title, articleRaw };
+            this.semiAdviceList.innerHTML = suggestions.map(s => `<li>${s}</li>`).join('');
+            this.semiAdviceModal.classList.remove('hidden');
+            return;
+        }
+
+        this.runSemiConversion(title, articleRaw);
+    },
+
+    // Dzisiejsza właściwa konwersja (retry/fallback, polishArticleText, budowa aiData) - wydzielona
+    // z convertSemiArticle, żeby dało się ją uruchomić dopiero PO ewentualnym potwierdzeniu porad
+    // (przycisk "Ignoruj porady i konwertuj") albo od razu, gdy AI nie miało żadnych uwag.
+    async runSemiConversion(title, articleRaw) {
         this.setResultState('loading');
 
         this._semiAbortController = new AbortController();
@@ -1606,16 +1847,18 @@ const App = {
                 onRetry: (attempt, maxAttempts, isFallback) => this.showRetryNotice(
                     this.genRetryNotice,
                     isFallback
-                        ? '⚠️ Nadal duże obciążenie serwerów Google - próbuję z alternatywnym modelem...'
-                        : `⚠️ Serwery Google są mocno obciążone - ponawiam próbę (${attempt}/${maxAttempts})...`
+                        ? this.t('⚠️ Nadal duże obciążenie serwerów Google - próbuję z alternatywnym modelem...')
+                        : `${this.t('⚠️ Serwery Google są mocno obciążone - ponawiam próbę')} (${attempt}/${maxAttempts})...`
                 )
             });
-            progress.finish('Gotowe!');
+            progress.finish(this.t('Gotowe!'));
 
             const tags = this.semiTagsInput.value.split(',').map(t => t.trim()).filter(Boolean);
 
             this.sugTitleInput.value = title;
-            this.sugDate.innerText = new Date().toLocaleString('pl-PL');
+            // Tryb pół-automatyczny nie zna prawdziwej daty publikacji (użytkownik jej nie podał) -
+            // w przeciwieństwie do trybu auto NIE zmyślamy jej, tylko chowamy ten wiersz (pkt 4).
+            this.metaDateItem.classList.add('hidden');
             this.sugTagsInput.value = tags.length ? tags.map(t => `${t},`).join(' ') : '';
 
             const featured = Compressor.processedFiles.find(f => f.isFeatured);
@@ -1630,14 +1873,13 @@ const App = {
                 filenameSlug: null // nazwy plików w tym trybie pochodzą z pól Kroku 2, nie od AI
             };
             this.renderTextView(this.state.aiData);
-            this.regenerateGutenbergCode();
-            this.switchOutputTab('text');
+            this.switchOutputTab('code'); // domyślnie pokazujemy gotowy kod Gutenberga
 
             this.setResultState('output');
         } catch (error) {
             progress.stop();
             if (error.name === 'AbortError') return;
-            this.aiFallbackMessage.textContent = `Nie udało się połączyć z wbudowanym AI (${error.message}). Możesz skopiować kompletny prompt poniżej i wkleić go do dowolnego zewnętrznego czatu AI - poprosi go o to samo (poprawki literówek i pogrubienia), co próbowało zrobić wbudowane AI.`;
+            this.aiFallbackMessage.textContent = `${this.t('Nie udało się połączyć z wbudowanym AI')} (${error.message}). ${this.t('Możesz skopiować kompletny prompt poniżej i wkleić go do dowolnego zewnętrznego czatu AI - poprosi go o to samo (poprawki literówek i pogrubienia), co próbowało zrobić wbudowane AI.')}`;
             this.setResultState('fallback');
         } finally {
             this.hideRetryNotice(this.genRetryNotice);
