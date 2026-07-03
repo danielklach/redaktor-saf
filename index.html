@@ -35,9 +35,18 @@
             <img src="assets/redaktor-saf-emblem.svg" alt="Redaktor SAFi" class="logo-emblem">
             <span class="logo-text">
                 <span class="logo-line">Redaktor</span>
-                <span class="logo-line">SAFi <span class="logo-version" data-release-date="2026-07-02">ver. 1.10.1</span></span>
+                <span class="logo-line">SAFi <span class="logo-version" data-release-date="2026-07-03">ver. 1.11.0</span></span>
             </span>
         </a>
+        <div class="mode-switcher-wrap">
+            <label for="modeSwitcher" class="mode-switcher-label">🛠️ Tryb pracy:</label>
+            <select id="modeSwitcher">
+                <option value="auto">🤖 Automatyczny (AI pisze całość)</option>
+                <option value="semi">✍️ Pół-automatyczny (Ty piszesz, AI formatuje)</option>
+                <option value="manual">🔧 Manualny (bez AI, tylko zdjęcia)</option>
+            </select>
+        </div>
+
         <div class="header-actions">
             <button type="button" id="btnShowIntro" class="btn-secondary">ℹ️ Jak korzystać?</button>
             <button type="button" id="btnReportIssue" class="btn-secondary">⚠️ Zgłoś problem</button>
@@ -47,9 +56,15 @@
 
     <main class="container">
         <div class="steps-indicator">
-            <div class="step active" data-step="1"><span class="step-num">1</span><span class="step-label">Dane wydarzenia</span></div>
-            <div class="step" data-step="2"><span class="step-num">2</span><span class="step-label">Przekazywanie zdjęć</span></div>
-            <div class="step" data-step="3"><span class="step-num">3</span><span class="step-label">Generowanie treści</span></div>
+            <!-- Tryb automatyczny: 3 kroki (bez zmian) -->
+            <div class="step active" data-step="step1" data-modes="auto"><span class="step-num">1</span><span class="step-label">Dane wydarzenia</span></div>
+            <div class="step" data-step="step2" data-modes="auto"><span class="step-num">2</span><span class="step-label">Przekazywanie zdjęć</span></div>
+            <div class="step" data-step="step3" data-modes="auto"><span class="step-num">3</span><span class="step-label">Generowanie treści</span></div>
+            <!-- Tryb pół-automatyczny: 2 kroki (reużywa Krok "zdjęcia", potem samo pisanie) -->
+            <div class="step hidden" data-step="step2" data-modes="semi"><span class="step-num">1</span><span class="step-label">Zdjęcia i nazwy</span></div>
+            <div class="step hidden" data-step="semiWriteStep" data-modes="semi"><span class="step-num">2</span><span class="step-label">Pisz artykuł</span></div>
+            <!-- Tryb manualny: 1 krok -->
+            <div class="step hidden" data-step="step2" data-modes="manual"><span class="step-num">1</span><span class="step-label">Zdjęcia i instrukcja</span></div>
         </div>
 
         <hr>
@@ -112,7 +127,22 @@
 
         <section id="step2" class="step-section">
             <h2>Wgranie i Kompresja Zdjęć</h2>
-            <p class="info-text">Wrzuć zdjęcia z wydarzenia w dowolnym profesjonalnym formacie i rozmiarze - aplikacja automatycznie przygotuje wersje zoptymalizowane pod stronę. Gotową paczkę ZIP pobierzesz w Kroku 3, po wygenerowaniu artykułu.</p>
+            <p class="info-text" id="step2IntroAuto">Wrzuć zdjęcia z wydarzenia w dowolnym profesjonalnym formacie i rozmiarze - aplikacja automatycznie przygotuje wersje zoptymalizowane pod stronę. Gotową paczkę ZIP pobierzesz w Kroku 3, po wygenerowaniu artykułu.</p>
+            <p class="info-text hidden" id="step2IntroOther">Wrzuć zdjęcia z wydarzenia w dowolnym profesjonalnym formacie i rozmiarze - aplikacja automatycznie przygotuje wersje zoptymalizowane pod stronę i nada im nazwy na podstawie danych poniżej.</p>
+
+            <div id="fileNamingFields" class="form-group hidden">
+                <div class="grid-2col" style="padding:0; margin:0;">
+                    <div>
+                        <label for="fileNameMonth">Miesiąc i rok wydarzenia:</label>
+                        <input type="month" id="fileNameMonth">
+                    </div>
+                    <div>
+                        <label for="fileNameEventName">Nazwa wydarzenia (do nazw plików):</label>
+                        <input type="text" id="fileNameEventName" placeholder="np. Koncert Myslovitz">
+                    </div>
+                </div>
+                <p class="info-text" id="fileNamePreview" style="margin-top:8px;">Podgląd nazwy pliku: <strong>2026-01-wydarzenie-01.webp</strong></p>
+            </div>
 
             <div class="dropzone" id="dropzone">
                 <p>Przeciągnij i upuść zdjęcia tutaj lub <span class="highlight" style="text-decoration: underline; pointer-events: none;">kliknij tutaj, aby wybrać z dysku</span></p>
@@ -127,6 +157,18 @@
             <p id="uploadProgressLabel" class="progress-label hidden"></p>
 
             <div id="fileStatus" class="file-status"></div>
+
+            <div id="manualInstructions" class="manual-instructions hidden">
+                <h3>🔧 Jak samodzielnie sformatować wpis w WordPressie</h3>
+                <p class="info-text">Bez AI - po prostu wklej poniższe elementy w Edytorze Kodu WordPressa, zachowując tę strukturę:</p>
+                <ul>
+                    <li><strong>Lead</strong> (pierwszy akapit, zajawka) - zawsze jako blok <code>generateblocks/text</code> z <code>tagName: "h6"</code>.</li>
+                    <li><strong>Śródtytuły</strong> (nagłówki sekcji) - zawsze jako blok <code>generateblocks/text</code> z <code>tagName: "h5"</code>.</li>
+                    <li><strong>Zwykłe akapity</strong> - standardowy blok <code>wp:paragraph</code>.</li>
+                    <li><strong>Obrazek wyróżniający</strong> (ten oznaczony ⭐ na liście wyżej) - ustaw go ręcznie jako "Featured Image" w ustawieniach wpisu. NIE wklejaj go w treść ani w galerię - wyświetli się automatycznie nad leadem.</li>
+                    <li><strong>Pozostałe zdjęcia</strong> - wklej jako bloki <code>wp:image</code> w odpowiednich miejscach treści (albo jako galerię na końcu), używając adresów z listy plików wyżej - każde zdjęcie po wgraniu do Biblioteki Mediów trafi pod adres <code>{adres strony}/wp-content/uploads/{nazwa-pliku}</code>, dokładnie taki, jak nazwa widoczna na liście powyżej.</li>
+                </ul>
+            </div>
 
             <div class="actions">
                 <button id="btnBackToStep1" class="btn-secondary">&larr; Wstecz</button>
@@ -151,14 +193,15 @@
                     </div>
 
                     <button id="btnTriggerAI" class="btn-primary w-100" style="margin-top: 15px;">★ Uruchom Magię AI</button>
+                    <button type="button" id="btnCopyExternalPrompt" class="btn-copy-external-subtle">Wolisz użyć innego AI? Skopiuj gotowy prompt</button>
                 </div>
 
-                <div class="result-zone">
+                <div class="result-zone" id="resultZone">
                     <h3>Wynik działania systemu</h3>
 
                     <div id="aiEmptyState" class="ai-empty-state">
                         <span class="ai-empty-icon">🪄</span>
-                        <p>Tutaj pojawi się gotowy artykuł - uzupełnij notatki obok i kliknij <strong>"Uruchom Magię AI"</strong>.</p>
+                        <p>Tutaj pojawi się gotowy wynik, gdy klikniesz główny przycisk.</p>
                     </div>
 
                     <div id="aiLoading" class="loading-spinner hidden">
@@ -173,19 +216,25 @@
                     </div>
 
                     <div id="aiOutput" class="hidden">
-                        <div class="output-tabs">
-                            <button type="button" id="tabTextView" class="output-tab active">📝 Tekst artykułu</button>
-                            <button type="button" id="tabCodeView" class="output-tab">🧩 Kod Gutenberga</button>
-                        </div>
+                        <!-- Pkt "stonuj edycję w trybie auto": zakładki tekst/kod są domyślnie zwinięte -
+                             można to samo poprawić wygodniej bezpośrednio w edytorze blokowym WordPressa. -->
+                        <button type="button" id="btnToggleEditPanel" class="btn-toggle-edit">✏️ Chcesz coś jeszcze poprawić przed skopiowaniem? <span class="btn-toggle-edit-hint">(zwykle wygodniej zrobić to bezpośrednio w edytorze WordPressa)</span></button>
 
-                        <div id="textViewPanel" class="output-panel">
-                            <p class="info-text" style="margin-top: 10px;">Możesz tu jeszcze poprawić, dopisać lub usunąć fragmenty tekstu przed skopiowaniem - to czysty tekst, bez znaczników HTML i bez zdjęć (te są tylko w kodzie Gutenberga). Zaczynasz od leadu, kolejne akapity oddziel pustą linią; żeby dodać śródtytuł, zacznij akapit od "## Śródtytuł". Tabelę zapisz wierszami w formie "| komórka | komórka |", a przycisk-link jako ostatni akapit w formie "[PRZYCISK: etykieta -> adres URL]".</p>
-                            <textarea id="articleTextInput" rows="14"></textarea>
-                        </div>
+                        <div id="editPanelWrap" class="hidden">
+                            <div class="output-tabs">
+                                <button type="button" id="tabTextView" class="output-tab active">📝 Tekst artykułu</button>
+                                <button type="button" id="tabCodeView" class="output-tab">🧩 Kod Gutenberga</button>
+                            </div>
 
-                        <div id="codeViewPanel" class="output-panel hidden">
-                            <label for="gutenbergOutput">Kod do wklejenia do Edytora Kodu WordPress (Gutenberg):</label>
-                            <textarea id="gutenbergOutput" rows="12" readonly></textarea>
+                            <div id="textViewPanel" class="output-panel">
+                                <p class="info-text" style="margin-top: 10px;">Możesz tu jeszcze poprawić, dopisać lub usunąć fragmenty tekstu przed skopiowaniem - to czysty tekst, bez znaczników HTML i bez zdjęć (te są tylko w kodzie Gutenberga). Zaczynasz od leadu, kolejne akapity oddziel pustą linią; żeby dodać śródtytuł, zacznij akapit od "## Śródtytuł". Tabelę zapisz wierszami w formie "| komórka | komórka |", a przycisk-link jako ostatni akapit w formie "[PRZYCISK: etykieta -> adres URL]".</p>
+                                <textarea id="articleTextInput" rows="14"></textarea>
+                            </div>
+
+                            <div id="codeViewPanel" class="output-panel hidden">
+                                <label for="gutenbergOutput">Kod do wklejenia do Edytora Kodu WordPress (Gutenberg):</label>
+                                <textarea id="gutenbergOutput" rows="12" readonly></textarea>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -217,8 +266,9 @@
                 </div>
             </div>
 
-            <div class="download-photos-cta">
-                <p><strong>Nie zapomnij zapisać zdjęć!</strong> To jedyne miejsce, w którym można je pobrać! Po pobraniu wrzuć je w biblioteki multimediów w Wordpressie.</p>
+            <div class="download-photos-cta" id="downloadPhotosCta">
+                <p id="downloadCtaTextAuto"><strong>Nie zapomnij zapisać zdjęć!</strong> To jedyne miejsce, w którym można je pobrać! Po pobraniu wrzuć je w biblioteki multimediów w Wordpressie.</p>
+                <p id="downloadCtaTextOther" class="hidden"><strong>Pobierz swoje zdjęcia!</strong> Po pobraniu wrzuć je w biblioteki multimediów w Wordpressie.</p>
 
                 <div class="download-options">
                     <!-- Zapis bezpośrednio na dysk (bez ZIP-a) - dostępny tylko w przeglądarkach z File
@@ -233,6 +283,57 @@
             <div class="actions">
                 <button id="btnBackToStep2" class="btn-secondary">&larr; Wstecz</button>
                 <button id="btnStartNew" class="btn-primary">🔄 Generuj kolejny wpis</button>
+            </div>
+        </section>
+
+        <section id="semiWriteStep" class="step-section">
+            <h2>Piszesz Artykuł Samodzielnie</h2>
+            <p class="info-text">Treść w całości piszesz Ty - AI tylko dostosuje formatowanie (śródtytuły, pogrubienia) i poprawi ewentualne literówki, bez zmiany treści ani sensu.</p>
+
+            <div class="form-group" style="margin-bottom: 20px;">
+                <label for="semiCategory"><strong>Kategoria wpisu</strong> (pomaga dobrać trafne tagi):</label>
+                <select id="semiCategory">
+                    <option value="kultura">Kultura</option>
+                    <option value="nauka">Nauka</option>
+                    <option value="sport">Sport</option>
+                    <option value="zapowiedzi">Zapowiedzi</option>
+                    <option value="zycie">Z życia agencji</option>
+                </select>
+            </div>
+
+            <div class="form-group">
+                <label for="semiTitleInput">Tytuł wpisu:</label>
+                <div class="input-with-assist">
+                    <input type="text" id="semiTitleInput" placeholder="Wymyśl chwytliwy tytuł...">
+                    <button type="button" id="btnSuggestTitle" class="btn-secondary">🪄 AI zasugeruj</button>
+                </div>
+            </div>
+
+            <div class="form-group">
+                <label for="semiTagsInput">Tagi (opcjonalnie, oddziel przecinkami):</label>
+                <div class="input-with-assist">
+                    <input type="text" id="semiTagsInput" placeholder="np. kultura, koncert, kortowo">
+                    <button type="button" id="btnSuggestTags" class="btn-secondary">🪄 AI zasugeruj</button>
+                </div>
+            </div>
+
+            <div class="form-group">
+                <label for="semiArticleInput">Treść artykułu:</label>
+                <p class="info-text">Zaczynasz od leadu, kolejne akapity oddziel pustą linią; żeby dodać śródtytuł, zacznij akapit od "## Śródtytuł". Tabelę zapisz wierszami w formie "| komórka | komórka |", a przycisk-link jako ostatni akapit w formie "[PRZYCISK: etykieta -> adres URL]". AI doda tu tylko pogrubienia/kursywę tam, gdzie warto, i poprawi literówki - NIE zmieni treści ani sensu.</p>
+                <textarea id="semiArticleInput" rows="16" placeholder="Lead artykułu (2-4 zdania)...
+
+Pierwszy akapit treści...
+
+## Śródtytuł (opcjonalnie)
+Kolejny akapit..."></textarea>
+            </div>
+
+            <button id="btnConvertSemi" class="btn-primary w-100" style="margin-top: 15px;">✨ Konwertuj na kod WordPress</button>
+            <button type="button" id="btnCopyExternalPromptSemi" class="btn-copy-external-subtle">Wolisz użyć innego AI? Skopiuj gotowy prompt</button>
+
+            <div class="actions">
+                <button id="btnBackToStep2FromSemi" class="btn-secondary">&larr; Wstecz</button>
+                <button id="btnStartNewSemi" class="btn-primary">🔄 Generuj kolejny wpis</button>
             </div>
         </section>
     </main>
@@ -253,18 +354,27 @@
                 </div>
             </div>
 
+            <div class="intro-mode-box">
+                <strong>🛠️ Najpierw wybierz tryb pracy</strong> (przełącznik na samej górze strony) - w każdej chwili możesz go zmienić:
+                <ul>
+                    <li><strong>🤖 Automatyczny</strong> (domyślny) - opisujesz wydarzenie w kilku zdaniach, a AI pisze CAŁY artykuł za Ciebie. Najszybszy.</li>
+                    <li><strong>✍️ Pół-automatyczny</strong> - piszesz artykuł w całości sam/a, a AI tylko poprawia literówki i dodaje formatowanie (bez zmiany treści ani sensu).</li>
+                    <li><strong>🔧 Manualny</strong> - żadnego AI - tylko konwerter zdjęć do WordPressa i instrukcja, jak samodzielnie sformatować wpis.</li>
+                </ul>
+            </div>
+
             <div class="intro-steps">
                 <div class="intro-step">
                     <span class="intro-step-num">1</span>
-                    <div><strong>Dane wydarzenia</strong><p>Opisz co, gdzie i kiedy - możesz też wkleić tekst z innego portalu jako źródło faktów.</p></div>
+                    <div><strong>Dane wydarzenia</strong><p>(tryb automatyczny) Opisz co, gdzie i kiedy - możesz też wkleić tekst z innego portalu jako źródło faktów.</p></div>
                 </div>
                 <div class="intro-step">
                     <span class="intro-step-num">2</span>
-                    <div><strong>Zdjęcia</strong><p>Wgraj zdjęcia w dowolnym formacie - aplikacja sama je skompresuje i przygotuje.</p></div>
+                    <div><strong>Zdjęcia</strong><p>Wgraj zdjęcia w dowolnym formacie - aplikacja sama je skompresuje i przygotuje pod WordPressa.</p></div>
                 </div>
                 <div class="intro-step">
                     <span class="intro-step-num">3</span>
-                    <div><strong>Generowanie</strong><p>Uruchom AI, pobierz zdjęcia i skopiuj gotowy kod wpisu do WordPressa.</p></div>
+                    <div><strong>Generowanie / pisanie</strong><p>Zależnie od trybu: AI napisze cały artykuł, Ty go napiszesz (a AI tylko sformatuje), albo dostaniesz gotowe zdjęcia i instrukcję do samodzielnej pracy.</p></div>
                 </div>
             </div>
 
@@ -340,7 +450,7 @@
         <button id="btnDismissInstall" class="install-banner-close" aria-label="Zamknij" title="Zamknij">✕</button>
     </div>
 
-    <script type="module" src="js/app.js?v=277"></script>
+    <script type="module" src="js/app.js?v=278"></script>
 
     <!-- Rejestracja Service Workera (PWA) - celowo osobny, zwykły skrypt (nie moduł aplikacji),
          żeby infrastruktura PWA działała niezależnie od ewentualnego błędu w js/app.js. -->

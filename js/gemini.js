@@ -124,6 +124,115 @@ Oto pełna treść notatek oraz zebranych informacji o wydarzeniu:
 ${notes}`;
     },
 
+    // Tryb pół-automatyczny: autor pisze artykuł CAŁKOWICIE sam, AI dostaje już POSTRUKTURYZOWANE
+    // lead+akapity (patrz app.js -> parseArticleText) i wolno mu WYŁĄCZNIE poprawić literówki oraz
+    // dodać <strong>/<em> tam, gdzie warto - żadnych zmian treści, sensu, kolejności czy długości.
+    // Publiczna (nie tylko wewnętrzna) metoda, żeby dało się zbudować DOKŁADNIE ten sam prompt do
+    // ręcznego skopiowania w app.js -> buildExternalPromptText (patrz tam), niezależnie od tego,
+    // czy wywołanie AI w ogóle się odbyło.
+    polishPromptTemplate({ lead, paragraphs }) {
+        const textParagraphs = (paragraphs || []).filter(p => p.type !== 'table');
+        const numbered = textParagraphs
+            .map((p, i) => `[AKAPIT ${i}]${p.heading ? ` (śródtytuł: "${p.heading}")` : ''}\n${p.text}`)
+            .join('\n\n');
+
+        return `${AGENCY_CONTEXT}
+
+Otrzymujesz GOTOWY, w całości napisany przez człowieka artykuł dla portalu SAF Jamnik. Twoim JEDYNYM zadaniem jest:
+1. Poprawić literówki oraz oczywiste błędy interpunkcyjne i ortograficzne.
+2. Dodać znaczniki <strong> i <em> tam, gdzie faktycznie warto podkreślić ważną informację, liczbę, cytat lub nazwę własną.
+3. NIC WIĘCEJ. Zabronione jest: zmienianie znaczenia zdań, dodawanie nowych zdań, usuwanie zdań, przestawianie kolejności, zmiana faktów, "ulepszanie" stylu ponad to, co napisał autor. Tekst MA pozostać w 99% dosłownie tym, co napisał autor - Twoja ingerencja ma być NIEZAUWAŻALNA poza poprawkami literówek i pogrubieniami.
+4. Myślniki: jeśli musisz cokolwiek dopisać/poprawić w tym zakresie, używaj WYŁĄCZNIE zwykłego znaku "-", nigdy "–" ani "—".
+
+LEAD:
+${lead}
+
+AKAPITY (każdy oznaczony numerem w nawiasach kwadratowych - MUSISZ zwrócić DOKŁADNIE tyle samo akapitów, w tej samej kolejności):
+${numbered || '(brak akapitów tekstowych - w artykule są tylko tabele/przyciski, które i tak zostają bez zmian)'}
+
+ODPOWIEDZ WYŁĄCZNIE CZYSTYM, SUROWYM KODEM JSON w formacie:
+{"lead": "poprawiony lead", "paragraphs": ["poprawiony akapit 0", "poprawiony akapit 1"]}
+Tablica "paragraphs" MUSI mieć DOKŁADNIE ${textParagraphs.length} elementów, w tej samej kolejności co powyżej. Bez markdownu, bez wstępów, bez komentarzy poza obiektem JSON.`;
+    },
+
+    // Wykonuje faktyczne wywołanie AI dla powyższego promptu i scala poprawiony tekst z powrotem
+    // w oryginalny kształt {lead, paragraphs} - akapity typu "table" przechodzą 1:1 (nie mają
+    // prozy do poprawiania, więc w ogóle nie idą do AI - patrz polishPromptTemplate).
+    async polishArticleText({ lead, paragraphs }, options = {}) {
+        const safeParagraphs = paragraphs || [];
+        const textIndices = [];
+        safeParagraphs.forEach((p, i) => { if (p.type !== 'table') textIndices.push(i); });
+
+        if (textIndices.length === 0 && !(lead || '').trim()) {
+            return { lead, paragraphs: safeParagraphs }; // nic do poprawienia (np. sama tabela)
+        }
+
+        const prompt = this.polishPromptTemplate({ lead, paragraphs: safeParagraphs });
+        const raw = await this.callGeminiRaw(prompt, {
+            temperature: 0.3, // nisko - to korekta, nie kreatywne pisanie
+            thinkingConfig: { thinkingBudget: 512 }
+        }, options);
+
+        const jsonMatch = raw.match(/\{[\s\S]*\}/);
+        const parsed = JSON.parse(jsonMatch ? jsonMatch[0] : raw);
+        const polishedTexts = Array.isArray(parsed.paragraphs) ? parsed.paragraphs : [];
+
+        const resultParagraphs = safeParagraphs.map((p, i) => {
+            if (p.type === 'table') return p;
+            const idx = textIndices.indexOf(i);
+            return { ...p, text: polishedTexts[idx] ?? p.text };
+        });
+
+        return { lead: parsed.lead || lead, paragraphs: resultParagraphs };
+    },
+
+    // Krótkie, szybkie sugestie tytułu/tagów na podstawie już napisanej treści (tryb pół-automatyczny,
+    // przyciski "AI zasugeruj") - te same niskokosztowe ustawienia co askForMissingDetails.
+    async suggestTitle(articleText, options = {}) {
+        const prompt = `${AGENCY_CONTEXT}
+
+Poniżej znajduje się treść artykułu napisanego przez redaktora SAF Jamnik. Zaproponuj JEDEN chwytliwy, ale wyważony tytuł (nie za długi - maks. ok. 70 znaków, nie za krótki ani lakoniczny) pasujący do tej treści.
+
+Treść artykułu:
+${articleText}
+
+ODPOWIEDZ WYŁĄCZNIE CZYSTYM, SUROWYM KODEM JSON w formacie:
+{"title": "Proponowany tytuł"}
+Bez markdownu, bez wstępów, bez komentarzy poza obiektem JSON.`;
+
+        const raw = await this.callGeminiRaw(prompt, {
+            temperature: 0.8, maxOutputTokens: 200, thinkingConfig: { thinkingBudget: 0 }
+        }, options);
+
+        const jsonMatch = raw.match(/\{[\s\S]*\}/);
+        const parsed = JSON.parse(jsonMatch ? jsonMatch[0] : raw);
+        return parsed.title || '';
+    },
+
+    async suggestTags(category, articleText, options = {}) {
+        const isAgencyLife = category === 'zycie';
+        const prompt = `${AGENCY_CONTEXT}
+
+Poniżej znajduje się treść artykułu napisanego przez redaktora SAF Jamnik (kategoria: ${category.toUpperCase()}). Zaproponuj od 2 do 5 pasujących tagów.
+
+W pierwszej kolejności wybieraj spośród tagów już istniejących na stronie: ${EXISTING_TAGS.join(", ")}. Własne, nowe tagi dodawaj TYLKO wtedy, gdy żaden z powyższych naprawdę nie pasuje.${isAgencyLife ? ` UWAGA - kategoria to "Z życia agencji": UNIKAJ typowo reporterskich tagów jak "reportaz" czy "olsztyn". Zamiast tego dobieraj tagi pasujące do wewnętrznego życia i integracji agencji, np.: ${AGENCY_LIFE_TAGS.join(", ")}.` : ''}
+
+Treść artykułu:
+${articleText}
+
+ODPOWIEDZ WYŁĄCZNIE CZYSTYM, SUROWYM KODEM JSON w formacie:
+{"tags": ["tag1", "tag2"]}
+Bez markdownu, bez wstępów, bez komentarzy poza obiektem JSON.`;
+
+        const raw = await this.callGeminiRaw(prompt, {
+            temperature: 0.7, maxOutputTokens: 200, thinkingConfig: { thinkingBudget: 0 }
+        }, options);
+
+        const jsonMatch = raw.match(/\{[\s\S]*\}/);
+        const parsed = JSON.parse(jsonMatch ? jsonMatch[0] : raw);
+        return Array.isArray(parsed.tags) ? parsed.tags : [];
+    },
+
     // Rozpoznaje błędy PRZECIĄŻENIA serwerów Google (zbyt duży ruch, "high demand") - odróżniamy
     // je celowo od innych błędów (zły klucz, brak promptu, nieznany model), bo TYLKO przeciążenie
     // ma sens ponawiać automatycznie - każdy inny błąd i tak powtórzyłby się identycznie,

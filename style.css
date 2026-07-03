@@ -48,6 +48,26 @@ header {
 .header-actions { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
 .header-actions a.btn-secondary { text-decoration: none; display: inline-flex; align-items: center; }
 
+/* Przełącznik trybu pracy - CELOWO wyróżniony (gruba, kolorowa ramka) w nagłówku, żeby był
+   najbardziej rzucającym się w oczy elementem obok logo - to najważniejszy wybór na stronie,
+   a sam <select> jednocześnie pełni rolę stałego wskaźnika aktualnie wybranego trybu. */
+.mode-switcher-wrap {
+    display: flex; align-items: center; gap: 10px; background: #1c1c22;
+    border: 2px solid var(--primary); border-radius: 8px; padding: 8px 14px;
+}
+.mode-switcher-label { font-weight: 700; font-size: 0.9rem; white-space: nowrap; }
+#modeSwitcher {
+    width: auto; font-weight: 600; font-size: 0.9rem; padding: 6px 10px;
+    border-color: var(--primary); cursor: pointer;
+}
+
+@media (max-width: 860px) {
+    .mode-switcher-wrap { width: 100%; flex-wrap: wrap; }
+    /* min-width:0 naprawia "grid/flex blowout": bez tego <select> nie chce się skurczyć poniżej
+       szerokości najdłuższej opcji, przez co wystawał poza ramkę na wąskich ekranach. */
+    #modeSwitcher { flex: 1 1 100%; min-width: 0; }
+}
+
 .container { max-width: 1200px; margin: 30px auto; padding: 0 20px; }
 
 .steps-indicator { display: flex; justify-content: space-between; gap: 8px; margin-bottom: 25px; }
@@ -123,6 +143,11 @@ h3 { margin-bottom: 15px; font-size: 1.1rem; color: var(--primary); }
 }
 
 .form-group label { display: block; margin-top: 15px; margin-bottom: 5px; font-weight: 600; font-size: 0.9rem; }
+
+/* Pole tekstowe + przycisk "AI zasugeruj" obok (tryb pół-automatyczny: tytuł/tagi) */
+.input-with-assist { display: flex; gap: 10px; flex-wrap: wrap; }
+.input-with-assist input { flex: 1; min-width: 200px; }
+.input-with-assist button { flex-shrink: 0; }
 input[type="text"], input[type="url"], input[type="password"], input[type="datetime-local"], select, textarea {
     width: 100%; padding: 10px; background: #0c0c0e; border: 1px solid var(--border); color: #fff; border-radius: 6px; font-size: 0.95rem;
 }
@@ -151,6 +176,19 @@ input[type="datetime-local"]::-webkit-calendar-picker-indicator {
 }
 
 .file-status { margin-top: 20px; max-height: 450px; overflow-y: auto; background: #0c0c0e; padding: 15px; border-radius: 6px; }
+
+/* Statyczna instrukcja formatowania w trybie manualnym (bez AI) */
+.manual-instructions {
+    background: #1c1c22; border: 1px solid var(--border); border-left: 4px solid var(--primary);
+    border-radius: 8px; padding: 18px 20px; margin-top: 20px;
+}
+.manual-instructions h3 { margin-bottom: 8px; }
+.manual-instructions ul { padding-left: 20px; margin-top: 10px; }
+.manual-instructions li { margin-bottom: 10px; line-height: 1.5; color: var(--text-color); }
+.manual-instructions code {
+    background: #0c0c0e; border: 1px solid var(--border); border-radius: 4px;
+    padding: 1px 5px; font-size: 0.85em; color: var(--primary);
+}
 
 .actions { display: flex; gap: 15px; margin-top: 30px; justify-content: flex-end; flex-wrap: wrap; }
 .w-100 { width: 100%; }
@@ -216,6 +254,15 @@ button:disabled { background: #2e2e38; color: var(--text-muted); cursor: not-all
 .intro-emoji { font-size: 1.8rem; line-height: 1; flex-shrink: 0; }
 .intro-header h3 { margin-bottom: 4px; }
 .intro-header p { margin-bottom: 0; color: var(--text-muted); font-size: 0.9rem; }
+
+/* Karta wyjaśniająca 3 tryby pracy w instrukcji startowej - pierwsza rzecz, jaką czyta nowy
+   użytkownik, więc krótko i konkretnie, z ikonami dla szybkiego skanowania wzrokiem. */
+.intro-mode-box {
+    background: #241c0d; border: 1px solid var(--border); border-left: 3px solid var(--primary);
+    border-radius: 6px; padding: 12px 14px; margin-bottom: 16px; font-size: 0.85rem;
+}
+.intro-mode-box ul { padding-left: 18px; margin-top: 8px; }
+.intro-mode-box li { margin-bottom: 6px; color: var(--text-color); line-height: 1.4; }
 
 .intro-steps { display: flex; flex-direction: column; gap: 10px; margin-bottom: 16px; }
 .intro-step {
@@ -296,8 +343,28 @@ button:disabled { background: #2e2e38; color: var(--text-muted); cursor: not-all
    gdy lewa kolumna (notatki + pole na link) jest wyższa niż tabki+tekst, to WŁAŚNIE textarea
    rośnie i wypełnia różnicę, zamiast zostawiać martwą, pustą przestrzeń pod spodem. */
 #aiOutput { flex: 1; display: flex; flex-direction: column; min-height: 0; }
+#editPanelWrap { flex: 1; display: flex; flex-direction: column; min-height: 0; }
 .output-panel { flex: 1; display: flex; flex-direction: column; min-height: 0; }
 #articleTextInput, #gutenbergOutput { flex: 1; min-height: 260px; }
+
+/* Pkt "stonuj edycję w trybie auto": zwinięty domyślnie link zamiast od razu widocznych zakładek -
+   zwykłe kopiowanie/pobranie nie wymaga w ogóle otwierania tego panelu. */
+.btn-toggle-edit {
+    background: transparent; border: 1px dashed var(--border); color: var(--text-muted);
+    font-size: 0.85rem; padding: 10px 14px; width: 100%; text-align: left;
+}
+.btn-toggle-edit:hover { border-color: var(--primary); color: var(--text-color); background: transparent; transform: none; box-shadow: none; }
+.btn-toggle-edit-hint { color: var(--text-muted); font-weight: 400; }
+
+/* Dyskretny link "skopiuj prompt dla zewnętrznego AI" - CELOWO stonowany (mały, podkreślony tekst
+   bez tła), żeby nie konkurował wizualnie z głównym przyciskiem generowania. Rzucający się w oczy
+   duży przycisk pojawia się dopiero PRZY BŁĘDZIE (patrz #aiFallback -> #btnCopyFallbackPrompt). */
+.btn-copy-external-subtle {
+    display: block; width: 100%; margin-top: 10px; background: transparent;
+    color: var(--text-muted); font-size: 0.78rem; font-weight: 400; text-decoration: underline;
+    padding: 4px; text-align: center; box-shadow: none;
+}
+.btn-copy-external-subtle:hover { color: var(--primary); background: transparent; transform: none; box-shadow: none; }
 
 /* Pola na opcjonalne linki do artykułu (Krok 3) - dowolna liczba "karteczek", każda z osobnym
    URL-em, opisem i przyciskiem usuwania w rogu; "+" na dole dokłada kolejną. */

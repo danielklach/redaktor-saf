@@ -23,8 +23,7 @@
         .policy-content p, .policy-content li { color: var(--text-color); line-height: 1.7; margin-bottom: 10px; }
         .policy-content ul { padding-left: 22px; margin-bottom: 14px; }
         .policy-content strong { color: #fff; }
-        .back-link { display: inline-block; margin-bottom: 20px; color: var(--primary); text-decoration: none; font-weight: 600; }
-        .back-link:hover { text-decoration: underline; }
+        .back-link { margin-bottom: 20px; text-decoration: none; }
     </style>
 </head>
 <body>
@@ -40,9 +39,9 @@
 
     <main class="container">
         <div class="policy-content">
-            <a href="/" class="back-link">&larr; Wróć do aplikacji</a>
+            <a href="/" class="back-link btn-secondary">&larr; Wróć do aplikacji</a>
             <h2>Polityka Prywatności</h2>
-            <p class="policy-updated">Ostatnia aktualizacja: 2 lipca 2026</p>
+            <p class="policy-updated">Ostatnia aktualizacja: 3 lipca 2026</p>
 
             <p>Redaktor SAFi to narzędzie Studenckiej Agencji Fotograficznej "Jamnik" (SAF Jamnik) przy Uniwersytecie Warmińsko-Mazurskim w Olsztynie, ułatwiające redaktorom agencji przygotowywanie wpisów na stronę. Poniżej, prostym językiem, wyjaśniamy dokładnie co dzieje się z Twoimi danymi podczas korzystania z tej aplikacji.</p>
 
@@ -52,9 +51,15 @@
             <h3>Czy trzeba założyć konto?</h3>
             <p>Nie. Aplikacja nie wymaga logowania, rejestracji ani podawania jakichkolwiek danych identyfikujących Cię jako osobę. Jest przeznaczona do użytku wewnętrznego przez redaktorów SAF Jamnik, ale sama w sobie nie sprawdza ani nie zapisuje, kto z niej korzysta.</p>
 
-            <h3>Co dzieje się z tekstem, który wpisujesz?</h3>
-            <p>Notatki, które wpisujesz w Kroku 1 i 3 (opis wydarzenia, ewentualny wklejony artykuł zewnętrzny, ostateczne uwagi do AI), są wysyłane do modelu sztucznej inteligencji <strong>Google Gemini</strong> wyłącznie po to, żeby wygenerować dla Ciebie gotowy tekst artykułu. Żądanie nie trafia do Google bezpośrednio z Twojej przeglądarki - przechodzi przez nasz własny, bezpieczny serwer pośredniczący (tzw. "Worker" na Cloudflare), który trzyma klucz dostępu do API po swojej stronie, żeby nigdy nie był widoczny w kodzie strony ani w Twojej przeglądarce.</p>
-            <p>Sama aplikacja Redaktor SAFi <strong>nie ma żadnej bazy danych</strong> - nie zapisuje wpisywanych notatek ani wygenerowanych artykułów na żadnym serwerze. Wszystko, co widzisz na ekranie, istnieje wyłącznie w pamięci Twojej przeglądarki i znika, gdy zamkniesz lub odświeżysz kartę (chyba że sam/sama coś skopiujesz lub zapiszesz). Przetwarzanie tekstu przez Google podlega odrębnie polityce prywatności Google.</p>
+            <h3>Trzy tryby pracy - co się dzieje z tekstem w każdym z nich?</h3>
+            <p>Redaktor SAFi ma trzy tryby pracy, wybierane przełącznikiem na górze strony - w każdym z nich AI ma inny zakres dostępu do Twojego tekstu:</p>
+            <ul>
+                <li><strong>Tryb automatyczny</strong> - Twoje notatki o wydarzeniu (opis, ewentualny wklejony artykuł zewnętrzny, uwagi do AI) są wysyłane do modelu <strong>Google Gemini</strong>, żeby wygenerować dla Ciebie CAŁY tekst artykułu.</li>
+                <li><strong>Tryb pół-automatyczny</strong> - artykuł piszesz w całości Ty. Do Gemini trafia WYŁĄCZNIE już napisana przez Ciebie treść, a jego zadaniem jest tylko poprawić literówki i dodać pogrubienia/kursywę - bez zmiany sensu ani dopisywania czegokolwiek od siebie.</li>
+                <li><strong>Tryb manualny</strong> - żaden tekst NIE jest wysyłany do żadnego AI. Ten tryb w ogóle nie korzysta ze sztucznej inteligencji - dostajesz tylko konwerter zdjęć i instrukcję do ręcznego wklejenia treści w WordPressie.</li>
+            </ul>
+            <p>W trybach automatycznym i pół-automatycznym żądanie nie trafia do Google bezpośrednio z Twojej przeglądarki - przechodzi przez nasz własny, bezpieczny serwer pośredniczący (tzw. "Worker" na Cloudflare), który trzyma klucz dostępu do API po swojej stronie, żeby nigdy nie był widoczny w kodzie strony ani w Twojej przeglądarce.</p>
+            <p>Sama aplikacja Redaktor SAFi <strong>nie ma żadnej bazy danych</strong> - nie zapisuje wpisywanych notatek ani wygenerowanych artykułów na żadnym serwerze, niezależnie od trybu. Wszystko, co widzisz na ekranie, istnieje wyłącznie w pamięci Twojej przeglądarki i znika, gdy zamkniesz lub odświeżysz kartę (chyba że sam/sama coś skopiujesz lub zapiszesz). Przetwarzanie tekstu przez Google podlega odrębnie polityce prywatności Google.</p>
 
             <h3>Co dzieje się ze zdjęciami, które wgrywasz?</h3>
             <p>To najważniejsza rzecz do zapamiętania: <strong>zdjęcia nigdy nie są wysyłane na żaden serwer przez tę aplikację</strong>. Cała kompresja i zmiana formatu zdjęć (do WebP) odbywa się w całości lokalnie, w Twojej przeglądarce, przy użyciu tzw. Web Workerów - to fragmenty kodu wykonywane bezpośrednio na Twoim urządzeniu, w tle, żeby nie blokowały interfejsu. Oryginalne i przetworzone zdjęcia opuszczają Twoje urządzenie tylko wtedy, gdy Ty sam/sama je zapiszesz na dysk, pobierzesz jako paczkę .zip albo ręcznie wgrasz je później do WordPressa - to już czynności całkowicie poza kontrolą tej aplikacji.</p>
@@ -99,7 +104,7 @@
             <h3>Kontakt</h3>
             <p>Pytania, uwagi lub wątpliwości dotyczące prywatności? Napisz: <strong>webmaster@klachphoto.com</strong>.</p>
 
-            <a href="/" class="back-link">&larr; Wróć do aplikacji</a>
+            <a href="/" class="back-link btn-secondary">&larr; Wróć do aplikacji</a>
         </div>
     </main>
 

@@ -42,7 +42,9 @@ window.addEventListener('appinstalled', () => {
 
 const App = {
     state: {
-        currentStep: 1,
+        // 'auto' (AI pisze całość) | 'semi' (autor pisze, AI tylko formatuje) | 'manual' (bez AI)
+        mode: 'auto',
+        currentStep: 'step1',
         interviewAnswers: "",
         aiFilenameSlug: null,
         // Ostatnio wygenerowane dane artykułu (title/lead/paragraphs/tags) - przechowywane, żeby
@@ -54,11 +56,13 @@ const App = {
         this.cacheDOM();
         this.bindEvents();
         this.handleCategoryChange();
-        this.switchStep(1);
+        this.switchStep('step1');
         this.initFileSystemSave();
         this.resetLinkRows();
         this.footerYear.textContent = new Date().getFullYear();
         this.renderFooterVersion();
+        this.updateFileNamePreview();
+        this.applyModeUI();
         this.handleHashNavigation();
         if (installPromptPending) {
             installPromptPending = false;
@@ -71,6 +75,7 @@ const App = {
 
     cacheDOM() {
         this.logoHome = document.getElementById('logoHome');
+        this.modeSwitcher = document.getElementById('modeSwitcher');
 
         this.btnShowIntro = document.getElementById('btnShowIntro');
         this.introModal = document.getElementById('introModal');
@@ -103,6 +108,14 @@ const App = {
         this.evtTitle = document.getElementById('evtTitle');
         this.evtLocation = document.getElementById('evtLocation');
 
+        this.step2IntroAuto = document.getElementById('step2IntroAuto');
+        this.step2IntroOther = document.getElementById('step2IntroOther');
+        this.fileNamingFields = document.getElementById('fileNamingFields');
+        this.fileNameMonth = document.getElementById('fileNameMonth');
+        this.fileNameEventName = document.getElementById('fileNameEventName');
+        this.fileNamePreview = document.getElementById('fileNamePreview');
+        this.manualInstructions = document.getElementById('manualInstructions');
+
         this.dropzone = document.getElementById('dropzone');
         this.fileInput = document.getElementById('fileInput');
         this.fileStatus = document.getElementById('fileStatus');
@@ -117,6 +130,9 @@ const App = {
         this.btnDownloadPhotosStep3 = document.getElementById('btnDownloadPhotosStep3');
         this.btnSaveToComputer = document.getElementById('btnSaveToComputer');
         this.fsUnsupportedNote = document.getElementById('fsUnsupportedNote');
+        this.downloadPhotosCta = document.getElementById('downloadPhotosCta');
+        this.downloadCtaTextAuto = document.getElementById('downloadCtaTextAuto');
+        this.downloadCtaTextOther = document.getElementById('downloadCtaTextOther');
         this.btnTriggerAI = document.getElementById('btnTriggerAI');
         this.btnCopyHtml = document.getElementById('btnCopyHtml');
         this.btnCopyTitle = document.getElementById('btnCopyTitle');
@@ -132,9 +148,14 @@ const App = {
         this.btnSkipModal = document.getElementById('btnSkipModal');
         this.btnSubmitModal = document.getElementById('btnSubmitModal');
 
+        this.step3 = document.getElementById('step3');
+        this.step3Grid = this.step3.querySelector('.grid-2col');
         this.finalNotes = document.getElementById('finalNotes');
+        this.linkInputGroup = document.querySelector('.link-input-group');
         this.linkRowsContainer = document.getElementById('linkRowsContainer');
         this.btnAddLink = document.getElementById('btnAddLink');
+        this.btnCopyExternalPrompt = document.getElementById('btnCopyExternalPrompt');
+        this.resultZone = document.getElementById('resultZone');
         this.aiEmptyState = document.getElementById('aiEmptyState');
         this.aiLoading = document.getElementById('aiLoading');
         this.genProgressBar = document.getElementById('genProgressBar');
@@ -144,6 +165,8 @@ const App = {
         this.aiFallbackMessage = document.getElementById('aiFallbackMessage');
         this.btnCopyFallbackPrompt = document.getElementById('btnCopyFallbackPrompt');
         this.aiOutput = document.getElementById('aiOutput');
+        this.btnToggleEditPanel = document.getElementById('btnToggleEditPanel');
+        this.editPanelWrap = document.getElementById('editPanelWrap');
         this.tabTextView = document.getElementById('tabTextView');
         this.tabCodeView = document.getElementById('tabCodeView');
         this.textViewPanel = document.getElementById('textViewPanel');
@@ -157,6 +180,19 @@ const App = {
         this.sugFeaturedImage = document.getElementById('sugFeaturedImage');
         this.metaSuggestion = document.getElementById('metaSuggestion');
         this.aiActionsFooter = document.getElementById('aiActionsFooter');
+
+        // Krok pisania w trybie pół-automatycznym
+        this.semiWriteStep = document.getElementById('semiWriteStep');
+        this.semiCategory = document.getElementById('semiCategory');
+        this.semiTitleInput = document.getElementById('semiTitleInput');
+        this.btnSuggestTitle = document.getElementById('btnSuggestTitle');
+        this.semiTagsInput = document.getElementById('semiTagsInput');
+        this.btnSuggestTags = document.getElementById('btnSuggestTags');
+        this.semiArticleInput = document.getElementById('semiArticleInput');
+        this.btnConvertSemi = document.getElementById('btnConvertSemi');
+        this.btnCopyExternalPromptSemi = document.getElementById('btnCopyExternalPromptSemi');
+        this.btnBackToStep2FromSemi = document.getElementById('btnBackToStep2FromSemi');
+        this.btnStartNewSemi = document.getElementById('btnStartNewSemi');
 
         this.footerYear = document.getElementById('footerYear');
         this.footerVersion = document.getElementById('footerVersion');
@@ -172,6 +208,10 @@ const App = {
         // Pozwala przeskoczyć do kroku wklejając np. "#3" w adresie, także BEZ przeładowania
         // strony (patrz handleHashNavigation) - przydatne przy testowaniu.
         window.addEventListener('hashchange', () => this.handleHashNavigation());
+
+        this.modeSwitcher.addEventListener('change', (e) => this.switchMode(e.target.value));
+        this.fileNameMonth.addEventListener('input', () => this.updateFileNamePreview());
+        this.fileNameEventName.addEventListener('input', () => this.updateFileNamePreview());
 
         this.btnShowIntro.addEventListener('click', () => this.introModal.classList.remove('hidden'));
         this.btnCloseIntro.addEventListener('click', () => {
@@ -214,8 +254,8 @@ const App = {
         });
 
         this.btnGoToStep2.addEventListener('click', () => this.handleStep1Submit());
-        this.btnBackToStep1.addEventListener('click', () => this.switchStep(1));
-        
+        this.btnBackToStep1.addEventListener('click', () => this.switchStep('step1'));
+
         this.dropzone.addEventListener('click', (e) => {
             e.preventDefault();
             if (this._processingFiles) return;
@@ -238,21 +278,33 @@ const App = {
 
         this.tabTextView.addEventListener('click', () => this.switchOutputTab('text'));
         this.tabCodeView.addEventListener('click', () => this.switchOutputTab('code'));
+        this.btnToggleEditPanel.addEventListener('click', () => this.editPanelWrap.classList.toggle('hidden'));
 
         this.btnGoToStep3.addEventListener('click', () => {
+            // Ta walidacja obrazka wyróżniającego dotyczy WSZYSTKICH trybów - zawsze potrzebny
+            // jest jeden poziomy plik 3:2, niezależnie od tego, kto/co napisze treść.
             const hasFeaturedCandidate = Compressor.processedFiles.some(f => f.isFeatured || this.canBeFeatured(f));
             if (!hasFeaturedCandidate) {
                 alert('Żadne z wgranych zdjęć nie nadaje się na obrazek wyróżniający - musi być zdjęciem POZIOMYM w proporcjach 3:2. Dodaj przynajmniej jedno takie zdjęcie, zanim przejdziesz dalej.');
                 return;
             }
-            this.goToStep3();
+            if (this.state.mode === 'semi') {
+                this.goToSemiWriteStep();
+            } else {
+                this.goToStep3();
+            }
         });
         this.btnBackToStep2.addEventListener('click', () => {
             // Jeśli AI właśnie generuje artykuł (albo ponawia próbę) - przerywamy to żądanie,
             // żeby nie płacić za odpowiedź, której i tak nikt już nie zobaczy (patrz generateArticle).
             this._articleAbortController?.abort();
-            this.switchStep(2);
+            this.switchStep('step2');
             this.renderFileList(); // odśwież listę - nazwy mogły się zmienić po Kroku 3 (slug od AI)
+        });
+        this.btnBackToStep2FromSemi.addEventListener('click', () => {
+            this._semiAbortController?.abort();
+            this.switchStep('step2');
+            this.renderFileList();
         });
 
         this.btnSubmitModal.addEventListener('click', () => this.closeModal(true));
@@ -268,12 +320,21 @@ const App = {
         this.btnCopyHtml.addEventListener('click', () => this.copyGutenbergCode());
         this.btnCopyTitle.addEventListener('click', () => this.copyTitle());
         this.btnCopyTags.addEventListener('click', () => this.copyTags());
-        this.btnCopyFallbackPrompt.addEventListener('click', () => this.copyFallbackPrompt());
+        // Ten sam przycisk (duży, widoczny WYŁĄCZNIE przy błędzie) i dyskretny link (zawsze
+        // dostępny) wołają teraz jedną, wspólną metodę - patrz buildExternalPromptText/copyExternalPrompt.
+        this.btnCopyFallbackPrompt.addEventListener('click', () => this.copyExternalPrompt());
+        this.btnCopyExternalPrompt.addEventListener('click', () => this.copyExternalPrompt());
+        this.btnCopyExternalPromptSemi.addEventListener('click', () => this.copyExternalPrompt());
         this.btnRegenerate.addEventListener('click', () => {
             this.setResultState('empty');
             this.finalNotes.focus();
         });
         this.btnStartNew.addEventListener('click', () => this.startNewPost());
+        this.btnStartNewSemi.addEventListener('click', () => this.startNewPost());
+
+        this.btnSuggestTitle.addEventListener('click', () => this.suggestSemiTitle());
+        this.btnSuggestTags.addEventListener('click', () => this.suggestSemiTags());
+        this.btnConvertSemi.addEventListener('click', () => this.convertSemiArticle());
     },
 
     // Jedyne miejsce pobierania zdjęć jest w Kroku 3 (po ewentualnym przemianowaniu przez AI),
@@ -282,9 +343,8 @@ const App = {
     downloadPhotosZip() {
         this.ensureFeaturedImage();
         this.renameAllFiles();
-        const title = this.evtTitle?.value || "wpis";
-        const startDate = this.evtStart.value;
-        Compressor.generateZip(title, startDate);
+        const { eventTitle, eventDateStr } = this.getFileNamingSource();
+        Compressor.generateZip(eventTitle, eventDateStr);
     },
 
     // Wywoływane z listenera beforeinstallprompt (patrz góra pliku) w chwili, gdy przeglądarka
@@ -369,10 +429,9 @@ const App = {
     async performDirectorySave(dirHandle) {
         this.ensureFeaturedImage();
         this.renameAllFiles();
-        const title = this.evtTitle?.value || "wpis";
-        const startDate = this.evtStart.value;
+        const { eventTitle, eventDateStr } = this.getFileNamingSource();
 
-        const { folderName, count } = await Compressor.saveToDirectory(dirHandle, title, startDate);
+        const { folderName, count } = await Compressor.saveToDirectory(dirHandle, eventTitle, eventDateStr);
 
         await rememberHandle(dirHandle);
         this._rememberedDirHandle = dirHandle;
@@ -493,26 +552,31 @@ const App = {
         }
     },
 
-    switchStep(stepNum) {
-        this.state.currentStep = stepNum;
+    // "step" to ZAWSZE id sekcji (np. "step1", "step2", "semiWriteStep") - dzięki temu ta sama
+    // metoda obsługuje zarówno kroki trybu automatycznego, jak i sekcje trybów pół-automatycznego
+    // i manualnego, których nie da się ponumerować w jednym wspólnym ciągu 1/2/3 (patrz applyModeUI).
+    // Wskaźnik kroków (.steps-indicator) filtrowany jest dodatkowo po aktualnym trybie, bo kilka
+    // pozycji w nim celowo dzieli to samo "data-step" (np. step2 jest wspólny dla 3 trybów).
+    switchStep(step) {
+        this.state.currentStep = step;
         document.querySelectorAll('.step-section').forEach(s => { s.style.display = 'none'; s.classList.remove('active'); });
         document.querySelectorAll('.step').forEach(s => s.classList.remove('active'));
-        
-        const targetSection = document.getElementById(`step${stepNum}`);
+
+        const targetSection = document.getElementById(step);
         if (targetSection) { targetSection.style.display = 'block'; targetSection.classList.add('active'); }
-        
-        const targetIndicator = document.querySelector(`.step[data-step="${stepNum}"]`);
+
+        const targetIndicator = document.querySelector(`.step[data-step="${step}"][data-modes="${this.state.mode}"]`);
         if (targetIndicator) { targetIndicator.classList.add('active'); }
     },
 
-    // W adresie strony można wkleić np. "#3", żeby od razu przeskoczyć do Kroku 3 - wygodne przy
-    // testowaniu, żeby nie trzeba było za każdym razem ręcznie przechodzić przez Kroki 1 i 2.
-    // Celowo pomija normalną walidację (handleStep1Submit/goToStep3) - to skrót WYŁĄCZNIE
-    // nawigacyjny, więc pola danego kroku mogą zostać puste.
+    // W adresie strony można wkleić np. "#3", żeby od razu przeskoczyć do Kroku 3 trybu
+    // automatycznego - wygodne przy testowaniu, żeby nie trzeba było za każdym razem ręcznie
+    // przechodzić przez Kroki 1 i 2. Celowo pomija normalną walidację (handleStep1Submit/goToStep3)
+    // - to skrót WYŁĄCZNIE nawigacyjny, więc pola danego kroku mogą zostać puste.
     handleHashNavigation() {
         const match = window.location.hash.match(/^#([1-3])$/);
         if (match) {
-            this.switchStep(parseInt(match[1], 10));
+            this.switchStep(`step${match[1]}`);
         }
     },
 
@@ -703,7 +767,7 @@ const App = {
             this.state.interviewAnswers = "";
         }
         this.aiModal.classList.add('hidden');
-        this.switchStep(2);
+        this.switchStep('step2');
         this.renderFileList();
     },
 
@@ -747,8 +811,7 @@ const App = {
         // Wymuszenie natychmiastowego przerysowania strony PRZED zleceniem pracy workerom.
         await new Promise(resolve => requestAnimationFrame(resolve));
 
-        const title = this.evtTitle?.value || "saf-wpis";
-        const startDate = this.evtStart.value;
+        const { eventTitle: title, eventDateStr: startDate } = this.getFileNamingSource();
         const skipped = [];
 
         const fileProgress = new Array(total).fill(0);
@@ -795,18 +858,17 @@ const App = {
         }
     },
 
-    // Przelicza nazwy WSZYSTKICH plików od nowa: RRRR-MM-{slug}-NR.webp. Slug pochodzi od AI
-    // (po Kroku 3 - patrz generateArticle), a dopóki AI się nie wypowiedziało - od tytułu z Kroku 1.
+    // Przelicza nazwy WSZYSTKICH plików od nowa: RRRR-MM-{slug}-NR.webp. Źródło roku/miesiąca/slugu
+    // zależy od trybu - patrz getFileNamingSource (w automatycznym: slug od AI po Kroku 3, a dopóki
+    // AI się nie wypowiedziało - tytuł z Kroku 1; w pół-automatycznym/manualnym: pola z Kroku 2).
     // Zdjęcie oznaczone jako wyróżniające zawsze dostaje numer "00", niezależnie od pozycji na liście;
     // pozostałe zdjęcia są numerowane kolejno 01, 02... (bez wliczania wyróżniającego).
     renameAllFiles() {
-        const startDate = this.evtStart.value;
-        const dateObj = new Date(startDate || Date.now());
+        const { eventTitle, eventDateStr } = this.getFileNamingSource();
+        const dateObj = new Date(eventDateStr || Date.now());
         const year = dateObj.getFullYear();
         const month = String(dateObj.getMonth() + 1).padStart(2, '0');
-        const baseSlug = this.state.aiFilenameSlug
-            ? Compressor.sanitizeString(this.state.aiFilenameSlug)
-            : Compressor.sanitizeString(this.evtTitle?.value || 'saf-wpis');
+        const baseSlug = Compressor.sanitizeString(eventTitle);
 
         let seq = 0;
         Compressor.processedFiles.forEach(file => {
@@ -938,7 +1000,13 @@ const App = {
         }
 
         this.finalNotes.value = compiledInformation;
-        this.switchStep(3);
+        this.switchStep('step3');
+    },
+
+    // Odpowiednik goToStep3() dla trybu pół-automatycznego - bez kompilowania notatek dla AI
+    // (autor pisze treść sam), tylko proste przejście do kroku pisania.
+    goToSemiWriteStep() {
+        this.switchStep('semiWriteStep');
     },
 
     // Dokłada jedną "karteczkę" z polem na URL i jego opis (Krok 3) - dzięki temu autor może
@@ -975,22 +1043,23 @@ const App = {
             .filter(link => link.url);
     },
 
-    // Pełny reset formularza i powrót do Kroku 1 - pozwala napisać kolejny wpis bez ręcznego
-    // czyszczenia każdego pola z osobna. Pyta o potwierdzenie tylko, gdy faktycznie jest coś do
-    // stracenia (świeży formularz nie musi straszyć użytkownika niepotrzebnym oknem).
-    startNewPost() {
-        const hasContent = this.evtTitle.value || this.evtNotes.value || this.getArticleLinks().length > 0
-            || Compressor.processedFiles.length > 0 || this.state.aiData;
-        if (hasContent && !window.confirm('Czy na pewno chcesz zacząć nowy wpis? Obecne dane, zdjęcia i wygenerowana treść zostaną utracone.')) {
-            return;
-        }
+    // Czy jest cokolwiek do stracenia w obecnym stanie formularza - wspólne dla "Generuj kolejny
+    // wpis" (startNewPost) i zmiany trybu pracy (switchMode), bo obie akcje czyszczą WSZYSTKO.
+    hasUnsavedContent() {
+        return !!(this.evtTitle.value || this.evtNotes.value || this.semiTitleInput.value
+            || this.semiArticleInput.value || this.getArticleLinks().length > 0
+            || Compressor.processedFiles.length > 0 || this.state.aiData);
+    },
 
-        // "Generuj kolejny wpis" jest dostępny na dole strony przez cały czas, więc mogło zostać
-        // kliknięte W TRAKCIE generowania artykułu - przerywamy je, żeby nie płacić za odpowiedź,
-        // której już nikt nie zobaczy.
+    // Czyści pola WSZYSTKICH trybów i przerywa ewentualne trwające żądania do AI - wydzielone z
+    // dawnego startNewPost, żeby ta sama logika reużyła się też przy zmianie trybu pracy (switchMode),
+    // gdzie struktura kroków jest inna, więc dalsza nawigacja różni się od "Generuj kolejny wpis".
+    resetAllFormState() {
         this._articleAbortController?.abort();
+        this._interviewAbortController?.abort();
+        this._semiAbortController?.abort();
 
-        // Krok 1
+        // Krok 1 (tryb automatyczny)
         this.evtCategory.value = '';
         this.handleCategoryChange();
         this.evtTitle.value = '';
@@ -1000,13 +1069,23 @@ const App = {
         this.evtNotes.value = '';
         this.evtExternalArticle.value = '';
 
-        // Krok 2 - zwalniamy podglądy zdjęć (previewUrl), żeby nie zostawić wycieku pamięci
+        // Pola nazywania plików (tryby pół-automatyczny/manualny)
+        this.fileNameMonth.value = '';
+        this.fileNameEventName.value = '';
+        this.updateFileNamePreview();
+
+        // Krok pisania (tryb pół-automatyczny)
+        this.semiTitleInput.value = '';
+        this.semiTagsInput.value = '';
+        this.semiArticleInput.value = '';
+
+        // Zdjęcia - zwalniamy podglądy (previewUrl), żeby nie zostawić wycieku pamięci
         Compressor.processedFiles.forEach(f => { if (f.previewUrl) URL.revokeObjectURL(f.previewUrl); });
         Compressor.processedFiles = [];
         this.fileInput.value = '';
         this.renderFileList();
 
-        // Krok 3
+        // Wynik AI - współdzielony między tryb automatyczny i pół-automatyczny
         this.finalNotes.value = '';
         this.resetLinkRows();
         this.state.interviewAnswers = '';
@@ -1020,9 +1099,123 @@ const App = {
         this.gutenbergOutput.value = '';
         this.setResultState('empty');
         this.switchOutputTab('text');
+    },
 
-        this.switchStep(1);
+    // Pełny reset formularza i powrót do pierwszego kroku AKTUALNEGO trybu - pozwala napisać
+    // kolejny wpis bez ręcznego czyszczenia każdego pola z osobna. Pyta o potwierdzenie tylko,
+    // gdy faktycznie jest coś do stracenia (świeży formularz nie musi straszyć niepotrzebnym oknem).
+    startNewPost() {
+        if (this.hasUnsavedContent() && !window.confirm('Czy na pewno chcesz zacząć nowy wpis? Obecne dane, zdjęcia i wygenerowana treść zostaną utracone.')) {
+            return;
+        }
+        this.resetAllFormState();
+        this.switchStep({ auto: 'step1', semi: 'step2', manual: 'step2' }[this.state.mode]);
         this.showToast('Możesz zacząć pisać nowy wpis!');
+    },
+
+    // Zmiana trybu pracy z górnego przełącznika - struktura kroków różni się między trybami
+    // (pola do wypełnienia są zupełnie inne), więc tak jak "Generuj kolejny wpis" wymaga pełnego
+    // resetu formularza; pyta o potwierdzenie tylko, gdy jest coś do stracenia.
+    switchMode(newMode) {
+        if (newMode === this.state.mode) return;
+
+        if (this.hasUnsavedContent() && !window.confirm('Zmiana trybu pracy zresetuje formularz - obecne dane, zdjęcia i wygenerowana treść zostaną utracone. Kontynuować?')) {
+            this.modeSwitcher.value = this.state.mode; // cofnij wizualną zmianę w <select>
+            return;
+        }
+
+        this.resetAllFormState();
+        this.state.mode = newMode;
+        this.applyModeUI();
+    },
+
+    // Dostosowuje CAŁY interfejs do aktualnego trybu: widoczność kroków na pasku postępu, pola
+    // Kroku 2 (nazywanie plików / instrukcja manualna) i miejsce współdzielonych bloków (pole na
+    // linki, wynik AI, meta-dane, karta pobierania zdjęć - patrz repositionSharedBlocks), a na
+    // koniec przechodzi do pierwszego kroku nowo wybranego trybu.
+    applyModeUI() {
+        this.updateStepsIndicatorForMode();
+        this.updateStep2FieldsForMode();
+        this.repositionSharedBlocks();
+        this.switchStep({ auto: 'step1', semi: 'step2', manual: 'step2' }[this.state.mode]);
+    },
+
+    updateStepsIndicatorForMode() {
+        document.querySelectorAll('.steps-indicator .step').forEach(el => {
+            el.classList.toggle('hidden', el.dataset.modes !== this.state.mode);
+        });
+    },
+
+    updateStep2FieldsForMode() {
+        const mode = this.state.mode;
+        this.step2IntroAuto.classList.toggle('hidden', mode !== 'auto');
+        this.step2IntroOther.classList.toggle('hidden', mode === 'auto');
+        this.fileNamingFields.classList.toggle('hidden', mode === 'auto');
+        this.manualInstructions.classList.toggle('hidden', mode !== 'manual');
+        this.btnBackToStep1.classList.toggle('hidden', mode !== 'auto');
+        this.downloadCtaTextAuto.classList.toggle('hidden', mode !== 'auto');
+        this.downloadCtaTextOther.classList.toggle('hidden', mode === 'auto');
+
+        if (mode === 'manual') {
+            this.btnGoToStep3.classList.add('hidden');
+        } else {
+            this.btnGoToStep3.classList.remove('hidden');
+            this.btnGoToStep3.textContent = mode === 'semi' ? 'Dalej: Pisz artykuł →' : 'Dalej: Generuj Wpis →';
+        }
+    },
+
+    // Krok 3 (auto) i Krok pisania (pół-auto) dzielą TĘ SAMĄ logikę wyniku (setResultState,
+    // renderTextView, kod Gutenberga, meta-dane, kopiowanie, pole na linki) - zamiast duplikować
+    // ten interfejs w dwóch miejscach, te same węzły DOM są PRZENOSZONE do właściwego miejsca w
+    // zależności od trybu. Dzięki temu chowają/pokazują się automatycznie razem z sekcją-rodzicem
+    // (patrz switchStep - .step-section bez klasy "active" ma display:none).
+    repositionSharedBlocks() {
+        if (this.state.mode === 'semi') {
+            this.semiArticleInput.insertAdjacentElement('afterend', this.linkInputGroup);
+            this.btnConvertSemi.insertAdjacentElement('afterend', this.aiActionsFooter);
+            this.btnConvertSemi.insertAdjacentElement('afterend', this.metaSuggestion);
+            this.btnConvertSemi.insertAdjacentElement('afterend', this.resultZone);
+        } else if (this.state.mode === 'auto') {
+            this.finalNotes.insertAdjacentElement('afterend', this.linkInputGroup);
+            this.step3Grid.appendChild(this.resultZone);
+            this.step3Grid.insertAdjacentElement('afterend', this.aiActionsFooter);
+            this.step3Grid.insertAdjacentElement('afterend', this.metaSuggestion);
+            this.aiActionsFooter.insertAdjacentElement('afterend', this.downloadPhotosCta);
+        }
+        // Tryb manualny nie używa linku/wyniku/meta-danych wcale - zostają tam, gdzie akurat są
+        // (ukryte razem z sekcją-rodzicem), a karta pobierania idzie do Kroku 2 (patrz niżej).
+
+        if (this.state.mode !== 'auto') {
+            this.fileStatus.insertAdjacentElement('afterend', this.downloadPhotosCta);
+        }
+    },
+
+    // Podgląd nazwy pliku na żywo (tryby pół-automatyczny/manualny) - używa TEJ SAMEJ funkcji
+    // sanityzującej co docelowe nazywanie plików (Compressor.sanitizeString), więc podgląd zawsze
+    // dokładnie zgadza się z tym, co faktycznie trafi do nazwy pliku.
+    updateFileNamePreview() {
+        const monthVal = this.fileNameMonth.value; // format "RRRR-MM" albo pusty string
+        const dateObj = new Date(monthVal ? `${monthVal}-01` : Date.now());
+        const year = dateObj.getFullYear();
+        const month = String(dateObj.getMonth() + 1).padStart(2, '0');
+        const slug = Compressor.sanitizeString(this.fileNameEventName.value || 'wydarzenie');
+        this.fileNamePreview.innerHTML = `Podgląd nazwy pliku: <strong>${year}-${month}-${slug}-01.webp</strong>`;
+    },
+
+    // Źródło danych do nazywania plików/folderu zależy od trybu: w automatycznym to nazwa
+    // wydarzenia z Kroku 1 (ew. nadpisana slugiem od AI po wygenerowaniu) + data rozpoczęcia;
+    // w pół-automatycznym/manualnym to pola wpisane wprost w Kroku 2 (miesiąc+rok+nazwa).
+    getFileNamingSource() {
+        if (this.state.mode === 'auto') {
+            return {
+                eventTitle: this.state.aiFilenameSlug || this.evtTitle?.value || 'saf-wpis',
+                eventDateStr: this.evtStart.value
+            };
+        }
+        return {
+            eventTitle: this.fileNameEventName.value || 'wydarzenie',
+            eventDateStr: this.fileNameMonth.value ? `${this.fileNameMonth.value}-01` : ''
+        };
     },
 
     // Usuwa znaczniki <strong>/<em>, których AI używa w treści akapitów (patrz gemini.js) - w
@@ -1238,8 +1431,9 @@ const App = {
             if (error.name === 'AbortError') return; // użytkownik wyszedł z Kroku 3 w trakcie generowania
             // Fallback: nazwy zdjęć już bazują na tytule z Kroku 1 (patrz renameAllFiles - aiFilenameSlug
             // jest wtedy dalej puste), więc nic tu nie trzeba dodatkowo naprawiać. Użytkownik dostaje
-            // za to gotowy, samowystarczalny prompt do wklejenia w dowolnym zewnętrznym czacie AI.
-            this._lastPrompt = prompt;
+            // za to gotowy, samowystarczalny prompt do wklejenia w dowolnym zewnętrznym czacie AI
+            // (patrz copyExternalPrompt - liczony na nowo z aktualnego stanu formularza, a nie z
+            // zapamiętanej zmiennej, więc działa niezależnie od tego, co się stało z tym wywołaniem).
             this.aiFallbackMessage.textContent = `Nie udało się połączyć z wbudowanym AI (${error.message}). Zdjęcia zachowały nazwy na podstawie nazwy wydarzenia z Kroku 1. Możesz skopiować kompletny prompt poniżej i wkleić go do dowolnego zewnętrznego czatu AI (np. ChatGPT, Claude, Gemini) - wynik będzie odpowiadał temu, co wygenerowałby Redaktor SAF.`;
             this.setResultState('fallback');
         } finally {
@@ -1289,11 +1483,38 @@ const App = {
         this.showToast('Skopiowano do schowka!');
     },
 
-    // Fallback na wypadek awarii wbudowanego AI: kopiuje DOKŁADNIE ten sam prompt, który poszedłby
-    // do Gemini, żeby wynik z dowolnego zewnętrznego czatu AI był jak najbardziej zbliżony.
-    async copyFallbackPrompt() {
-        const text = this._lastPrompt;
-        if (!text) return;
+    // Buduje TEN SAM prompt, który poszedłby do wbudowanego AI (pełne generowanie w trybie auto,
+    // albo formatowanie/poprawki w trybie pół-auto), żeby wynik z zewnętrznego czatu AI (ChatGPT,
+    // Claude, inny Gemini...) był jak najbardziej zbliżony. Liczony NA NOWO z aktualnego stanu
+    // formularza przy KAŻDYM kliknięciu - działa więc NIEZALEŻNIE od tego, czy wbudowane AI w ogóle
+    // zostało uruchomione, powiodło się, czy "całkowicie trafiło szlag" (patrz wymóg użytkownika).
+    buildExternalPromptText() {
+        let prompt;
+        if (this.state.mode === 'semi') {
+            const parsed = this.parseArticleText(this.semiArticleInput.value);
+            prompt = Gemini.polishPromptTemplate(parsed);
+        } else {
+            const cat = this.evtCategory.value;
+            const notes = this.finalNotes.value;
+            const links = this.getArticleLinks();
+            prompt = Gemini.getPromptTemplate(cat, notes, links);
+        }
+
+        // Zdjęcia mają już OSTATECZNE, deterministyczne adresy WordPressa (patrz renameAllFiles) -
+        // zewnętrzne AI nie zna naszego systemu wklejania zdjęć, więc dajemy mu gotową listę
+        // linków wraz z instrukcją, jak samodzielnie wstawić je w treść.
+        this.renameAllFiles();
+        const images = Compressor.processedFiles.filter(f => !f.isFeatured);
+        if (images.length > 0) {
+            const list = images.map(f => `- ${f.wpPath}`).join('\n');
+            prompt += `\n\n=== ZDJĘCIA DO WSTAWIENIA W ARTYKULE ===\nPoniższe zdjęcia są już wgrane na serwer pod tymi adresami. Wstaw KAŻDE z nich jako zwykły znacznik HTML <img src="..."> w odpowiednim, pasującym miejscu treści, rozkładając je w miarę równomiernie pomiędzy akapitami (nie wszystkie na początku):\n${list}`;
+        }
+
+        return prompt;
+    },
+
+    async copyExternalPrompt() {
+        const text = this.buildExternalPromptText();
         try {
             await navigator.clipboard.writeText(text);
         } catch (e) {
@@ -1307,6 +1528,120 @@ const App = {
             ta.remove();
         }
         this.showToast('Skopiowano do schowka!');
+    },
+
+    // Tryb pół-automatyczny: przycisk "AI zasugeruj" dla tytułu, na podstawie już napisanej treści.
+    async suggestSemiTitle() {
+        const articleText = this.semiArticleInput.value.trim();
+        if (!articleText) {
+            alert('Najpierw napisz treść artykułu, żeby AI mogło zaproponować tytuł.');
+            return;
+        }
+        this.btnSuggestTitle.disabled = true;
+        try {
+            const title = await Gemini.suggestTitle(articleText);
+            if (title) this.semiTitleInput.value = title;
+        } catch (error) {
+            alert('Nie udało się zaproponować tytułu: ' + error.message);
+        } finally {
+            this.btnSuggestTitle.disabled = false;
+        }
+    },
+
+    async suggestSemiTags() {
+        const articleText = this.semiArticleInput.value.trim();
+        if (!articleText) {
+            alert('Najpierw napisz treść artykułu, żeby AI mogło zaproponować tagi.');
+            return;
+        }
+        this.btnSuggestTags.disabled = true;
+        try {
+            const tags = await Gemini.suggestTags(this.semiCategory.value, articleText);
+            if (tags.length) this.semiTagsInput.value = tags.join(', ');
+        } catch (error) {
+            alert('Nie udało się zaproponować tagów: ' + error.message);
+        } finally {
+            this.btnSuggestTags.disabled = false;
+        }
+    },
+
+    // Tryb pół-automatyczny: odpowiednik generateArticle() - autor już napisał tytuł/treść/tagi
+    // sam, więc AI dostaje TYLKO postrukturyzowany tekst (patrz Gemini.polishArticleText) do
+    // kosmetycznej korekty, bez zmiany treści. Reużywa CAŁĄ resztę infrastruktury wyniku z Kroku 3
+    // (setResultState, renderTextView, kod Gutenberga, meta-dane, retry/fallback modelu).
+    async convertSemiArticle() {
+        const title = this.semiTitleInput.value.trim();
+        const articleRaw = this.semiArticleInput.value.trim();
+        if (!title) {
+            alert('Wpisz tytuł wpisu (albo kliknij "AI zasugeruj").');
+            return;
+        }
+        if (!articleRaw) {
+            alert('Napisz treść artykułu, zanim spróbujesz go przekonwertować.');
+            return;
+        }
+
+        this.setResultState('loading');
+
+        this._semiAbortController = new AbortController();
+        const { signal } = this._semiAbortController;
+
+        const progress = this.startProgressSimulation(
+            this.genProgressBar,
+            this.genProgressLabel,
+            [],
+            [
+                "Sprawdzam pisownię i literówki...",
+                "Dobieram pogrubienia i kursywę...",
+                "Formatuję kod dla WordPressa..."
+            ],
+            8000
+        );
+
+        const parsed = this.parseArticleText(articleRaw);
+
+        try {
+            const polished = await Gemini.polishArticleText(parsed, {
+                signal,
+                onRetry: (attempt, maxAttempts, isFallback) => this.showRetryNotice(
+                    this.genRetryNotice,
+                    isFallback
+                        ? '⚠️ Nadal duże obciążenie serwerów Google - próbuję z alternatywnym modelem...'
+                        : `⚠️ Serwery Google są mocno obciążone - ponawiam próbę (${attempt}/${maxAttempts})...`
+                )
+            });
+            progress.finish('Gotowe!');
+
+            const tags = this.semiTagsInput.value.split(',').map(t => t.trim()).filter(Boolean);
+
+            this.sugTitleInput.value = title;
+            this.sugDate.innerText = new Date().toLocaleString('pl-PL');
+            this.sugTagsInput.value = tags.length ? tags.map(t => `${t},`).join(' ') : '';
+
+            const featured = Compressor.processedFiles.find(f => f.isFeatured);
+            this.sugFeaturedImage.textContent = featured ? featured.name : 'brak';
+
+            this.state.aiData = {
+                title,
+                lead: polished.lead,
+                paragraphs: polished.paragraphs,
+                linkButtons: parsed.linkButtons,
+                tags,
+                filenameSlug: null // nazwy plików w tym trybie pochodzą z pól Kroku 2, nie od AI
+            };
+            this.renderTextView(this.state.aiData);
+            this.regenerateGutenbergCode();
+            this.switchOutputTab('text');
+
+            this.setResultState('output');
+        } catch (error) {
+            progress.stop();
+            if (error.name === 'AbortError') return;
+            this.aiFallbackMessage.textContent = `Nie udało się połączyć z wbudowanym AI (${error.message}). Możesz skopiować kompletny prompt poniżej i wkleić go do dowolnego zewnętrznego czatu AI - poprosi go o to samo (poprawki literówek i pogrubienia), co próbowało zrobić wbudowane AI.`;
+            this.setResultState('fallback');
+        } finally {
+            this.hideRetryNotice(this.genRetryNotice);
+        }
     }
 };
 
