@@ -55,11 +55,27 @@ export const Compressor = {
         return worker;
     },
 
+    // Limit dotyczy WYŁĄCZNIE realnego czasu przetwarzania POJEDYNCZEGO pliku przez worker -
+    // NIE liczy się czas oczekiwania w kolejce (patrz _onWorkerMessage: timer startuje dopiero
+    // przy PIERWSZYM komunikacie "progress", czyli gdy worker faktycznie zaczął ten plik).
+    // Dzięki temu wgranie np. 150 zdjęć na małej puli workerów nie generuje fałszywych błędów
+    // "za długo się przetwarzał" tylko dlatego, że plik długo czekał w kolejce.
+    PER_FILE_TIMEOUT_MS: 30000,
+
     _onWorkerMessage(data) {
         const pending = this._pending.get(data.id);
         if (!pending) return;
 
         if (data.type === 'progress') {
+            // Pierwszy sygnał od workera dla TEGO pliku = realny start przetwarzania - dopiero
+            // teraz uzbrajamy timeout (patrz komentarz przy PER_FILE_TIMEOUT_MS wyżej).
+            if (!pending.started) {
+                pending.started = true;
+                pending.timeoutId = setTimeout(() => {
+                    this._pending.delete(data.id);
+                    pending.reject(new Error(`"${pending.fileName}" przetwarzał się dłużej niż 30 sekund i został pominięty (prawdopodobnie nieobsługiwany lub uszkodzony plik).`));
+                }, this.PER_FILE_TIMEOUT_MS);
+            }
             pending.onProgress?.(data.stage, data.pct);
             return;
         }
@@ -83,14 +99,11 @@ export const Compressor = {
         const worker = this._workers[workerSlot];
 
         return new Promise((resolve, reject) => {
-            const timeoutId = setTimeout(() => {
-                this._pending.delete(id);
-                reject(new Error(`"${file.name}" przetwarzał się dłużej niż 45 sekund i został pominięty (prawdopodobnie nieobsługiwany lub uszkodzony plik).`));
-            }, 45000);
-
             this._pending.set(id, {
                 workerSlot,
-                timeoutId,
+                timeoutId: null,
+                started: false,
+                fileName: file.name,
                 onProgress,
                 resolve: (result) => resolve(this._nameResult(result, targetIndex, eventTitle, eventDateStr)),
                 reject

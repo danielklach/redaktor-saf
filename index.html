@@ -46,6 +46,7 @@
 <body>
     <div id="langLoadingOverlay" class="lang-loading-overlay" aria-hidden="true">
         <div class="lang-loading-spinner"></div>
+        <p class="lang-loading-text" data-no-translate>Preparing English interface, please wait&hellip;</p>
     </div>
 
     <header>
@@ -53,7 +54,7 @@
             <img src="assets/redaktor-saf-emblem.svg" alt="Redaktor SAFi" class="logo-emblem">
             <span class="logo-text">
                 <span class="logo-line">Redaktor</span>
-                <span class="logo-line">SAFi <span class="logo-version" data-release-date="2026-07-03" data-no-translate>ver. 1.11.2</span></span>
+                <span class="logo-line">SAFi <span class="logo-version" data-release-date="2026-07-03" data-no-translate>ver. 1.11.3</span></span>
             </span>
         </a>
         <div class="mode-switcher-wrap">
@@ -68,7 +69,7 @@
         <div class="header-actions">
             <button type="button" id="btnShowIntro" class="btn-secondary">ℹ️ Jak korzystać?</button>
             <button type="button" id="btnReportIssue" class="btn-secondary">⚠️ Zgłoś problem</button>
-            <a href="https://jamnik.uwm.edu.pl/strefa-czlonka/" target="_blank" rel="noopener noreferrer" class="btn-secondary">🔑 Strefa Członka</a>
+            <button type="button" id="btnStrefaCzlonka" class="btn-secondary">🔑 Strefa Członka</button>
             <button type="button" id="btnLangSwitch" class="btn-secondary btn-lang-switch" title="Change interface language" data-no-translate>
                 <svg class="flag-icon flag-en" viewBox="0 0 640 480" aria-hidden="true"><path fill="#012169" d="M0 0h640v480H0z"/><path fill="#FFF" d="m75 0 244 181L562 0h78v62L400 241l240 178v61h-80L320 301 81 480H0v-60l239-178L0 64V0z"/><path fill="#C8102E" d="m424 281 216 159v40L369 281zm-184 20 6 35L54 480H0zM640 0v3L391 191l2-44L590 0zM0 0l239 176h-60L0 42z"/><path fill="#FFF" d="M241 0v480h160V0zM0 160v160h640V160z"/><path fill="#C8102E" d="M0 193v96h640v-96zM273 0v480h96V0z"/></svg>
                 <svg class="flag-icon flag-pl hidden" viewBox="0 0 640 480" aria-hidden="true"><g fill-rule="evenodd"><path fill="#fff" d="M0 0h640v240H0z"/><path fill="#dc143c" d="M0 240h640v240H0z"/></g></svg>
@@ -269,7 +270,7 @@
             </div>
 
             <div id="aiActionsFooter" class="hidden">
-                <p class="info-text">📌 Zanim wkleisz poniższy kod do WordPressa, jeszcze raz przeczytaj go uważnie od początku do końca - AI mogło popełnić błąd rzeczowy, literówkę lub napisać coś w nienaturalny sposób.<br>🧩 Kolejność w WordPressie: 1) przełącz edytor wpisu na <strong>"Edytor kodu"</strong> (menu ⋮), 2) dopiero wtedy wklej poniższy kod, 3) wróć do <strong>"Edytora wizualnego"</strong>, żeby zobaczyć i przeczytać gotowy wpis.</p>
+                <p class="info-text">📌 Zanim wkleisz poniższy kod do WordPressa, jeszcze raz przeczytaj go uważnie od początku do końca - AI mogło popełnić błąd rzeczowy, literówkę lub napisać coś w nienaturalny sposób.<br>🧩 Kolejność w WordPressie: 1) przełącz edytor wpisu na <strong>"Edytor kodu"</strong> (menu ⋮), 2) dopiero wtedy wklej poniższy kod, 3) wróć do <strong>"Edytora wizualnego"</strong>, żeby zobaczyć i przeczytać gotowy wpis. Jeśli czujesz, że temu wpisowi czegoś brakuje, nie wahaj się eksperymentować z edytorem blokowym Wordpressa!</p>
                 <div class="actions" style="margin-top: 10px;">
                     <button id="btnCopyHtml" class="btn-secondary">📋 Kopiuj artykuł w HTML</button>
                     <button id="btnRegenerate" class="btn-secondary">Generuj jeszcze raz</button>
@@ -326,19 +327,18 @@
                     <div class="form-group">
                         <label for="semiTagsInput">Tagi (opcjonalnie, oddziel przecinkami):</label>
                         <div class="input-with-assist">
-                            <input type="text" id="semiTagsInput" placeholder="np. kultura, koncert, kortowo">
+                            <input type="text" id="semiTagsInput" placeholder="np. kultura, koncert, kortowo,">
                             <button type="button" id="btnSuggestTags" class="btn-secondary">🪄 AI zasugeruj</button>
                         </div>
                     </div>
 
                     <div class="form-group">
                         <label for="semiArticleInput">Treść artykułu:</label>
-                        <p class="info-text">Zaczynasz od leadu, kolejne akapity oddziel pustą linią; żeby dodać śródtytuł, zacznij akapit od "## Śródtytuł". Tabelę zapisz wierszami w formie "| komórka | komórka |", a przycisk-link jako ostatni akapit w formie "[PRZYCISK: etykieta -> adres URL]". AI doda tu tylko pogrubienia/kursywę tam, gdzie warto, i poprawi literówki - NIE zmieni treści ani sensu.</p>
+                        <p class="info-text">Zaczynasz od leadu, kolejne akapity oddziel pustą linią - o resztę struktury (śródtytuły, tam gdzie faktycznie pasują) zadba AI, nie musisz niczego oznaczać ręcznie. Linki do artykułu dodaj w polu "Linki do artykułu" poniżej. AI doda tu tylko pogrubienia/kursywę tam, gdzie warto, i poprawi literówki - NIE zmieni Twojej treści ani sensu.</p>
                         <textarea id="semiArticleInput" rows="14" placeholder="Lead artykułu (2-4 zdania)...
 
 Pierwszy akapit treści...
 
-## Śródtytuł (opcjonalnie)
 Kolejny akapit..."></textarea>
                     </div>
 
@@ -366,7 +366,7 @@ Kolejny akapit..."></textarea>
                 <span class="intro-emoji">👋</span>
                 <div>
                     <h3>Witaj w Redaktorze SAFi!</h3>
-                    <p>Nie musisz być pisarzem ani ekspertem od AI - wypełnij pola, resztę zrobi aplikacja.</p>
+                    <p>Nie musisz być pisarzem, ekspertem od AI ani programistą - wypełnij pola, a większość roboty zrobi za Ciebie aplikacja.</p>
                 </div>
             </div>
 
@@ -425,7 +425,7 @@ Kolejny akapit..."></textarea>
     <div id="semiAdviceModal" class="modal hidden">
         <div class="modal-content">
             <h3>💡 Zanim wygenerujemy kod...</h3>
-            <p class="info-text">AI zauważyło, że w Twoim tekście może brakować kilku istotnych informacji:</p>
+            <p class="info-text">🤖 Agent Redakcyjny SAF zauważył, że w Twoim tekście może brakować kilku istotnych informacji:</p>
 
             <ul id="semiAdviceList"></ul>
 
@@ -480,7 +480,7 @@ Kolejny akapit..."></textarea>
         <button id="btnDismissInstall" class="install-banner-close" aria-label="Zamknij" title="Zamknij">✕</button>
     </div>
 
-    <script type="module" src="js/app.js?v=280"></script>
+    <script type="module" src="js/app.js?v=281"></script>
 
     <!-- Rejestracja Service Workera (PWA) - celowo osobny, zwykły skrypt (nie moduł aplikacji),
          żeby infrastruktura PWA działała niezależnie od ewentualnego błędu w js/app.js. -->

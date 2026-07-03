@@ -159,6 +159,7 @@ const App = {
         this.btnDismissInstall = document.getElementById('btnDismissInstall');
 
         this.btnReportIssue = document.getElementById('btnReportIssue');
+        this.btnStrefaCzlonka = document.getElementById('btnStrefaCzlonka');
         this.reportModal = document.getElementById('reportModal');
         this.reportCategory = document.getElementById('reportCategory');
         this.reportDescription = document.getElementById('reportDescription');
@@ -322,6 +323,11 @@ const App = {
         this.btnReportIssue.addEventListener('click', () => {
             this.reportModal.classList.remove('hidden');
             this.reportFallbackEmail.classList.add('hidden');
+        });
+        // Zwykły <button>, nie <a> (patrz index.html) - żeby wyglądał IDENTYCZNIE jak pozostałe
+        // przyciski nagłówka niezależnie od stylowania linków przeglądarki; nawigację robimy tu.
+        this.btnStrefaCzlonka.addEventListener('click', () => {
+            window.open('https://jamnik.uwm.edu.pl/strefa-czlonka/', '_blank', 'noopener,noreferrer');
         });
         this.btnCancelReport.addEventListener('click', () => this.reportModal.classList.add('hidden'));
         this.btnSendReport.addEventListener('click', () => this.sendReport());
@@ -604,10 +610,16 @@ const App = {
             return;
         }
 
+        // Pkt 1 (v1.11.3): jeśli tłumaczenie NIE zdążyło się już dogrzać w tle (patrz
+        // schedulePrecomputeTranslation), to zapytanie do AI może chwilę potrwać - pokazujemy więc
+        // TĘ SAMĄ nakładkę co przy starcie strony (patrz initLanguage), żeby użytkownik widział, że
+        // coś się dzieje, zamiast patrzeć na pozornie "zawieszony" przycisk.
         this.btnLangSwitch.disabled = true;
+        document.documentElement.classList.add('lang-loading');
         try {
             await I18n.ensureReady(KNOWN_DYNAMIC_STRINGS);
         } catch (error) {
+            document.documentElement.classList.remove('lang-loading');
             this.btnLangSwitch.disabled = false;
             alert('Sorry, this function is temporarily unavailable.');
             return;
@@ -1744,34 +1756,33 @@ const App = {
         this.showToast(this.t('Skopiowano do schowka!'));
     },
 
-    // Buduje TEN SAM prompt, który poszedłby do wbudowanego AI (pełne generowanie w trybie auto,
-    // albo formatowanie/poprawki w trybie pół-auto), żeby wynik z zewnętrznego czatu AI (ChatGPT,
-    // Claude, inny Gemini...) był jak najbardziej zbliżony. Liczony NA NOWO z aktualnego stanu
-    // formularza przy KAŻDYM kliknięciu - działa więc NIEZALEŻNIE od tego, czy wbudowane AI w ogóle
-    // zostało uruchomione, powiodło się, czy "całkowicie trafiło szlag" (patrz wymóg użytkownika).
+    // Buduje prompt do RĘCZNEGO wklejenia w zewnętrznym czacie AI (ChatGPT, Claude, inny Gemini...) -
+    // w przeciwieństwie do wbudowanego AI (które zwraca JSON, dalej przetwarzany przez
+    // js/gutenberg.js), tu NIE MA żadnego etapu przetwarzania po stronie aplikacji, więc prompt
+    // (patrz Gemini.buildExternalAutoPrompt/buildExternalSemiPrompt) każe modelowi samemu zwrócić
+    // GOTOWY, w pełni sformatowany kod Gutenberga - użytkownik wkleja odpowiedź WPROST do Edytora
+    // Kodu WordPressa. Liczony NA NOWO z aktualnego stanu formularza przy KAŻDYM kliknięciu - działa
+    // więc NIEZALEŻNIE od tego, czy wbudowane AI w ogóle zostało uruchomione, powiodło się, czy
+    // "całkowicie trafiło szlag" (patrz wymóg użytkownika).
     buildExternalPromptText() {
-        let prompt;
-        if (this.state.mode === 'semi') {
-            const parsed = this.parseArticleText(this.semiArticleInput.value);
-            prompt = Gemini.polishPromptTemplate(parsed);
-        } else {
-            const cat = this.evtCategory.value;
-            const notes = this.finalNotes.value;
-            const links = this.getArticleLinks();
-            prompt = Gemini.getPromptTemplate(cat, notes, links);
-        }
-
         // Zdjęcia mają już OSTATECZNE, deterministyczne adresy WordPressa (patrz renameAllFiles) -
-        // zewnętrzne AI nie zna naszego systemu wklejania zdjęć, więc dajemy mu gotową listę
-        // linków wraz z instrukcją, jak samodzielnie wstawić je w treść.
+        // zewnętrzne AI nie zna naszego systemu wklejania zdjęć, więc dajemy mu gotową listę wraz
+        // z instrukcją, jak samodzielnie rozłożyć je w kodzie Gutenberga (patrz _externalImagesNote).
         this.renameAllFiles();
         const images = Compressor.processedFiles.filter(f => !f.isFeatured);
-        if (images.length > 0) {
-            const list = images.map(f => `- ${f.wpPath}`).join('\n');
-            prompt += `\n\n=== ZDJĘCIA DO WSTAWIENIA W ARTYKULE ===\nPoniższe zdjęcia są już wgrane na serwer pod tymi adresami. Wstaw KAŻDE z nich jako zwykły znacznik HTML <img src="..."> w odpowiednim, pasującym miejscu treści, rozkładając je w miarę równomiernie pomiędzy akapitami (nie wszystkie na początku):\n${list}`;
+
+        if (this.state.mode === 'semi') {
+            const title = this.semiTitleInput.value.trim() || 'Bez tytułu';
+            const tags = this.semiTagsInput.value.split(',').map(t => t.trim()).filter(Boolean);
+            const parsed = this.parseArticleText(this.semiArticleInput.value);
+            const links = this.getArticleLinks();
+            return Gemini.buildExternalSemiPrompt({ title, tags, lead: parsed.lead, paragraphs: parsed.paragraphs }, links, images);
         }
 
-        return prompt;
+        const cat = this.evtCategory.value;
+        const notes = this.finalNotes.value;
+        const links = this.getArticleLinks();
+        return Gemini.buildExternalAutoPrompt(cat, notes, links, images);
     },
 
     async copyExternalPrompt() {
@@ -1848,7 +1859,7 @@ const App = {
         this.btnConvertSemi.disabled = true;
         let suggestions = [];
         try {
-            suggestions = await Gemini.checkArticleCompleteness(articleRaw);
+            suggestions = await Gemini.checkArticleCompleteness(articleRaw, this.getArticleLinks());
         } catch (error) {
             console.warn('[Porady] Nie udało się sprawdzić kompletności tekstu:', error.message);
         }
@@ -1886,9 +1897,10 @@ const App = {
         );
 
         const parsed = this.parseArticleText(articleRaw);
+        const links = this.getArticleLinks();
 
         try {
-            const polished = await Gemini.polishArticleText(parsed, {
+            const polished = await Gemini.polishArticleText(parsed, links, {
                 signal,
                 onRetry: (attempt, maxAttempts, isFallback) => this.showRetryNotice(
                     this.genRetryNotice,
@@ -1914,7 +1926,7 @@ const App = {
                 title,
                 lead: polished.lead,
                 paragraphs: polished.paragraphs,
-                linkButtons: parsed.linkButtons,
+                linkButtons: polished.linkButtons,
                 tags,
                 filenameSlug: null // nazwy plików w tym trybie pochodzą z pól Kroku 2, nie od AI
             };
@@ -1933,4 +1945,5 @@ const App = {
     }
 };
 
+window.App = App;
 window.addEventListener('DOMContentLoaded', () => App.init());
