@@ -25,14 +25,31 @@
         .policy-content strong { color: #fff; }
         .back-link { margin-bottom: 20px; text-decoration: none; }
     </style>
+
+    <!-- Pkt 2 (v1.11.2): ta podstrona nie ma własnego "App", ale MA respektować język zapisany
+         na stronie głównej (patrz js/i18n.js) - jeśli to angielski, maskujemy treść nakładką,
+         zanim moduł zdąży ją przetłumaczyć, żeby uniknąć mignięcia polskiego tekstu. -->
+    <script>
+        (function () {
+            try {
+                if (localStorage.getItem('saf_lang') === 'en') {
+                    document.documentElement.classList.add('lang-loading');
+                }
+            } catch (e) {}
+        })();
+    </script>
 </head>
 <body>
+    <div id="langLoadingOverlay" class="lang-loading-overlay" aria-hidden="true">
+        <div class="lang-loading-spinner"></div>
+    </div>
+
     <header>
         <a href="/" class="logo-zone" title="Wróć do Redaktora SAFi">
             <img src="assets/redaktor-saf-emblem.svg" alt="Redaktor SAFi" class="logo-emblem">
             <span class="logo-text">
                 <span class="logo-line">Redaktor</span>
-                <span class="logo-line">SAFi</span>
+                <span class="logo-line">SAFi <span class="logo-version" data-release-date="2026-07-03" data-no-translate>ver. 1.11.2</span></span>
             </span>
         </a>
     </header>
@@ -115,6 +132,24 @@
 
     <script>
         document.getElementById('footerYear').textContent = new Date().getFullYear();
+    </script>
+
+    <!-- Pkt 2: samodzielne zastosowanie zapisanego języka na tej podstronie - reużywa DOKŁADNIE
+         tego samego modułu i cache'u tłumaczeń co główna aplikacja (patrz js/i18n.js). -->
+    <script type="module">
+        import { I18n } from './js/i18n.js';
+
+        (async function () {
+            if (localStorage.getItem('saf_lang') !== 'en') return;
+            document.documentElement.lang = 'en';
+            try {
+                await I18n.applyEnglish();
+            } catch (error) {
+                console.warn('[i18n] Nie udało się przetłumaczyć polityki prywatności:', error.message);
+            } finally {
+                document.documentElement.classList.remove('lang-loading');
+            }
+        })();
     </script>
 </body>
 </html>

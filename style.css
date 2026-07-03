@@ -69,10 +69,20 @@ header {
     border-color: var(--primary); cursor: pointer; min-width: 0;
 }
 
-/* Skromny przycisk PL/EN obok reszty akcji w nagłówku - przełącza język interfejsu (patrz
-   js/app.js -> switchLanguage). Celowo mały i stonowany, to drugorzędna opcja. */
-.btn-lang-switch { background: #2e2e38; color: var(--text-color); font-size: 0.85rem; padding: 8px 14px; }
-.btn-lang-switch:hover { background: #3e3e4a; }
+/* Pełnoekranowa nakładka pokazywana WYŁĄCZNIE na ułamek sekundy, dopóki zapisany wcześniej
+   angielski interfejs nie zostanie zastosowany (patrz inline-script na górze <body> w index.html/
+   polityka-prywatnosci.html oraz App.initLanguage) - zapobiega mignięciu polskiego tekstu. */
+.lang-loading-overlay {
+    display: none; position: fixed; inset: 0; background: var(--bg-color); z-index: 99999;
+    align-items: center; justify-content: center;
+}
+html.lang-loading .lang-loading-overlay { display: flex; }
+.lang-loading-spinner {
+    width: 36px; height: 36px; border-radius: 50%;
+    border: 3px solid var(--border); border-top-color: var(--primary);
+    animation: lang-spin 0.8s linear infinite;
+}
+@keyframes lang-spin { to { transform: rotate(360deg); } }
 
 /* Na średnich szerokościach logo+przełącznik trybu mieszczą się obok siebie w jednym wierszu
    (krótsze etykiety, patrz index.html) - reszta przycisków (Jak korzystać/Zgłoś problem/...)
@@ -234,6 +244,14 @@ button, .btn-primary, .btn-secondary, .btn-success, .btn-download {
 .btn-primary:hover, .btn-secondary:hover, .btn-success:hover { transform: translateY(-1px); box-shadow: 0 4px 12px rgba(0,0,0,0.3); }
 .btn-primary:active, .btn-secondary:active, .btn-success:active { transform: translateY(0); box-shadow: none; }
 button:disabled { background: #2e2e38; color: var(--text-muted); cursor: not-allowed; transform: none; box-shadow: none; }
+
+/* Przycisk PL/EN (nagłówek) - ma klasę .btn-secondary, więc dziedziczy DOKŁADNIE ten sam padding/
+   line-height/tło co pozostałe przyciski nagłówka (żeby wszystkie miały identyczną wysokość - bez
+   tego .btn-lang-switch miał własny, mniejszy padding i wychodził niższy niż reszta). Ta reguła
+   dokłada WYŁĄCZNIE układ flex, żeby zmieścić obok siebie ikonę flagi i skrót języka. */
+.btn-lang-switch { display: inline-flex; align-items: center; gap: 6px; }
+.btn-lang-switch:disabled { cursor: wait; }
+.flag-icon { width: 20px; height: 15px; border-radius: 2px; box-shadow: 0 0 0 1px rgba(255,255,255,0.25); flex-shrink: 0; }
 
 .download-photos-cta {
     background: #241c0d; border: 2px solid var(--primary); border-radius: 10px;

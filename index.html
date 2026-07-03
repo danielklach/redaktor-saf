@@ -28,14 +28,32 @@
     <link href="https://fonts.googleapis.com/css2?family=Quicksand:wght@600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="style.css">
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+
+    <!-- Pkt 1/4: jeśli użytkownik zapisał wcześniej angielski interfejs, ZANIM cokolwiek innego
+         się wyrenderuje, oznaczamy <html> klasą "lang-loading" (patrz style.css) - to natychmiast
+         pokazuje pełnoekranową nakładkę zamiast choćby na moment błysnąć polskim tekstem, zanim
+         js/app.js zdąży zastosować zapisany język (patrz App.initLanguage). -->
+    <script>
+        (function () {
+            try {
+                if (localStorage.getItem('saf_lang') === 'en') {
+                    document.documentElement.classList.add('lang-loading');
+                }
+            } catch (e) {}
+        })();
+    </script>
 </head>
 <body>
+    <div id="langLoadingOverlay" class="lang-loading-overlay" aria-hidden="true">
+        <div class="lang-loading-spinner"></div>
+    </div>
+
     <header>
         <a href="./" id="logoHome" class="logo-zone" title="Odśwież stronę">
             <img src="assets/redaktor-saf-emblem.svg" alt="Redaktor SAFi" class="logo-emblem">
             <span class="logo-text">
                 <span class="logo-line">Redaktor</span>
-                <span class="logo-line">SAFi <span class="logo-version" data-release-date="2026-07-03">ver. 1.11.1</span></span>
+                <span class="logo-line">SAFi <span class="logo-version" data-release-date="2026-07-03" data-no-translate>ver. 1.11.2</span></span>
             </span>
         </a>
         <div class="mode-switcher-wrap">
@@ -51,7 +69,11 @@
             <button type="button" id="btnShowIntro" class="btn-secondary">ℹ️ Jak korzystać?</button>
             <button type="button" id="btnReportIssue" class="btn-secondary">⚠️ Zgłoś problem</button>
             <a href="https://jamnik.uwm.edu.pl/strefa-czlonka/" target="_blank" rel="noopener noreferrer" class="btn-secondary">🔑 Strefa Członka</a>
-            <button type="button" id="btnLangSwitch" class="btn-lang-switch" title="Change interface language" data-no-translate>🌐 EN</button>
+            <button type="button" id="btnLangSwitch" class="btn-secondary btn-lang-switch" title="Change interface language" data-no-translate>
+                <svg class="flag-icon flag-en" viewBox="0 0 640 480" aria-hidden="true"><path fill="#012169" d="M0 0h640v480H0z"/><path fill="#FFF" d="m75 0 244 181L562 0h78v62L400 241l240 178v61h-80L320 301 81 480H0v-60l239-178L0 64V0z"/><path fill="#C8102E" d="m424 281 216 159v40L369 281zm-184 20 6 35L54 480H0zM640 0v3L391 191l2-44L590 0zM0 0l239 176h-60L0 42z"/><path fill="#FFF" d="M241 0v480h160V0zM0 160v160h640V160z"/><path fill="#C8102E" d="M0 193v96h640v-96zM273 0v480h96V0z"/></svg>
+                <svg class="flag-icon flag-pl hidden" viewBox="0 0 640 480" aria-hidden="true"><g fill-rule="evenodd"><path fill="#fff" d="M0 0h640v240H0z"/><path fill="#dc143c" d="M0 240h640v240H0z"/></g></svg>
+                <span class="lang-code">EN</span>
+            </button>
         </div>
     </header>
 
@@ -458,7 +480,7 @@ Kolejny akapit..."></textarea>
         <button id="btnDismissInstall" class="install-banner-close" aria-label="Zamknij" title="Zamknij">✕</button>
     </div>
 
-    <script type="module" src="js/app.js?v=279"></script>
+    <script type="module" src="js/app.js?v=280"></script>
 
     <!-- Rejestracja Service Workera (PWA) - celowo osobny, zwykły skrypt (nie moduł aplikacji),
          żeby infrastruktura PWA działała niezależnie od ewentualnego błędu w js/app.js. -->

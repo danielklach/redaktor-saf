@@ -2,6 +2,7 @@ import { Compressor } from './compressor.js';
 import { Gemini } from './gemini.js';
 import { Gutenberg } from './gutenberg.js';
 import { getRememberedHandle, rememberHandle, verifyPermission } from './dirHandleStore.js';
+import { I18n } from './i18n.js';
 
 // Domena WordPressa - w ustawieniach Mediów odznaczone jest "Porządkuj wysyłane pliki w
 // katalogi z numerami miesięcy i lat", więc pliki trafiają bezpośrednio do /wp-content/uploads/
@@ -20,6 +21,66 @@ const HASH_ROUTES = {
     s1: ['semi', 'step2'], s2: ['semi', 'semiWriteStep'],
     m1: ['manual', 'step2']
 };
+
+// Pkt 1/2 (v1.11.2): pełna lista tekstów DYNAMICZNYCH (przekazywanych do this.t() w całym pliku) -
+// zebrana w JEDNYM miejscu, żeby dało się je przetłumaczyć WSZYSTKIE naraz z wyprzedzeniem (patrz
+// App.schedulePrecomputeTranslation/switchLanguage), zamiast czekać, aż każdy z nich pierwszy raz
+// się wyświetli (co i tak by nie zdążyło - np. alert() blokuje wątek zanim tłumaczenie w tle
+// dobiegnie końca). Jeśli dodajesz gdzieś nowe this.t('...'), dopisz TEN SAM literał tutaj.
+const KNOWN_DYNAMIC_STRINGS = [
+    'Żadne z wgranych zdjęć nie nadaje się na obrazek wyróżniający - musi być zdjęciem POZIOMYM w proporcjach 3:2. Dodaj przynajmniej jedno takie zdjęcie, zanim przejdziesz dalej.',
+    'Aplikacja została zainstalowana! 🎉',
+    'Nie udało się zapisać zdjęć:',
+    'Zapisano', 'zdjęcie', 'zdjęć', 'w folderze',
+    'Opisz proszę, na czym polega problem.',
+    'Dzięki za zgłoszenie, zajmę się tym jak najszybciej!',
+    'Nie udało się wysłać zgłoszenia:',
+    'Agent nie ma dodatkowych pytań - możesz przejść dalej.',
+    'Twoja odpowiedź (opcjonalnie)...',
+    'BŁĄD: Musisz najpierw wybrać kategorię wpisu z listy.',
+    'BŁĄD: Musisz najpierw wypełnić WSZYSTKIE pola, aby przejść do wgrywania zdjęć.',
+    'BŁĄD: Data zakończenia wydarzenia nie może być wcześniejsza niż data rozpoczęcia. Popraw daty i spróbuj ponownie.',
+    'BŁĄD: Musisz najpierw wypełnić pole notatek.',
+    '⚠️ Nadal duże obciążenie serwerów Google - próbuję z alternatywnym modelem...',
+    '⚠️ Serwery Google są mocno obciążone - ponawiam próbę',
+    'Gotowe!',
+    'Nie udało się połączyć z AI',
+    'Czy chcesz samodzielnie dodać jakieś kluczowe szczegóły, o których zapomniałeś w notatkach?',
+    'Błędny format pliku - pominięto', 'plik', 'plików',
+    'Obsługiwane formaty: JPG, PNG, TIFF, DNG, WEBP, HEIC, HEIF, GIF, AVIF, BMP.',
+    'Przygotowywanie', 'zdjęcia', 'Przetwarzanie',
+    'Nie udało się przetworzyć', 'z',
+    'Brak dodanych zdjęć. Przeciągnij pliki wyżej, aby je dodać.',
+    'Nietypowe proporcje (zalecane 3:2, 2:3 lub pion 4:5)',
+    'Obrazek wyróżniający musi być zdjęciem poziomym w proporcjach 3:2',
+    'Waga:', 'Wyróżniające', 'Ustaw jako wyróżniające', 'Usuń',
+    'Czy na pewno chcesz zacząć nowy wpis? Obecne dane, zdjęcia i wygenerowana treść zostaną utracone.',
+    'Możesz zacząć pisać nowy wpis!',
+    'Zmiana trybu pracy zresetuje formularz - obecne dane, zdjęcia i wygenerowana treść zostaną utracone. Kontynuować?',
+    'Zmiana języka odświeży stronę - obecne dane, zdjęcia i wygenerowana treść zostaną utracone. Kontynuować?',
+    'Nie udało się połączyć z wbudowanym AI',
+    'Zdjęcia zachowały nazwy na podstawie nazwy wydarzenia z Kroku 1. Możesz skopiować kompletny prompt poniżej i wkleić go do dowolnego zewnętrznego czatu AI (np. ChatGPT, Claude, Gemini) - wynik będzie odpowiadał temu, co wygenerowałby Redaktor SAF.',
+    'Skopiowano do schowka!',
+    'Najpierw napisz treść artykułu, żeby AI mogło zaproponować tytuł.',
+    'Nie udało się zaproponować tytułu:',
+    'Najpierw napisz treść artykułu, żeby AI mogło zaproponować tagi.',
+    'Nie udało się zaproponować tagów:',
+    'Wpisz tytuł wpisu (albo kliknij "AI zasugeruj").',
+    'Napisz treść artykułu, zanim spróbujesz go przekonwertować.',
+    'Możesz skopiować kompletny prompt poniżej i wkleić go do dowolnego zewnętrznego czatu AI - poprosi go o to samo (poprawki literówek i pogrubienia), co próbowało zrobić wbudowane AI.',
+    // Etykiety generowane dynamicznie w handleCategoryChange (zależne od wybranej kategorii)
+    'Twoje surowe notatki / spostrzeżenia:',
+    'Kto brał udział, jaka była atmosfera wydarzenia i co szczególnie przykuło uwagę naszych fotografów...',
+    'np. Koncert Myslovitz…', 'np. MSKN...', 'np. Liga Wydziałów...',
+    '<strong>Co dokładnie zapowiadasz, kiedy i gdzie to będzie?</strong>',
+    'Opisz szczegółowo zapowiadane wydarzenie: co się wydarzy, kiedy dokładnie i gdzie...',
+    '<strong>Opisz co się działo w agencji / jakie są ustalenia:</strong>',
+    'Opisz przebieg spotkania lub wydarzenia w agencji: kto brał udział i jakie zapadły ustalenia...',
+    // Etykiety etapów paska postępu (startProgressSimulation)
+    'Agent analizuje wpisane dane...', 'Szuka wątków wartych dopytania...', 'Formułuje pytania pomocnicze...',
+    'Analizuję notatki...', 'Redaguję tytuł i lead...', 'Piszę treść artykułu...', 'Dobieram tagi...',
+    'Formatuję kod dla WordPressa...', 'Sprawdzam pisownię i literówki...', 'Dobieram pogrubienia i kursywę...'
+];
 
 // Zdarzenie beforeinstallprompt trzeba przechwycić NA POZIOMIE MODUŁU (nie wewnątrz App.init,
 // które odpala się dopiero na DOMContentLoaded) - przeglądarka może je wysłać w dowolnym
@@ -74,10 +135,8 @@ const App = {
         this.updateFileNamePreview();
         this.applyModeUI();
         this.handleHashNavigation();
-        if (this.state.lang === 'en') {
-            this.btnLangSwitch.textContent = '🌐 PL';
-            this.collectAndTranslateStatic().catch(err => console.warn('[i18n] Nie udało się odtworzyć zapisanego języka:', err.message));
-        }
+        this.applyLangButtonUI();
+        this.initLanguage();
         if (installPromptPending) {
             installPromptPending = false;
             this.onInstallPromptAvailable();
@@ -215,6 +274,9 @@ const App = {
         this.btnSemiAdviceIgnore = document.getElementById('btnSemiAdviceIgnore');
 
         this.btnLangSwitch = document.getElementById('btnLangSwitch');
+        this.flagEn = this.btnLangSwitch.querySelector('.flag-en');
+        this.flagPl = this.btnLangSwitch.querySelector('.flag-pl');
+        this.langCode = this.btnLangSwitch.querySelector('.lang-code');
 
         this.footerYear = document.getElementById('footerYear');
         this.footerVersion = document.getElementById('footerVersion');
@@ -518,37 +580,101 @@ const App = {
         this.setFeaturedImage(pick.i);
     },
 
-    // Pkt 11: klucz cache tłumaczeń zawiera numer wersji aplikacji (czytany z nagłówka) - dzięki
-    // temu aktualizacja treści strony w nowej wersji automatycznie unieważnia stare tłumaczenia.
-    getI18nCacheKey() {
-        const versionEl = document.querySelector('.logo-version');
-        return 'saf_i18n_en_' + (versionEl ? versionEl.textContent.trim() : 'unknown');
+    // Pkt 1/4 (v1.11.2): każde przełączenie języka teraz przeładowuje CAŁĄ stronę (location.reload)
+    // zamiast podmieniać teksty w locie - eliminuje to ryzyko "połowicznego" tłumaczenia (część
+    // elementów po angielsku, część nadal po polsku) i sprawia, że powrót na polski jest ZAWSZE
+    // idealnie czysty (to po prostu naturalna treść z pliku HTML, bez żadnej rekonstrukcji w JS).
+    // Zanim faktycznie przełączymy na EN, upewniamy się (ensureReady), że tłumaczenie jest już
+    // GOTOWE w cache'u - dzięki temu przeładowana strona pokazuje angielski interfejs od razu,
+    // bez zauważalnego opóźnienia (patrz initLanguage/lang-loading overlay w index.html).
+    async switchLanguage(lang) {
+        if (lang === this.state.lang) return;
+
+        // Przełączenie języka teraz przeładowuje stronę (patrz komentarz wyżej), a to skasowałoby
+        // niezapisane dane (zdjęcia trzymane są WYŁĄCZNIE w pamięci JS) - ostrzegamy więc dokładnie
+        // tak samo, jak przy zmianie trybu pracy (switchMode) czy "Generuj kolejny wpis", i TYLKO
+        // jeśli faktycznie jest coś do stracenia.
+        if (this.hasUnsavedContent() && !window.confirm(this.t('Zmiana języka odświeży stronę - obecne dane, zdjęcia i wygenerowana treść zostaną utracone. Kontynuować?'))) {
+            return;
+        }
+
+        if (lang === 'pl') {
+            localStorage.setItem('saf_lang', 'pl');
+            location.reload();
+            return;
+        }
+
+        this.btnLangSwitch.disabled = true;
+        try {
+            await I18n.ensureReady(KNOWN_DYNAMIC_STRINGS);
+        } catch (error) {
+            this.btnLangSwitch.disabled = false;
+            alert('Sorry, this function is temporarily unavailable.');
+            return;
+        }
+        localStorage.setItem('saf_lang', 'en');
+        location.reload();
     },
 
-    getTranslationCache() {
-        try {
-            return JSON.parse(localStorage.getItem(this.getI18nCacheKey()) || '{}');
-        } catch {
-            return {};
+    // Ustawia flagę + etykietę na przycisku PL/EN zgodnie z AKTUALNYM językiem - pokazuje flagę
+    // i skrót JĘZYKA, na który kliknięcie przełączy (np. w trybie polskim pokazuje flagę UK / "EN").
+    applyLangButtonUI() {
+        const switchingToEn = this.state.lang === 'pl';
+        this.flagEn.classList.toggle('hidden', !switchingToEn);
+        this.flagPl.classList.toggle('hidden', switchingToEn);
+        this.langCode.textContent = switchingToEn ? 'EN' : 'PL';
+    },
+
+    // Wywoływane RAZ przy starcie aplikacji: jeśli zapisany język to angielski, strona jest
+    // maskowana nakładką (patrz inline-script + #langLoadingOverlay w index.html, ustawiony
+    // ZANIM ten moduł się w ogóle załadował, żeby uniknąć choćby krótkiego mignięcia polskiego
+    // tekstu) - tłumaczenie w tym momencie powinno już być w cache'u (patrz
+    // schedulePrecomputeTranslation z POPRZEDNIEJ sesji w języku polskim), więc zastosowanie go
+    // jest praktycznie natychmiastowe. Jeśli język to polski, zamiast tego cicho dogrzewamy cache
+    // angielski w tle, żeby PRZYSZŁE przełączenie było błyskawiczne (pkt 1).
+    async initLanguage() {
+        document.documentElement.lang = this.state.lang === 'en' ? 'en' : 'pl';
+
+        if (this.state.lang === 'en') {
+            try {
+                await I18n.applyEnglish(KNOWN_DYNAMIC_STRINGS);
+            } catch (error) {
+                console.warn('[i18n] Nie udało się zastosować zapisanego języka:', error.message);
+            } finally {
+                this.hideLangLoadingOverlay();
+            }
+            return;
+        }
+
+        this.hideLangLoadingOverlay();
+        this.schedulePrecomputeTranslation();
+    },
+
+    hideLangLoadingOverlay() {
+        document.documentElement.classList.remove('lang-loading');
+    },
+
+    schedulePrecomputeTranslation() {
+        const run = () => {
+            I18n.ensureReady(KNOWN_DYNAMIC_STRINGS).catch(error => {
+                console.warn('[i18n] Wstępne tłumaczenie w tle nie powiodło się (spróbuje ponownie przy kliknięciu):', error.message);
+            });
+        };
+        if ('requestIdleCallback' in window) {
+            requestIdleCallback(run, { timeout: 4000 });
+        } else {
+            setTimeout(run, 1500);
         }
     },
 
-    saveTranslationCache(cache) {
-        try {
-            localStorage.setItem(this.getI18nCacheKey(), JSON.stringify(cache));
-        } catch (e) {
-            console.warn('[i18n] Nie udało się zapisać cache tłumaczeń:', e.message);
-        }
-    },
-
-    // Tłumaczenie tekstów DYNAMICZNYCH (alert/toast/komunikaty), których nie da się złapać
-    // przez chodzenie po DOM (patrz collectAndTranslateStatic) - w trybie PL zwraca oryginał
-    // bez zmian; w trybie EN zwraca wersję z cache'u, jeśli już przetłumaczona, w przeciwnym
-    // razie zwraca oryginał i dopisuje string do kolejki tłumaczenia w tle (zbiorczo, patrz
-    // _flushDynamicQueue) - kolejne wywołanie z tym samym tekstem skorzysta już z cache'u.
+    // Tłumaczenie tekstów DYNAMICZNYCH (alert/toast/komunikaty) - w trybie PL zwraca oryginał bez
+    // zmian; w trybie EN zwraca wersję z cache'u (powinna tam już być, patrz KNOWN_DYNAMIC_STRINGS
+    // + schedulePrecomputeTranslation/ensureReady). Jeśli mimo wszystko jeszcze nie jest cache'owana
+    // (np. string dopisany do kodu, ale zapomniany w manifeście), zwraca oryginał i dopisuje go do
+    // kolejki tłumaczenia w tle jako siatkę bezpieczeństwa - kolejne wywołanie skorzysta z cache'u.
     t(text) {
         if (this.state.lang === 'pl' || !text) return text;
-        if (!this._translationCache) this._translationCache = this.getTranslationCache();
+        if (!this._translationCache) this._translationCache = I18n.getCache();
         const cached = this._translationCache[text];
         if (cached) return cached;
         this._queueDynamicTranslation(text);
@@ -568,118 +694,28 @@ const App = {
         this._dynamicQueue.clear();
         try {
             const translations = await Gemini.translateStrings(strings);
-            if (!this._translationCache) this._translationCache = this.getTranslationCache();
+            if (!this._translationCache) this._translationCache = I18n.getCache();
             strings.forEach((s, i) => { this._translationCache[s] = translations[i]; });
-            this.saveTranslationCache(this._translationCache);
+            I18n.saveCache(this._translationCache);
         } catch (e) {
             console.warn('[i18n] Nie udało się przetłumaczyć tekstów dynamicznych:', e.message);
         }
     },
 
-    // Chodzi po CAŁYM document.body i zbiera węzły tekstowe + atrybuty placeholder/title/aria-label
-    // do przetłumaczenia - pomijając <textarea>/<input>/<script>/<style> (wartości pól to dane
-    // użytkownika/AI, MAJĄ zostać po polsku niezależnie od języka interfejsu) oraz elementy
-    // oznaczone data-no-translate. Wywoływane TYLKO raz - lista węzłów (z zapamiętanym oryginalnym,
-    // polskim tekstem) jest cache'owana w this._i18nNodes, żeby powrót na PL nie wymagał AI.
-    collectTranslatableNodes() {
-        if (this._i18nNodes) return this._i18nNodes;
-
-        const nodes = [];
-        const isSkipped = (el) => !!(el.closest && el.closest('[data-no-translate]'));
-
-        const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT, {
-            acceptNode: (node) => {
-                if (!node.textContent || !node.textContent.trim()) return NodeFilter.FILTER_REJECT;
-                const parent = node.parentElement;
-                if (!parent) return NodeFilter.FILTER_REJECT;
-                if (parent.closest('textarea, input, script, style')) return NodeFilter.FILTER_REJECT;
-                if (isSkipped(parent)) return NodeFilter.FILTER_REJECT;
-                return NodeFilter.FILTER_ACCEPT;
-            }
-        });
-
-        let node;
-        while ((node = walker.nextNode())) {
-            nodes.push({ type: 'text', node, original: node.textContent });
-        }
-
-        document.body.querySelectorAll('[placeholder], [title], [aria-label]').forEach(el => {
-            if (isSkipped(el)) return;
-            ['placeholder', 'title', 'aria-label'].forEach(attr => {
-                const val = el.getAttribute(attr);
-                if (val && val.trim()) nodes.push({ type: 'attr', node: el, attr, original: val });
-            });
-        });
-
-        this._i18nNodes = nodes;
-        return nodes;
-    },
-
-    // Tłumaczy (jeśli trzeba) i podmienia CAŁĄ statyczną treść strony na angielską - w JEDNYM
-    // zbiorczym wywołaniu Gemini.translateStrings dla wszystkich jeszcze nieprzetłumaczonych
-    // tekstów (patrz cache w getTranslationCache/saveTranslationCache).
-    async collectAndTranslateStatic() {
-        const nodes = this.collectTranslatableNodes();
-        if (!this._translationCache) this._translationCache = this.getTranslationCache();
-        const cache = this._translationCache;
-
-        const missing = [];
-        const seen = new Set();
-        nodes.forEach(n => {
-            if (!cache[n.original] && !seen.has(n.original)) {
-                seen.add(n.original);
-                missing.push(n.original);
-            }
-        });
-
-        if (missing.length > 0) {
-            this.showToast('Translating interface...');
-            const translations = await Gemini.translateStrings(missing);
-            missing.forEach((s, i) => { cache[s] = translations[i]; });
-            this.saveTranslationCache(cache);
-        }
-
-        nodes.forEach(n => {
-            const translated = cache[n.original];
-            if (!translated) return;
-            if (n.type === 'text') n.node.textContent = translated;
-            else n.node.setAttribute(n.attr, translated);
-        });
-    },
-
-    // Powrót na polski jest błyskawiczny i BEZ żadnego wywołania AI - po prostu przywraca
-    // zapamiętany oryginalny tekst każdego węzła (this._i18nNodes).
-    restoreStaticOriginals() {
-        if (!this._i18nNodes) return;
-        this._i18nNodes.forEach(n => {
-            if (n.type === 'text') n.node.textContent = n.original;
-            else n.node.setAttribute(n.attr, n.original);
-        });
-    },
-
-    async switchLanguage(lang) {
-        if (lang === this.state.lang) return;
-        this.state.lang = lang;
-        localStorage.setItem('saf_lang', lang);
-
-        if (lang === 'pl') {
-            this.restoreStaticOriginals();
-            this.btnLangSwitch.textContent = '🌐 EN';
-            if (Compressor.processedFiles.length > 0) this.renderFileList(); // odśwież treść dynamiczną (np. listę plików)
-            return;
-        }
-
-        this.btnLangSwitch.textContent = '🌐 PL';
+    // Tłumaczy w REALNYM CZASIE pytania wygenerowane przez agenta AI (askForMissingDetails) - to
+    // treść inna za KAŻDYM razem (zależna od notatek użytkownika), więc nie da się jej wcześniej
+    // przygotować w cache'u jak KNOWN_DYNAMIC_STRINGS. Zwraca DWIE równoległe tablice: oryginalne
+    // (polskie, do zapisania jako dataset.question - trafiają do promptu generującego artykuł,
+    // który MUSI zostać po polsku niezależnie od języka interfejsu) i do wyświetlenia (przetłumaczone,
+    // gdy interfejs jest po angielsku). W razie błędu tłumaczenia po prostu pokazuje oryginały.
+    async translateForDisplay(strings) {
+        if (this.state.lang === 'pl' || !strings || strings.length === 0) return strings;
         try {
-            await this.collectAndTranslateStatic();
+            return await Gemini.translateStrings(strings);
         } catch (error) {
-            alert('Could not translate the interface: ' + error.message);
-            this.state.lang = 'pl';
-            localStorage.setItem('saf_lang', 'pl');
-            this.btnLangSwitch.textContent = '🌐 EN';
-            return;
+            console.warn('[i18n] Nie udało się przetłumaczyć pytań agenta na żywo:', error.message);
+            return strings;
         }
-        if (Compressor.processedFiles.length > 0) this.renderFileList();
     },
 
     // Toast notification nienachalny popup na dole ekranu, zamiast systemowego alert() (pkt UI/UX).
@@ -735,22 +771,22 @@ const App = {
         if (category === 'kultura' || category === 'sport' || category === 'nauka') {
             this.dynamicFields.style.display = 'block';
             this.step1Grid.classList.remove('single-col');
-            this.notesLabel.innerHTML = "Twoje surowe notatki / spostrzeżenia:";
-            this.evtNotes.placeholder = "Kto brał udział, jaka była atmosfera wydarzenia i co szczególnie przykuło uwagę naszych fotografów...";
+            this.notesLabel.innerHTML = this.t("Twoje surowe notatki / spostrzeżenia:");
+            this.evtNotes.placeholder = this.t("Kto brał udział, jaka była atmosfera wydarzenia i co szczególnie przykuło uwagę naszych fotografów...");
 
-            if (category === 'kultura') { this.evtTitle.placeholder = "np. Koncert Myslovitz…"; }
-            else if (category === 'nauka') { this.evtTitle.placeholder = "np. MSKN..."; }
-            else if (category === 'sport') { this.evtTitle.placeholder = "np. Liga Wydziałów..."; }
+            if (category === 'kultura') { this.evtTitle.placeholder = this.t("np. Koncert Myslovitz…"); }
+            else if (category === 'nauka') { this.evtTitle.placeholder = this.t("np. MSKN..."); }
+            else if (category === 'sport') { this.evtTitle.placeholder = this.t("np. Liga Wydziałów..."); }
         } else {
             this.dynamicFields.style.display = 'none';
             // Bez pól tytuł/miejsce/daty druga kolumna (notatki) zajmuje całą szerokość siatki.
             this.step1Grid.classList.add('single-col');
             if (category === 'zapowiedzi') {
-                this.notesLabel.innerHTML = "<strong>Co dokładnie zapowiadasz, kiedy i gdzie to będzie?</strong>";
-                this.evtNotes.placeholder = "Opisz szczegółowo zapowiadane wydarzenie: co się wydarzy, kiedy dokładnie i gdzie...";
+                this.notesLabel.innerHTML = this.t("<strong>Co dokładnie zapowiadasz, kiedy i gdzie to będzie?</strong>");
+                this.evtNotes.placeholder = this.t("Opisz szczegółowo zapowiadane wydarzenie: co się wydarzy, kiedy dokładnie i gdzie...");
             } else if (category === 'zycie') {
-                this.notesLabel.innerHTML = "<strong>Opisz co się działo w agencji / jakie są ustalenia:</strong>";
-                this.evtNotes.placeholder = "Opisz przebieg spotkania lub wydarzenia w agencji: kto brał udział i jakie zapadły ustalenia...";
+                this.notesLabel.innerHTML = this.t("<strong>Opisz co się działo w agencji / jakie są ustalenia:</strong>");
+                this.evtNotes.placeholder = this.t("Opisz przebieg spotkania lub wydarzenia w agencji: kto brał udział i jakie zapadły ustalenia...");
             }
         }
     },
@@ -862,7 +898,11 @@ const App = {
     },
 
     // Pkt 2: buduje ponumerowane pytania, każde z własnym polem odpowiedzi TUŻ pod nim.
-    renderQuestions(questions) {
+    // "displayQuestions" (opcjonalne, domyślnie = questions) to wersja do WYŚWIETLENIA - w trybie
+    // angielskim to tłumaczenie na żywo (patrz translateForDisplay) - a "questions" (zawsze polskie)
+    // zostają zapisane w dataset.question, bo to one budują prompt generujący artykuł.
+    renderQuestions(questions, displayQuestions) {
+        displayQuestions = displayQuestions || questions;
         this.aiQuestionsContainer.innerHTML = "";
 
         if (!questions || questions.length === 0) {
@@ -876,7 +916,7 @@ const App = {
 
             const qTitle = document.createElement('div');
             qTitle.className = 'q-title';
-            qTitle.textContent = `${idx + 1}. ${q}`;
+            qTitle.textContent = `${idx + 1}. ${displayQuestions[idx] ?? q}`;
 
             const answer = document.createElement('textarea');
             answer.className = 'question-answer';
@@ -935,9 +975,9 @@ const App = {
             this.aiProgressLabel,
             [this.aiProgressWrap, this.aiProgressLabel],
             [
-                "Agent analizuje wpisane dane...",
-                "Szuka wątków wartych dopytania...",
-                "Formułuje pytania pomocnicze..."
+                this.t("Agent analizuje wpisane dane..."),
+                this.t("Szuka wątków wartych dopytania..."),
+                this.t("Formułuje pytania pomocnicze...")
             ],
             6000
         );
@@ -953,7 +993,13 @@ const App = {
                 )
             });
             progress.finish(this.t("Gotowe!"));
-            this.renderQuestions(questions);
+            // Pytania są generowane przez AI za KAŻDYM razem od nowa (zależnie od notatek), więc nie
+            // da się ich przetłumaczyć z wyprzedzeniem jak KNOWN_DYNAMIC_STRINGS - tłumaczymy je tu,
+            // na żywo, TYLKO do wyświetlenia (oryginalne, polskie pytania trafiają do dataset.question
+            // w renderQuestions, bo to one budują interviewAnswers -> prompt generujący artykuł, który
+            // MUSI zostać po polsku niezależnie od języka interfejsu).
+            const displayQuestions = await this.translateForDisplay(questions);
+            this.renderQuestions(questions, displayQuestions);
         } catch (error) {
             progress.stop();
             if (error.name === 'AbortError') return; // użytkownik kliknął "Pomiń" - nic więcej nie rób
@@ -1587,11 +1633,11 @@ const App = {
             this.genProgressLabel,
             [],
             [
-                "Analizuję notatki...",
-                "Redaguję tytuł i lead...",
-                "Piszę treść artykułu...",
-                "Dobieram tagi...",
-                "Formatuję kod dla WordPressa..."
+                this.t("Analizuję notatki..."),
+                this.t("Redaguję tytuł i lead..."),
+                this.t("Piszę treść artykułu..."),
+                this.t("Dobieram tagi..."),
+                this.t("Formatuję kod dla WordPressa...")
             ],
             11000
         );
@@ -1832,9 +1878,9 @@ const App = {
             this.genProgressLabel,
             [],
             [
-                "Sprawdzam pisownię i literówki...",
-                "Dobieram pogrubienia i kursywę...",
-                "Formatuję kod dla WordPressa..."
+                this.t("Sprawdzam pisownię i literówki..."),
+                this.t("Dobieram pogrubienia i kursywę..."),
+                this.t("Formatuję kod dla WordPressa...")
             ],
             8000
         );
