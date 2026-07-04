@@ -72,6 +72,37 @@ Bez markdownu, bez wstępów, bez komentarzy poza obiektem JSON.`;
         return Array.isArray(parsed.questions) ? parsed.questions : [];
     },
 
+    // Odpowiednik askForMissingDetails dla Redaktora Social Media - bez kategorii (ta strona jej nie
+    // ma) i z JEDNĄ ogólną datą zamiast rozpoczęcia/zakończenia; pytania celują w szczegóły przydatne
+    // do KRÓTKIEGO podpisu social media, nie pod długi artykuł.
+    async askForMissingSocialDetails(title, location, date, photographers, notes, options = {}) {
+        const prompt = `${AGENCY_CONTEXT}
+
+Jesteś dociekliwym redaktorem social media SAF Jamnik. Ktoś z zespołu właśnie wrócił z wydarzenia i wrzucił do systemu takie surowe notatki, z których przygotujesz krótkie podpisy pod posty na Instagramie i Facebooku:
+Wydarzenie: ${title}
+Miejsce: ${location}
+Data: ${date}
+Kto robił zdjęcia: ${photographers}
+Notatki: ${notes}
+
+Wygeneruj od 3 do 6 konkretnych, krótkich pytań pomocniczych, które wyciągną ciekawe szczegóły (klimat, anegdoty, konkretne godziny jeśli to istotne, brakujące fakty) przydatne do KRÓTKIEGO podpisu social media - to NIE ma być wywiad pod długi artykuł, więc nie pytaj o rzeczy nieistotne dla krótkiego podpisu. Nie pytaj o informacje, które już podano.
+
+ODPOWIEDZ WYŁĄCZNIE CZYSTYM, SUROWYM KODEM JSON w formacie:
+{"questions": ["pytanie 1", "pytanie 2"]}
+Bez markdownu, bez wstępów, bez komentarzy poza obiektem JSON.`;
+
+        const raw = await this.callGeminiRaw(prompt, {
+            temperature: 0.8,
+            maxOutputTokens: 500,
+            thinkingConfig: { thinkingBudget: 0 }
+        }, options);
+
+        const jsonMatch = raw.match(/\{[\s\S]*\}/);
+        const jsonStr = jsonMatch ? jsonMatch[0] : raw;
+        const parsed = JSON.parse(jsonStr);
+        return Array.isArray(parsed.questions) ? parsed.questions : [];
+    },
+
     // Wspólna logika "przycisk czy link inline" (reużywana przez getPromptTemplate,
     // polishPromptTemplate ORAZ prompty zewnętrzne - patrz _buildExternalLinkInstructions) -
     // decyzję (galeria w chmurze -> przycisk, wszystko inne -> zwykły <a> w treści) AI podejmuje
@@ -413,23 +444,83 @@ ${numbered || '(brak akapitów tekstowych - w artykule jest tylko tabela)'}${tab
 ${this._externalOutputFormatSpec(images, links)}`;
     },
 
+    // Redaktor Social Media (v1.13.0): rozwiązuje zdrobnienia/ksywki/literówki w polu "Kto robił
+    // zdjęcia" wobec listy znanych fotografów z bazy (patrz js/photoDb.js) - np. "Kuba" to
+    // prawdopodobnie "Jakub Nowak", "Ola"/"Alex" to prawdopodobnie "Aleksandra Kowalska". Wołane
+    // TYLKO gdy dopasowanie dokładne (case-insensitive, też po alternatywnych pisowniach) zawiedzie.
+    async matchPhotographerName(typedName, knownNames, options = {}) {
+        if (!knownNames || knownNames.length === 0) return { match: null, confidence: 'low' };
+
+        const prompt = `Sprawdź, czy podane imię/nazwisko może odnosić się do jednej z osób z listy znanych fotografów SAF Jamnik - to mogą być zdrobnienia, ksywki lub literówki (np. "Kuba" to prawdopodobnie "Jakub Nowak", "Ola" albo "Alex" to prawdopodobnie "Aleksandra Kowalska").
+
+Wpisane przez użytkownika: "${typedName}"
+Znane osoby: ${knownNames.join(', ')}
+
+ODPOWIEDZ WYŁĄCZNIE CZYSTYM, SUROWYM KODEM JSON w formacie:
+{"match": "Dokładna nazwa ze znanej listy powyżej", "confidence": "high"}
+Jeśli żadna naprawdę nie pasuje (to prawdopodobnie nowa osoba), zwróć {"match": null, "confidence": "low"}. Bez markdownu, bez komentarzy poza obiektem JSON.`;
+
+        const raw = await this.callGeminiRaw(prompt, {
+            temperature: 0.2, maxOutputTokens: 150, thinkingConfig: { thinkingBudget: 0 }
+        }, options);
+
+        const jsonMatch = raw.match(/\{[\s\S]*\}/);
+        const parsed = JSON.parse(jsonMatch ? jsonMatch[0] : raw);
+        // Zabezpieczenie: jeśli model "wymyśli" nazwę spoza podanej listy, traktuj jak brak dopasowania.
+        const match = typeof parsed.match === 'string' && knownNames.includes(parsed.match) ? parsed.match : null;
+        return { match, confidence: parsed.confidence === 'high' ? 'high' : 'low' };
+    },
+
+    // Wspólna instrukcja oznaczeń (fotografowie/jednostki) dla generateSocialCaptions ORAZ
+    // buildExternalSocialPrompt - "tags" to już ROZWIĄZANE dane z Kroku 2 na social-media.html
+    // ({photographers: [{name, handle}], units: [{name, handle}]}), NIE surowy tekst z formularza.
+    _buildTagCreditsNote(tags) {
+        const photographers = (tags && tags.photographers) || [];
+        const units = (tags && tags.units) || [];
+        if (!photographers.length && !units.length) {
+            return 'Nie podano żadnych fotografów ani jednostek do oznaczenia - pomiń temat oznaczeń/creditów.';
+        }
+
+        const describe = (list) => list.map((t) => t.handle
+            ? `${t.name} (uchwyt na Instagramie: @${String(t.handle).replace(/^@/, '')})`
+            : `${t.name} (BEZ Instagrama - użyj wyłącznie imienia/nazwy, nigdy @)`
+        ).join('; ');
+
+        const parts = [];
+        if (photographers.length) parts.push(`Fotografowie do oznaczenia: ${describe(photographers)}.`);
+        if (units.length) parts.push(`Jednostki do oznaczenia: ${describe(units)}.`);
+
+        return `${parts.join(' ')} Na Instagramie użyj uchwytu w formie @uchwyt tam, gdzie podano, w przeciwnym razie zwykłego imienia/nazwy (NIGDY nie wymyślaj uchwytu, którego nie podano); na Facebooku ZAWSZE zwykłego imienia/nazwy (BEZ @) - Facebook nie używa tej samej konwencji wzmianek co Instagram. Wpleć credity naturalnie (np. "Fot. ...", wzmianka o organizatorze), a nie jak sztywny spis na końcu.`;
+    },
+
     // Redaktor Social Media (v1.12.0): z tych samych notatek co artykuł WordPressowy, ale w
     // zupełnie innym, krótszym stylu, generuje DWA gotowe podpisy - pod Instagram (limit ok. 20
     // zdjęć w karuzeli, więc "wybrane zdjęcia" + hashtagi) i pod Facebooka (pełna galeria, więc
-    // "obszerniejszy materiał", bez hashtagów). Współdzielone WYMAGANIA z buildSocialCaptionsPrompt
+    // "obszerniejszy materiał", bez hashtagów). Współdzielone WYMAGANIA z buildExternalSocialPrompt
     // (używanym też w external-prompt fallbacku), żeby oba warianty (wbudowane AI / zewnętrzny czat)
-    // dawały spójny styl.
-    _socialCaptionRequirements(category) {
-        const isAgencyLife = category === 'zycie';
-        const hashtagPool = (isAgencyLife ? AGENCY_LIFE_TAGS : EXISTING_TAGS).map(t => `#${t}`).join(' ');
+    // dawały spójny styl. Przykładowy post (FEST MUZA) to prawdziwy, lubiany przez użytkownika wpis
+    // SAF Jamnik - dołączony WYŁĄCZNIE jako wzór tonu/emoji, nie treści.
+    _socialCaptionRequirements(tags) {
+        const hashtagPool = EXISTING_TAGS.map(t => `#${t}`).join(' ');
 
-        return `1. PODPIS NA INSTAGRAM - krótki, angażujący, dynamiczny (ok. 4-8 zdań). Post na Instagramie pokazuje ograniczoną liczbę zdjęć (do ok. 20 w karuzeli), więc zakończ zdaniem zachęcającym do obejrzenia WYBRANYCH zdjęć (np. w stylu "Zapraszamy do obejrzenia wybranych zdjęć z wydarzenia!"). Na samym końcu dodaj 5-10 pasujących hashtagów (format #tag, po polsku, bez spacji w środku tagu) - najpierw spośród: ${hashtagPool}. Nowe hashtagi twórz TYLKO, gdy naprawdę żaden z powyższych nie pasuje.
+        return `0. STYL - piszcie KREATYWNIE, z humorem i osobowością, jak żywy człowiek prowadzący social media agencji studenckiej - NIE sztywno ani korporacyjnie. Używajcie emoji NATURALNIE w treści (nie tylko na końcu), tam gdzie ożywiają zdanie. Poniżej przykładowy, udany post tej samej agencji - WYŁĄCZNIE jako wzór STYLU i tonu, NIE kopiuj jego treści, tematu ani struktury:
+"FEST MUZA za nami! 🔥
+
+Pogoda wczoraj zdecydowanie nie brała jeńców - przez większość dnia lało jak z cebra i warunki koncertowe były... powiedzmy, że mocno wymagające 😅
+
+Ale od czego jest dobra muzyka! Mimo ulewy byliśmy na miejscu z aparatami, a zespoły dawały z siebie 100%. Energia pod sceną totalnie wynagrodziła nam wcześniejszą walkę z deszczem! 🔥
+
+Łapcie świeże kadry z wczorajszych koncertów! 📸 Wielkie brawa dla wszystkich grających! 🏆👏
+
+#festmuza #mokolsztyn #safjamnik"
+1. PODPIS NA INSTAGRAM - krótki, angażujący, dynamiczny (ok. 4-8 zdań). Post na Instagramie pokazuje ograniczoną liczbę zdjęć (do ok. 20 w karuzeli), więc zakończ zdaniem zachęcającym do obejrzenia WYBRANYCH zdjęć (np. w stylu "Zapraszamy do obejrzenia wybranych zdjęć z wydarzenia!"). Na samym końcu dodaj 5-10 pasujących hashtagów (format #tag, po polsku, bez spacji w środku tagu) - najpierw spośród: ${hashtagPool}. Nowe hashtagi twórz TYLKO, gdy naprawdę żaden z powyższych nie pasuje.
 2. PODPIS NA FACEBOOK - trochę dłuższy i bardziej opisowy niż wersja na Instagram (ale nadal zwięzły - to social media, nie artykuł blogowy), BEZ ŻADNYCH hashtagów. Post na Facebooku łączy się z PEŁNĄ galerią zdjęć, więc zakończ zdaniem zachęcającym do obejrzenia OBSZERNIEJSZEGO materiału (np. w stylu "Zapraszamy do obejrzenia obszerniejszego materiału w naszej galerii!").
 3. Oba podpisy MUSZĄ być po polsku, niezależnie od tego, w jakim języku są notatki poniżej.
-4. Myślniki: wyłącznie zwykły znak "-", nigdy "–" ani "—".`;
+4. Myślniki: WYŁĄCZNIE zwykły znak "-" (dywiz) - NIGDY długiej kreski "–" ani pauzy "—".
+5. OZNACZENIA - ${this._buildTagCreditsNote(tags)}`;
     },
 
-    async generateSocialCaptions(category, notes, options = {}) {
+    async generateSocialCaptions(notes, tags, options = {}) {
         const prompt = `${AGENCY_CONTEXT}
 
 Piszesz podpisy pod posty na Instagramie i Facebooku dla SAF Jamnik, na podstawie tych samych notatek, z których redakcja przygotowuje też artykuł na WordPressa - ale styl social media jest INNY: krótszy, bardziej bezpośredni i mniej formalny niż artykuł blogowy.
@@ -439,14 +530,13 @@ ODPOWIEDZ WYŁĄCZNIE CZYSTYM, SUROWYM KODEM JSON w formacie:
 Bez markdownu, bez wstępów, bez komentarzy poza obiektem JSON.
 
 WYMAGANIA:
-${this._socialCaptionRequirements(category)}
+${this._socialCaptionRequirements(tags)}
 
-Kategoria wydarzenia: ${category.toUpperCase()}
 Notatki i zebrane informacje o wydarzeniu:
 ${notes}`;
 
         const raw = await this.callGeminiRaw(prompt, {
-            temperature: 0.85,
+            temperature: 0.9,
             thinkingConfig: { thinkingBudget: 512 }
         }, options);
 
@@ -458,13 +548,13 @@ ${notes}`;
     // Odpowiednik generateSocialCaptions do RĘCZNEGO wklejenia w zewnętrznym czacie AI - zamiast
     // JSON-a każe modelowi zwrócić gotowe podpisy wprost w czytelnym tekście (nie ma tu żadnego
     // etapu przetwarzania po stronie aplikacji).
-    buildExternalSocialPrompt(category, notes) {
+    buildExternalSocialPrompt(notes, tags) {
         return `${AGENCY_CONTEXT}
 
 Piszesz podpisy pod posty na Instagramie i Facebooku dla SAF Jamnik, na podstawie notatek poniżej - styl social media: krótszy, bardziej bezpośredni i mniej formalny niż artykuł blogowy.
 
 WYMAGANIA:
-${this._socialCaptionRequirements(category)}
+${this._socialCaptionRequirements(tags)}
 
 ODPOWIEDZ WYŁĄCZNIE w poniższym formacie (bez potrójnych apostrofów/code fence, bez wstępu ani komentarzy):
 
@@ -474,7 +564,6 @@ INSTAGRAM:
 FACEBOOK:
 (tu podpis na Facebook, bez hashtagów)
 
-Kategoria wydarzenia: ${category.toUpperCase()}
 Notatki i zebrane informacje o wydarzeniu:
 ${notes}`;
     },

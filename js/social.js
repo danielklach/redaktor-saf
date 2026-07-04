@@ -1,15 +1,13 @@
 import { Gemini } from './gemini.js';
 import { I18n } from './i18n.js';
+import { PhotoDb } from './photoDb.js';
 
 // Redaktor Social Media (v1.12.0) - odpowiednik trybu automatycznego z głównej aplikacji (patrz
 // js/app.js), ale znacznie okrojony: bez zdjęć/Compressor/Gutenberg (IG/FB przyjmują zdjęcia w
 // dowolnym formacie wprost z telefonu - ten krok jest tu całkowicie zbędny) i bez kroku "finalNotes"
 // - wywiad AI od razu prowadzi do gotowego wyniku: DWA teksty (Instagram/Facebook).
 const KNOWN_DYNAMIC_STRINGS = [
-    'BŁĄD: Musisz najpierw wybrać kategorię wpisu z listy.',
-    'BŁĄD: Musisz najpierw wypełnić WSZYSTKIE pola, aby wygenerować podpisy.',
-    'BŁĄD: Data zakończenia wydarzenia nie może być wcześniejsza niż data rozpoczęcia. Popraw daty i spróbuj ponownie.',
-    'BŁĄD: Musisz najpierw wypełnić pole notatek.',
+    'BŁĄD: Musisz najpierw wypełnić WSZYSTKIE pola (nazwa wydarzenia, miejsce, data, kto robił zdjęcia i notatki), aby wygenerować podpisy.',
     '⚠️ Nadal duże obciążenie serwerów Google - próbuję z alternatywnym modelem...',
     '⚠️ Serwery Google są mocno obciążone - ponawiam próbę',
     'Gotowe!',
@@ -28,13 +26,19 @@ const KNOWN_DYNAMIC_STRINGS = [
     'Czy na pewno chcesz zacząć nowy wpis? Obecne dane i wygenerowana treść zostaną utracone.',
     'Możesz zacząć pisać nowy wpis!',
     'Zmiana języka odświeży stronę - obecne dane i wygenerowana treść zostaną utracone. Kontynuować?',
-    'Twoje surowe notatki / spostrzeżenia:',
-    'Kto brał udział, jaka była atmosfera wydarzenia i co szczególnie przykuło uwagę naszych fotografów...',
-    'np. Koncert Myslovitz…', 'np. MSKN...', 'np. Liga Wydziałów...',
-    '<strong>Co dokładnie zapowiadasz, kiedy i gdzie to będzie?</strong>',
-    'Opisz szczegółowo zapowiadane wydarzenie: co się wydarzy, kiedy dokładnie i gdzie...',
-    '<strong>Opisz co się działo w agencji / jakie są ustalenia:</strong>',
-    'Opisz przebieg spotkania lub wydarzenia w agencji: kto brał udział i jakie zapadły ustalenia...'
+    'Sprawdzam bazę fotografów...',
+    'Nie podano żadnych fotografów.',
+    'Baza jednostek jest jeszcze pusta - możesz dodać wpisy w "Baza fotografów" w nagłówku.',
+    'uchwyt na Instagramie (bez @)',
+    'Brak Instagrama',
+    'Wczytywanie...',
+    'Nie udało się wczytać listy:',
+    'Baza jest jeszcze pusta.',
+    'brak Instagrama',
+    'Dodano do bazy!',
+    'Podaj imię i nazwisko.',
+    'Nie udało się zapisać:',
+    'Podaj nazwę jednostki.'
 ];
 
 const SocialApp = {
@@ -42,13 +46,14 @@ const SocialApp = {
         currentStep: 'step1',
         interviewAnswers: '',
         captionsData: null,
+        // {photographers: [{name, handle}], units: [{name, handle}]} - ustawiane w confirmTagsAndGenerate.
+        resolvedTags: null,
         lang: localStorage.getItem('saf_lang') || 'pl'
     },
 
     init() {
         this.cacheDOM();
         this.bindEvents();
-        this.handleCategoryChange();
         this.switchStep('step1');
         this.footerYear.textContent = new Date().getFullYear();
         this.renderFooterVersion();
@@ -76,24 +81,36 @@ const SocialApp = {
         this.reportFallbackEmail = document.getElementById('reportFallbackEmail');
         this.toastContainer = document.getElementById('toastContainer');
 
+        this.btnShowPhotoDb = document.getElementById('btnShowPhotoDb');
+        this.photoDbModal = document.getElementById('photoDbModal');
+        this.photoDbPhotographersList = document.getElementById('photoDbPhotographersList');
+        this.photoDbUnitsList = document.getElementById('photoDbUnitsList');
+        this.newPhotographerName = document.getElementById('newPhotographerName');
+        this.newPhotographerHandle = document.getElementById('newPhotographerHandle');
+        this.btnAddPhotographer = document.getElementById('btnAddPhotographer');
+        this.newUnitName = document.getElementById('newUnitName');
+        this.newUnitHandle = document.getElementById('newUnitHandle');
+        this.newUnitKeywords = document.getElementById('newUnitKeywords');
+        this.btnAddUnit = document.getElementById('btnAddUnit');
+        this.btnClosePhotoDb = document.getElementById('btnClosePhotoDb');
+
         this.btnLangSwitch = document.getElementById('btnLangSwitch');
         this.flagEn = this.btnLangSwitch.querySelector('.flag-en');
         this.flagPl = this.btnLangSwitch.querySelector('.flag-pl');
         this.langCode = this.btnLangSwitch.querySelector('.lang-code');
 
-        this.evtCategory = document.getElementById('evtCategory');
-        this.step1CategoryHint = document.getElementById('step1CategoryHint');
-        this.step1FormBody = document.getElementById('step1FormBody');
-        this.step1Grid = document.getElementById('step1Grid');
-        this.dynamicFields = document.getElementById('dynamicFields');
-        this.notesLabel = document.getElementById('notesLabel');
         this.evtNotes = document.getElementById('evtNotes');
         this.evtExternalArticle = document.getElementById('evtExternalArticle');
-        this.evtStart = document.getElementById('evtStart');
-        this.evtEnd = document.getElementById('evtEnd');
+        this.evtDate = document.getElementById('evtDate');
+        this.evtPhotographers = document.getElementById('evtPhotographers');
         this.evtTitle = document.getElementById('evtTitle');
         this.evtLocation = document.getElementById('evtLocation');
         this.btnGenerateSocial = document.getElementById('btnGenerateSocial');
+
+        this.photographerTagsContainer = document.getElementById('photographerTagsContainer');
+        this.unitsChecklistContainer = document.getElementById('unitsChecklistContainer');
+        this.btnBackToStep1FromTags = document.getElementById('btnBackToStep1FromTags');
+        this.btnConfirmTags = document.getElementById('btnConfirmTags');
 
         this.aiModal = document.getElementById('aiModal');
         this.aiProgressWrap = document.getElementById('aiProgressWrap');
@@ -117,7 +134,7 @@ const SocialApp = {
         this.btnCopyInstagram = document.getElementById('btnCopyInstagram');
         this.btnCopyFacebook = document.getElementById('btnCopyFacebook');
         this.btnCopyExternalPromptSocial = document.getElementById('btnCopyExternalPromptSocial');
-        this.btnBackToStep1 = document.getElementById('btnBackToStep1');
+        this.btnBackToStep2 = document.getElementById('btnBackToStep2');
         this.btnRegenerateSocial = document.getElementById('btnRegenerateSocial');
         this.btnStartNewSocial = document.getElementById('btnStartNewSocial');
 
@@ -148,12 +165,12 @@ const SocialApp = {
             this.reportFallbackEmail.classList.toggle('hidden');
         });
 
-        this.btnLangSwitch.addEventListener('click', () => this.switchLanguage(this.state.lang === 'pl' ? 'en' : 'pl'));
+        this.btnShowPhotoDb.addEventListener('click', () => this.openPhotoDbModal());
+        this.btnClosePhotoDb.addEventListener('click', () => this.photoDbModal.classList.add('hidden'));
+        this.btnAddPhotographer.addEventListener('click', () => this.addPhotographerFromModal());
+        this.btnAddUnit.addEventListener('click', () => this.addUnitFromModal());
 
-        this.evtCategory.addEventListener('change', () => this.handleCategoryChange());
-        this.evtStart.addEventListener('change', (e) => {
-            if (e.target.value) this.evtEnd.value = e.target.value;
-        });
+        this.btnLangSwitch.addEventListener('click', () => this.switchLanguage(this.state.lang === 'pl' ? 'en' : 'pl'));
 
         this.btnGenerateSocial.addEventListener('click', () => this.handleStep1Submit());
         this.btnSubmitModal.addEventListener('click', () => this.closeModal(true));
@@ -162,9 +179,12 @@ const SocialApp = {
             this.closeModal(false);
         });
 
-        this.btnBackToStep1.addEventListener('click', () => {
+        this.btnBackToStep1FromTags.addEventListener('click', () => this.switchStep('step1'));
+        this.btnConfirmTags.addEventListener('click', () => this.confirmTagsAndGenerate());
+
+        this.btnBackToStep2.addEventListener('click', () => {
             this._captionsAbortController?.abort();
-            this.switchStep('step1');
+            this.switchStep('step2');
         });
         this.btnRegenerateSocial.addEventListener('click', () => this.generateCaptions());
         this.btnStartNewSocial.addEventListener('click', () => this.startNewPost());
@@ -173,39 +193,6 @@ const SocialApp = {
         this.btnCopyFacebook.addEventListener('click', () => this.copyField(this.facebookOutput));
         this.btnCopyExternalPromptSocial.addEventListener('click', () => this.copyExternalPrompt());
         this.btnCopyFallbackPrompt.addEventListener('click', () => this.copyExternalPrompt());
-    },
-
-    handleCategoryChange() {
-        const category = this.evtCategory.value;
-
-        if (!category) {
-            this.step1FormBody.classList.add('hidden');
-            this.step1CategoryHint.classList.remove('hidden');
-            return;
-        }
-        this.step1FormBody.classList.remove('hidden');
-        this.step1CategoryHint.classList.add('hidden');
-
-        if (category === 'kultura' || category === 'sport' || category === 'nauka') {
-            this.dynamicFields.style.display = 'block';
-            this.step1Grid.classList.remove('single-col');
-            this.notesLabel.innerHTML = this.t("Twoje surowe notatki / spostrzeżenia:");
-            this.evtNotes.placeholder = this.t("Kto brał udział, jaka była atmosfera wydarzenia i co szczególnie przykuło uwagę naszych fotografów...");
-
-            if (category === 'kultura') { this.evtTitle.placeholder = this.t("np. Koncert Myslovitz…"); }
-            else if (category === 'nauka') { this.evtTitle.placeholder = this.t("np. MSKN..."); }
-            else if (category === 'sport') { this.evtTitle.placeholder = this.t("np. Liga Wydziałów..."); }
-        } else {
-            this.dynamicFields.style.display = 'none';
-            this.step1Grid.classList.add('single-col');
-            if (category === 'zapowiedzi') {
-                this.notesLabel.innerHTML = this.t("<strong>Co dokładnie zapowiadasz, kiedy i gdzie to będzie?</strong>");
-                this.evtNotes.placeholder = this.t("Opisz szczegółowo zapowiadane wydarzenie: co się wydarzy, kiedy dokładnie i gdzie...");
-            } else if (category === 'zycie') {
-                this.notesLabel.innerHTML = this.t("<strong>Opisz co się działo w agencji / jakie są ustalenia:</strong>");
-                this.evtNotes.placeholder = this.t("Opisz przebieg spotkania lub wydarzenia w agencji: kto brał udział i jakie zapadły ustalenia...");
-            }
-        }
     },
 
     switchStep(step) {
@@ -309,32 +296,15 @@ const SocialApp = {
     },
 
     async handleStep1Submit() {
-        const cat = this.evtCategory.value;
-        const title = this.evtTitle?.value || "";
-        const loc = this.evtLocation?.value || "";
-        const start = this.evtStart?.value || "";
-        const end = this.evtEnd?.value || "";
+        const title = this.evtTitle.value.trim();
+        const loc = this.evtLocation.value.trim();
+        const date = this.evtDate.value;
+        const photographers = this.evtPhotographers.value.trim();
         const notes = this.evtNotes.value.trim();
 
-        if (!cat) {
-            alert(this.t("BŁĄD: Musisz najpierw wybrać kategorię wpisu z listy."));
+        if (!title || !loc || !date || !photographers || !notes) {
+            alert(this.t("BŁĄD: Musisz najpierw wypełnić WSZYSTKIE pola (nazwa wydarzenia, miejsce, data, kto robił zdjęcia i notatki), aby wygenerować podpisy."));
             return;
-        }
-
-        if (cat === 'kultura' || cat === 'sport' || cat === 'nauka') {
-            if (!title || !loc || !start || !end || !notes) {
-                alert(this.t("BŁĄD: Musisz najpierw wypełnić WSZYSTKIE pola, aby wygenerować podpisy."));
-                return;
-            }
-            if (new Date(end) < new Date(start)) {
-                alert(this.t("BŁĄD: Data zakończenia wydarzenia nie może być wcześniejsza niż data rozpoczęcia. Popraw daty i spróbuj ponownie."));
-                return;
-            }
-        } else {
-            if (!notes) {
-                alert(this.t("BŁĄD: Musisz najpierw wypełnić pole notatek."));
-                return;
-            }
         }
 
         this.aiModal.classList.remove('hidden');
@@ -357,7 +327,7 @@ const SocialApp = {
         );
 
         try {
-            const questions = await Gemini.askForMissingDetails(cat, title, loc, start, end, notes, {
+            const questions = await Gemini.askForMissingSocialDetails(title, loc, date, photographers, notes, {
                 signal,
                 onRetry: (attempt, maxAttempts, isFallback) => this.showRetryNotice(
                     this.aiRetryNotice,
@@ -383,7 +353,8 @@ const SocialApp = {
     },
 
     // W przeciwieństwie do WordPressa (closeModal -> switchStep('step2') na zdjęcia), tutaj nie ma
-    // kroku zdjęć - zamknięcie modala od razu generuje gotowe podpisy.
+    // kroku zdjęć - zamknięcie modala prowadzi do Kroku 2 "Potwierdź oznaczenia" (patrz
+    // showTagsStep), a dopiero STAMTĄD (po potwierdzeniu uchwytów/jednostek) generujemy podpisy.
     closeModal(saveData) {
         if (saveData) {
             const answers = [];
@@ -396,21 +367,238 @@ const SocialApp = {
             this.state.interviewAnswers = "";
         }
         this.aiModal.classList.add('hidden');
+        this.showTagsStep();
+    },
+
+    // Krok 2 "Potwierdź oznaczenia": rozdziela pole "Kto robił zdjęcia" na pojedyncze osoby, próbuje
+    // dopasować każdą do bazy (dokładnie, potem przez Gemini.matchPhotographerName dla zdrobnień/
+    // literówek - patrz js/gemini.js) i renderuje edytowalną tabelę uchwytów, oraz checklistę
+    // jednostek z automatycznymi podpowiedziami wg słów kluczowych znalezionych w notatkach.
+    async showTagsStep() {
         this.switchStep('step2');
+        this.photographerTagsContainer.innerHTML = `<p class="info-text">${this.t('Sprawdzam bazę fotografów...')}</p>`;
+        this.unitsChecklistContainer.innerHTML = '';
+
+        const typedNames = this.evtPhotographers.value.split(',').map((s) => s.trim()).filter(Boolean);
+
+        let knownPhotographers = [];
+        let knownUnits = [];
+        try {
+            knownPhotographers = await PhotoDb.getPhotographers();
+        } catch (error) {
+            console.warn('[PhotoDb] Nie udało się pobrać listy fotografów (działam bez sugestii):', error.message);
+        }
+        try {
+            knownUnits = await PhotoDb.getUnits();
+        } catch (error) {
+            console.warn('[PhotoDb] Nie udało się pobrać listy jednostek (działam bez sugestii):', error.message);
+        }
+        this._knownUnits = knownUnits;
+
+        await this.renderPhotographerTags(typedNames, knownPhotographers);
+        this.renderUnitsChecklist(knownUnits);
+    },
+
+    async renderPhotographerTags(typedNames, knownPhotographers) {
+        if (typedNames.length === 0) {
+            this.photographerTagsContainer.innerHTML = `<p class="info-text">${this.t('Nie podano żadnych fotografów.')}</p>`;
+            this._resolvedPhotographers = [];
+            return;
+        }
+
+        const findExact = (name) => knownPhotographers.find((p) =>
+            p.name.toLowerCase() === name.toLowerCase()
+            || (p.altNames || []).some((alt) => alt.toLowerCase() === name.toLowerCase())
+        );
+
+        const rows = [];
+        for (const typedName of typedNames) {
+            const exact = findExact(typedName);
+            let resolvedName = typedName;
+            let handle = '';
+
+            if (exact) {
+                resolvedName = exact.name;
+                handle = exact.handle || '';
+            } else if (knownPhotographers.length > 0) {
+                try {
+                    const { match } = await Gemini.matchPhotographerName(typedName, knownPhotographers.map((p) => p.name));
+                    if (match) {
+                        const fuzzy = knownPhotographers.find((p) => p.name === match);
+                        resolvedName = fuzzy.name;
+                        handle = fuzzy.handle || '';
+                    }
+                } catch (error) {
+                    console.warn('[PhotoDb] Dopasowanie nazwiska nie powiodło się:', error.message);
+                }
+            }
+
+            // Jeśli baza już zna tę osobę i ma zapisane PUSTE pole uchwytu, to wcześniej
+            // potwierdzone "brak Instagrama" - odznacz pole domyślnie w tym jednym przypadku.
+            const confirmedNoHandle = !!exact && !exact.handle;
+            rows.push({ typedName, resolvedName, handle, noInstagram: confirmedNoHandle });
+        }
+
+        this._resolvedPhotographers = rows;
+        this.renderPhotographerRows();
+    },
+
+    renderPhotographerRows() {
+        this.photographerTagsContainer.innerHTML = '';
+        this._resolvedPhotographers.forEach((row, idx) => {
+            const wrap = document.createElement('div');
+            wrap.style.cssText = 'display:flex; align-items:center; gap:10px; padding:8px 0; border-bottom:1px solid var(--border); flex-wrap:wrap;';
+            wrap.innerHTML = `
+                <span style="min-width:160px; font-weight:600;">${row.resolvedName}</span>
+                <input type="text" class="photographer-handle-input" data-idx="${idx}" placeholder="${this.t('uchwyt na Instagramie (bez @)')}" value="${row.handle || ''}" style="flex:1 1 160px;" ${row.noInstagram ? 'disabled' : ''}>
+                <label style="display:flex; align-items:center; gap:6px; white-space:nowrap;">
+                    <input type="checkbox" class="photographer-no-ig-checkbox" data-idx="${idx}" ${row.noInstagram ? 'checked' : ''}>
+                    ${this.t('Brak Instagrama')}
+                </label>
+            `;
+            this.photographerTagsContainer.appendChild(wrap);
+        });
+
+        this.photographerTagsContainer.querySelectorAll('.photographer-handle-input').forEach((input) => {
+            input.addEventListener('input', (e) => {
+                this._resolvedPhotographers[Number(e.target.dataset.idx)].handle = e.target.value.trim();
+            });
+        });
+        this.photographerTagsContainer.querySelectorAll('.photographer-no-ig-checkbox').forEach((cb) => {
+            cb.addEventListener('change', (e) => {
+                const idx = Number(e.target.dataset.idx);
+                this._resolvedPhotographers[idx].noInstagram = e.target.checked;
+                const input = this.photographerTagsContainer.querySelector(`.photographer-handle-input[data-idx="${idx}"]`);
+                input.disabled = e.target.checked;
+                if (e.target.checked) {
+                    input.value = '';
+                    this._resolvedPhotographers[idx].handle = '';
+                }
+            });
+        });
+    },
+
+    // Proste dopasowanie podciągu (case-insensitive) słów kluczowych jednostki wobec tytułu/miejsca/
+    // notatek - jeśli trafi, jednostka jest domyślnie zaznaczona (użytkownik może to zmienić).
+    renderUnitsChecklist(knownUnits) {
+        this.unitsChecklistContainer.innerHTML = '';
+        if (!knownUnits || knownUnits.length === 0) {
+            this.unitsChecklistContainer.innerHTML = `<p class="info-text">${this.t('Baza jednostek jest jeszcze pusta - możesz dodać wpisy w "Baza fotografów" w nagłówku.')}</p>`;
+            return;
+        }
+
+        const haystack = `${this.evtTitle.value} ${this.evtLocation.value} ${this.evtNotes.value}`.toLowerCase();
+
+        knownUnits.forEach((unit, idx) => {
+            const suggested = (unit.keywords || []).some((kw) => kw && haystack.includes(kw.toLowerCase()));
+            const label = document.createElement('label');
+            label.style.cssText = 'display:flex; align-items:center; gap:8px; padding:6px 0;';
+            label.innerHTML = `<input type="checkbox" class="unit-checkbox" data-idx="${idx}" ${suggested ? 'checked' : ''}> ${unit.name}${unit.handle ? ` (@${unit.handle})` : ''}`;
+            this.unitsChecklistContainer.appendChild(label);
+        });
+    },
+
+    // Zapisuje nowe/zmienione wpisy fotografów w bazie (fire-and-forget - błąd zapisu NIE blokuje
+    // przejścia dalej, patrz architektura "fail-open" w js/photoDb.js), buduje finalną listę
+    // {name, handle|null} dla fotografów i zaznaczonych jednostek, i dopiero TERAZ generuje podpisy.
+    confirmTagsAndGenerate() {
+        (this._resolvedPhotographers || []).forEach((row) => {
+            PhotoDb.upsertPhotographer({
+                name: row.resolvedName,
+                handle: row.noInstagram ? '' : row.handle,
+                altNames: row.resolvedName !== row.typedName ? [row.typedName] : undefined
+            }).catch((error) => console.warn('[PhotoDb] Nie udało się zapisać fotografa:', error.message));
+        });
+
+        const photographers = (this._resolvedPhotographers || []).map((row) => ({
+            name: row.resolvedName,
+            handle: row.noInstagram ? null : (row.handle || null)
+        }));
+
+        const selectedIdxs = Array.from(this.unitsChecklistContainer.querySelectorAll('.unit-checkbox:checked')).map((cb) => Number(cb.dataset.idx));
+        const units = selectedIdxs.map((idx) => this._knownUnits[idx]).map((u) => ({ name: u.name, handle: u.handle || null }));
+
+        this.state.resolvedTags = { photographers, units };
+        this.switchStep('step3');
         this.generateCaptions();
     },
 
-    // Odpowiednik goToStep3()+generateArticle() z WordPressa, ale bez zdjęć/linków - kompiluje
-    // notatki i od razu woła Gemini.generateSocialCaptions.
-    compileNotes() {
-        const cat = this.evtCategory.value;
-        let compiledInformation = "";
+    // --- "Baza fotografów" (modal dostępny z nagłówka w każdej chwili) ---
 
-        if (cat === 'kultura' || cat === 'sport' || cat === 'nauka') {
-            compiledInformation += `Wydarzenie: ${this.evtTitle.value}\n`;
-            compiledInformation += `Miejsce: ${this.evtLocation.value}\n`;
-            compiledInformation += `Czas: od ${this.evtStart.value} do ${this.evtEnd.value}\n\n`;
+    async openPhotoDbModal() {
+        this.photoDbModal.classList.remove('hidden');
+        await this.refreshPhotoDbLists();
+    },
+
+    async refreshPhotoDbLists() {
+        this.photoDbPhotographersList.innerHTML = `<p class="info-text">${this.t('Wczytywanie...')}</p>`;
+        this.photoDbUnitsList.innerHTML = `<p class="info-text">${this.t('Wczytywanie...')}</p>`;
+
+        try {
+            const photographers = await PhotoDb.getPhotographers();
+            this.photoDbPhotographersList.innerHTML = photographers.length
+                ? photographers.map((p) => `<div style="padding:4px 0;">${p.name}${p.handle ? ` - @${p.handle}` : ` (${this.t('brak Instagrama')})`}</div>`).join('')
+                : `<p class="info-text">${this.t('Baza jest jeszcze pusta.')}</p>`;
+        } catch (error) {
+            this.photoDbPhotographersList.innerHTML = `<p class="info-text">${this.t('Nie udało się wczytać listy:')} ${error.message}</p>`;
         }
+
+        try {
+            const units = await PhotoDb.getUnits();
+            this.photoDbUnitsList.innerHTML = units.length
+                ? units.map((u) => `<div style="padding:4px 0;">${u.name}${u.handle ? ` - @${u.handle}` : ''}${(u.keywords || []).length ? ` <span style="color:var(--text-muted); font-size:0.85rem;">(${u.keywords.join(', ')})</span>` : ''}</div>`).join('')
+                : `<p class="info-text">${this.t('Baza jest jeszcze pusta.')}</p>`;
+        } catch (error) {
+            this.photoDbUnitsList.innerHTML = `<p class="info-text">${this.t('Nie udało się wczytać listy:')} ${error.message}</p>`;
+        }
+    },
+
+    async addPhotographerFromModal() {
+        const name = this.newPhotographerName.value.trim();
+        const handle = this.newPhotographerHandle.value.trim().replace(/^@/, '');
+        if (!name) {
+            alert(this.t('Podaj imię i nazwisko.'));
+            return;
+        }
+        try {
+            await PhotoDb.upsertPhotographer({ name, handle });
+            this.newPhotographerName.value = '';
+            this.newPhotographerHandle.value = '';
+            this.showToast(this.t('Dodano do bazy!'));
+            await this.refreshPhotoDbLists();
+        } catch (error) {
+            alert(this.t('Nie udało się zapisać:') + ' ' + error.message);
+        }
+    },
+
+    async addUnitFromModal() {
+        const name = this.newUnitName.value.trim();
+        const handle = this.newUnitHandle.value.trim().replace(/^@/, '');
+        const keywords = this.newUnitKeywords.value.split(',').map((s) => s.trim()).filter(Boolean);
+        if (!name) {
+            alert(this.t('Podaj nazwę jednostki.'));
+            return;
+        }
+        try {
+            await PhotoDb.upsertUnit({ name, handle, keywords });
+            this.newUnitName.value = '';
+            this.newUnitHandle.value = '';
+            this.newUnitKeywords.value = '';
+            this.showToast(this.t('Dodano do bazy!'));
+            await this.refreshPhotoDbLists();
+        } catch (error) {
+            alert(this.t('Nie udało się zapisać:') + ' ' + error.message);
+        }
+    },
+
+    // Odpowiednik goToStep3()+generateArticle() z WordPressa, ale bez zdjęć/linków/kategorii -
+    // kompiluje notatki i od razu woła Gemini.generateSocialCaptions.
+    compileNotes() {
+        let compiledInformation = "";
+        compiledInformation += `Wydarzenie: ${this.evtTitle.value}\n`;
+        compiledInformation += `Miejsce: ${this.evtLocation.value}\n`;
+        compiledInformation += `Data: ${this.evtDate.value}\n`;
+        compiledInformation += `Kto robił zdjęcia: ${this.evtPhotographers.value}\n\n`;
 
         compiledInformation += `Główne notatki autora:\n${this.evtNotes.value}\n`;
 
@@ -420,7 +608,7 @@ const SocialApp = {
 
         const externalArticle = this.evtExternalArticle?.value.trim();
         if (externalArticle) {
-            compiledInformation += `\n\n=== ZEWNĘTRZNY ARTYKUŁ O TYM WYDARZENIU (TYLKO DO INSPIRACJI FAKTOGRAFICZNEJ - NIE KOPIUJ ZDAŃ ANI STYLU) ===\n${externalArticle}`;
+            compiledInformation += `\n\n=== WCZEŚNIEJSZY ARTYKUŁ O TYM WYDARZENIU (Z ZEWNĘTRZNEGO PORTALU LUB WCZEŚNIEJSZY WPIS SAF JAMNIK - TYLKO DO INSPIRACJI FAKTOGRAFICZNEJ, NIE KOPIUJ ZDAŃ ANI STYLU) ===\n${externalArticle}`;
         }
 
         return compiledInformation;
@@ -454,7 +642,7 @@ const SocialApp = {
         );
 
         try {
-            const captions = await Gemini.generateSocialCaptions(this.evtCategory.value, this._notes, {
+            const captions = await Gemini.generateSocialCaptions(this._notes, this.state.resolvedTags, {
                 signal,
                 onRetry: (attempt, maxAttempts, isFallback) => this.showRetryNotice(
                     this.genRetryNotice,
@@ -481,7 +669,7 @@ const SocialApp = {
 
     buildExternalPromptText() {
         const notes = this._notes || this.compileNotes();
-        return Gemini.buildExternalSocialPrompt(this.evtCategory.value, notes);
+        return Gemini.buildExternalSocialPrompt(notes, this.state.resolvedTags);
     },
 
     async copyExternalPrompt() {
@@ -513,25 +701,27 @@ const SocialApp = {
     },
 
     hasUnsavedContent() {
-        return !!(this.evtTitle.value || this.evtNotes.value || this.evtExternalArticle.value || this.state.captionsData);
+        return !!(this.evtTitle.value || this.evtNotes.value || this.evtExternalArticle.value
+            || this.evtPhotographers.value || this.state.captionsData);
     },
 
     resetAllFormState() {
         this._interviewAbortController?.abort();
         this._captionsAbortController?.abort();
 
-        this.evtCategory.value = '';
-        this.handleCategoryChange();
         this.evtTitle.value = '';
         this.evtLocation.value = '';
-        this.evtStart.value = '';
-        this.evtEnd.value = '';
+        this.evtDate.value = '';
+        this.evtPhotographers.value = '';
         this.evtNotes.value = '';
         this.evtExternalArticle.value = '';
 
         this.state.interviewAnswers = '';
         this.state.captionsData = null;
+        this.state.resolvedTags = null;
         this._notes = null;
+        this._resolvedPhotographers = null;
+        this._knownUnits = null;
         this.instagramOutput.value = '';
         this.facebookOutput.value = '';
         this.setResultState('loading');
