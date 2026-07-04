@@ -484,6 +484,41 @@ Jeśli żadna naprawdę nie pasuje (to prawdopodobnie nowa osoba), zwróć {"mat
         return { match, confidence: parsed.confidence === 'high' ? 'high' : 'low' };
     },
 
+    // Redaktor Social Media: rozwiązuje różne nazwy/skróty TEJ SAMEJ jednostki uczelnianej wobec
+    // listy znanych jednostek z bazy (patrz js/photoDb.js) - np. "RUSS", "Rada Uczelniana Samorządu
+    // Studenckiego" i "Samorząd UWM" to bardzo prawdopodobnie ta sama jednostka pod różnymi
+    // nazwami/skrótami. Wołane TYLKO gdy dopasowanie dokładne (case-insensitive) zawiedzie.
+    // knownUnits to PEŁNE obiekty {name, keywords} (nie same nazwy) - słowa kluczowe dają modelowi
+    // dodatkowy kontekst przydatny przy rozpoznawaniu skrótów.
+    async matchUnitName(typedName, knownUnits, options = {}) {
+        if (!knownUnits || knownUnits.length === 0) return { match: null, confidence: 'low' };
+        const knownNames = knownUnits.map((u) => u.name);
+
+        const describedUnits = knownUnits.map((u) => {
+            const kw = (u.keywords || []).length ? ` (słowa kluczowe: ${u.keywords.join(', ')})` : '';
+            return `${u.name}${kw}`;
+        }).join('\n- ');
+
+        const prompt = `Sprawdź, czy podana nazwa jednostki/organizacji uczelnianej może odnosić się do jednej z jednostek z poniższej listy znanych jednostek UWM/SAF Jamnik - to mogą być skróty, pełne nazwy lub potoczne określenia TEJ SAMEJ jednostki (np. "RUSS", "Rada Uczelniana Samorządu Studenckiego" i "Samorząd UWM" to bardzo prawdopodobnie ta sama jednostka).
+
+Wpisane przez użytkownika: "${typedName}"
+Znane jednostki:
+- ${describedUnits}
+
+ODPOWIEDZ WYŁĄCZNIE CZYSTYM, SUROWYM KODEM JSON w formacie:
+{"match": "Dokładna nazwa ze znanej listy powyżej", "confidence": "high"}
+Jeśli żadna naprawdę nie pasuje (to prawdopodobnie nowa jednostka), zwróć {"match": null, "confidence": "low"}. Bez markdownu, bez komentarzy poza obiektem JSON.`;
+
+        const raw = await this.callGeminiRaw(prompt, {
+            temperature: 0.2, maxOutputTokens: 150, thinkingConfig: { thinkingBudget: 0 }
+        }, options);
+
+        const jsonMatch = raw.match(/\{[\s\S]*\}/);
+        const parsed = JSON.parse(jsonMatch ? jsonMatch[0] : raw);
+        const match = typeof parsed.match === 'string' && knownNames.includes(parsed.match) ? parsed.match : null;
+        return { match, confidence: parsed.confidence === 'high' ? 'high' : 'low' };
+    },
+
     // Wspólna instrukcja oznaczeń (fotografowie/jednostki) dla generateSocialCaptions ORAZ
     // buildExternalSocialPrompt - "tags" to już ROZWIĄZANE dane z Kroku 2 na social-media.html
     // ({photographers: [{name, handle}], units: [{name, handle}]}), NIE surowy tekst z formularza.

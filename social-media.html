@@ -45,7 +45,7 @@
             <img src="assets/redaktor-saf-emblem.svg" alt="Redaktor SAFi" class="logo-emblem">
             <span class="logo-text">
                 <span class="logo-line">Redaktor</span>
-                <span class="logo-line">Social Media <span class="logo-version" data-release-date="2026-07-04" data-no-translate>ver. 1.13.1</span></span>
+                <span class="logo-line">Social Media <span class="logo-version" data-release-date="2026-07-04" data-no-translate>ver. 1.14.0</span></span>
             </span>
         </a>
 
@@ -240,8 +240,21 @@
                 </div>
 
                 <div class="form-group">
-                    <label><strong>Jednostki do oznaczenia</strong> (zaznacz wszystkie pasujące):</label>
-                    <div id="unitsChecklistContainer"></div>
+                    <label><strong>Jednostki do oznaczenia</strong></label>
+
+                    <p class="info-text" style="margin-bottom: 6px;">Zaproponowane na podstawie treści:</p>
+                    <div id="suggestedUnitsContainer"></div>
+
+                    <p class="info-text" style="margin: 14px 0 6px;">Wszystkie jednostki:</p>
+                    <input type="text" id="unitSearchInput" placeholder="Szukaj po nazwie lub słowie kluczowym...">
+                    <div id="allUnitsContainer" style="max-height: 180px; overflow-y: auto; margin-top: 8px;"></div>
+
+                    <div style="display: flex; gap: 8px; flex-wrap: wrap; margin-top: 14px;">
+                        <input type="text" id="newTagUnitName" placeholder="Nazwa nowej jednostki (np. RUSS)" style="flex: 1 1 140px;">
+                        <input type="text" id="newTagUnitHandle" placeholder="Nazwa na Instagramie (bez @)" style="flex: 1 1 160px;">
+                        <input type="text" id="newTagUnitKeywords" placeholder="Słowa kluczowe, oddziel przecinkami" style="flex: 1 1 160px;">
+                        <button type="button" id="btnAddTagUnit" class="btn-secondary">+ Dodaj jednostkę</button>
+                    </div>
                 </div>
             </div>
 
@@ -299,7 +312,7 @@
 
     <div id="toastContainer" class="toast-container"></div>
 
-    <script type="module" src="js/social.js?v=4"></script>
+    <script type="module" src="js/social.js?v=5"></script>
 
     <script>
         if ('serviceWorker' in navigator) {

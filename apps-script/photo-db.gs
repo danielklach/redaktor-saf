@@ -1,5 +1,5 @@
 /**
- * Redaktor Social Media - baza fotografów i jednostek (v1.13.0)
+ * Redaktor Social Media - baza fotografów i jednostek (v1.13.2)
  *
  * Skrypt PRZYPISANY DO tego Google Dokumentu (kontenerowy Apps Script), który służy jako prosta,
  * współdzielona baza danych "kto to jest -> jaka jest jego nazwa na Instagramie". Dokument przechowuje
@@ -39,8 +39,8 @@ function doGet(e) {
     const type = (e.parameter && e.parameter.type) || 'photographers';
     const doc = DocumentApp.openById(DOC_ID);
     const data = type === 'units'
-      ? readTable(doc, UNIT_HEADING, UNIT_COLUMNS, UNIT_HEADER_CELLS)
-      : readTable(doc, PHOTOGRAPHER_HEADING, PHOTOGRAPHER_COLUMNS, PHOTOGRAPHER_HEADER_CELLS);
+      ? readTable(doc, UNIT_HEADING, UNIT_COLUMNS, UNIT_HEADER_CELLS, unitSortKey)
+      : readTable(doc, PHOTOGRAPHER_HEADING, PHOTOGRAPHER_COLUMNS, PHOTOGRAPHER_HEADER_CELLS, surnameKey);
     return jsonResponse({ status: 'success', data: data });
   } catch (err) {
     return jsonResponse({ status: 'error', message: err && err.message ? err.message : String(err) });
@@ -53,9 +53,9 @@ function doPost(e) {
     const doc = DocumentApp.openById(DOC_ID);
 
     if (body.action === 'addPhotographer') {
-      upsertRow(doc, PHOTOGRAPHER_HEADING, PHOTOGRAPHER_COLUMNS, PHOTOGRAPHER_HEADER_CELLS, body);
+      upsertRow(doc, PHOTOGRAPHER_HEADING, PHOTOGRAPHER_COLUMNS, PHOTOGRAPHER_HEADER_CELLS, body, surnameKey);
     } else if (body.action === 'addUnit') {
-      upsertRow(doc, UNIT_HEADING, UNIT_COLUMNS, UNIT_HEADER_CELLS, body);
+      upsertRow(doc, UNIT_HEADING, UNIT_COLUMNS, UNIT_HEADER_CELLS, body, unitSortKey);
     } else {
       throw new Error('Nieznana akcja: ' + body.action);
     }
@@ -64,6 +64,18 @@ function doPost(e) {
   } catch (err) {
     return jsonResponse({ status: 'error', message: err && err.message ? err.message : String(err) });
   }
+}
+
+// Klucze sortowania tabel (patrz sortTableRows) - fotografowie sortowani po NAZWISKU (ostatni człon
+// komórki "Imię i nazwisko" - prosta, ale skuteczna heurystyka dla polskich imion/nazwisk), jednostki
+// po pełnej nazwie.
+function surnameKey(fullName) {
+  const parts = String(fullName || '').trim().split(/\s+/).filter(Boolean);
+  return (parts.length ? parts[parts.length - 1] : '').toLowerCase();
+}
+
+function unitSortKey(name) {
+  return String(name || '').trim().toLowerCase();
 }
 
 function jsonResponse(obj) {
@@ -110,8 +122,9 @@ function syncHeaderRow(table, headerCells) {
   });
 }
 
-function readTable(doc, heading, keys, headerCells) {
+function readTable(doc, heading, keys, headerCells, sortKeyFn) {
   const table = ensureTable(doc, heading, headerCells);
+  sortTableRows(table, sortKeyFn);
   const rows = [];
 
   for (let r = 1; r < table.getNumRows(); r++) { // r=0 to wiersz nagłówkowy
@@ -131,13 +144,15 @@ function readTable(doc, heading, keys, headerCells) {
 
 // Dopisuje NOWY wiersz, albo aktualizuje ISTNIEJĄCY (dopasowanie po pierwszej kolumnie "name",
 // bez rozróżniania wielkości liter) - dzięki temu potwierdzenie/poprawka nazwy z aplikacji NIE
-// tworzy duplikatów tej samej osoby/jednostki.
-function upsertRow(doc, heading, keys, headerCells, data) {
+// tworzy duplikatów tej samej osoby/jednostki. Na końcu ZAWSZE sortuje tabelę (patrz sortTableRows) -
+// dzięki temu nowo dopisany wiersz od razu ląduje we właściwym, alfabetycznym miejscu w dokumencie.
+function upsertRow(doc, heading, keys, headerCells, data, sortKeyFn) {
   const table = ensureTable(doc, heading, headerCells);
   const nameKey = keys[0];
   const targetName = String(data[nameKey] || '').trim();
   if (!targetName) throw new Error('Brak pola "' + nameKey + '" w żądaniu.');
 
+  let found = false;
   for (let r = 1; r < table.getNumRows(); r++) {
     const row = table.getRow(r);
     if (row.getCell(0).getText().trim().toLowerCase() === targetName.toLowerCase()) {
@@ -145,12 +160,49 @@ function upsertRow(doc, heading, keys, headerCells, data) {
         if (data[key] === undefined) return;
         row.getCell(c).setText(cellValue(data[key]));
       });
-      return;
+      found = true;
+      break;
     }
   }
 
-  const newRow = table.appendTableRow();
-  keys.forEach((key) => newRow.appendTableCell(cellValue(data[key])));
+  if (!found) {
+    const newRow = table.appendTableRow();
+    keys.forEach((key) => newRow.appendTableCell(cellValue(data[key])));
+  }
+
+  sortTableRows(table, sortKeyFn);
+}
+
+// Sortuje wiersze DANYCH (bez wiersza nagłówkowego) alfabetycznie wg sortKeyFn, przepisując tekst
+// komórek w istniejące wiersze (zamiast usuwać/wstawiać wiersze - Apps Script nie ma wygodnego API
+// do przestawiania wierszy tabeli, a nadpisanie tekstu jest znacznie prostsze i równie skuteczne).
+// Woływane przy KAŻDYM odczycie/zapisie (patrz readTable/upsertRow) - samonaprawia też porządek
+// wierszy dopisanych kiedyś ręcznie wprost w dokumencie przez admina.
+function sortTableRows(table, sortKeyFn) {
+  const numRows = table.getNumRows();
+  if (numRows <= 2) return; // nagłówek + co najwyżej 1 wiersz danych - nic do posortowania
+
+  const numCols = table.getRow(0).getNumCells();
+  const dataRows = [];
+  for (let r = 1; r < numRows; r++) {
+    const row = table.getRow(r);
+    const values = [];
+    for (let c = 0; c < numCols; c++) {
+      values.push(row.getNumCells() > c ? row.getCell(c).getText() : '');
+    }
+    dataRows.push(values);
+  }
+
+  dataRows.sort((a, b) => sortKeyFn(a[0]).localeCompare(sortKeyFn(b[0]), 'pl'));
+
+  dataRows.forEach((values, i) => {
+    const row = table.getRow(i + 1);
+    values.forEach((value, c) => {
+      if (row.getNumCells() > c && row.getCell(c).getText() !== value) {
+        row.getCell(c).setText(value);
+      }
+    });
+  });
 }
 
 function cellValue(value) {

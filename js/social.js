@@ -2,7 +2,7 @@ import { Gemini } from './gemini.js';
 import { I18n } from './i18n.js';
 import { PhotoDb } from './photoDb.js';
 
-// Redaktor Social Media (v1.13.1) - odpowiednik trybu automatycznego z głównej aplikacji (patrz
+// Redaktor Social Media (v1.14.0) - odpowiednik trybu automatycznego z głównej aplikacji (patrz
 // js/app.js), ale znacznie okrojony: bez zdjęć/Compressor/Gutenberg (IG/FB przyjmują zdjęcia w
 // dowolnym formacie wprost z telefonu - ten krok jest tu całkowicie zbędny) i bez kroku "finalNotes"
 // - wywiad AI od razu prowadzi do gotowego wyniku: DWA teksty (Instagram/Facebook).
@@ -28,7 +28,9 @@ const KNOWN_DYNAMIC_STRINGS = [
     'Zmiana języka odświeży stronę - obecne dane i wygenerowana treść zostaną utracone. Kontynuować?',
     'Sprawdzam bazę fotografów...',
     'Nie podano żadnych fotografów.',
-    'Baza jednostek jest jeszcze pusta - możesz dodać wpisy w "Baza fotografów" w nagłówku.',
+    'Baza jednostek jest jeszcze pusta - dodaj pierwszą poniżej.',
+    'Brak sugestii na podstawie treści - wybierz jednostki poniżej.',
+    'Brak wyników.',
     'nazwa na Instagramie (bez @)',
     'Brak Instagrama',
     'Podaj imię i nazwisko.',
@@ -120,7 +122,13 @@ const SocialApp = {
         this.tagsLoadingLabel = document.getElementById('tagsLoadingLabel');
         this.tagsContent = document.getElementById('tagsContent');
         this.photographerTagsContainer = document.getElementById('photographerTagsContainer');
-        this.unitsChecklistContainer = document.getElementById('unitsChecklistContainer');
+        this.suggestedUnitsContainer = document.getElementById('suggestedUnitsContainer');
+        this.allUnitsContainer = document.getElementById('allUnitsContainer');
+        this.unitSearchInput = document.getElementById('unitSearchInput');
+        this.newTagUnitName = document.getElementById('newTagUnitName');
+        this.newTagUnitHandle = document.getElementById('newTagUnitHandle');
+        this.newTagUnitKeywords = document.getElementById('newTagUnitKeywords');
+        this.btnAddTagUnit = document.getElementById('btnAddTagUnit');
         this.btnBackToStep1FromTags = document.getElementById('btnBackToStep1FromTags');
         this.btnConfirmTags = document.getElementById('btnConfirmTags');
 
@@ -197,6 +205,8 @@ const SocialApp = {
 
         this.btnBackToStep1FromTags.addEventListener('click', () => this.tagsModal.classList.add('hidden'));
         this.btnConfirmTags.addEventListener('click', () => this.confirmTagsAndGenerate());
+        this.unitSearchInput.addEventListener('input', () => this.renderUnitsUI());
+        this.btnAddTagUnit.addEventListener('click', () => this.addUnitFromTagsModal());
 
         this.btnBackToStep1FromResults.addEventListener('click', () => {
             this._captionsAbortController?.abort();
@@ -398,6 +408,10 @@ const SocialApp = {
         this.btnConfirmTags.disabled = true;
         this.tagsLoadingLabel.textContent = this.t('Sprawdzam bazę fotografów...');
 
+        this._unitSelected = new Set();
+        this._unitsInitialized = false;
+        this.unitSearchInput.value = '';
+
         const typedNames = this.evtPhotographers.value.split(',').map((s) => s.trim()).filter(Boolean);
 
         let knownPhotographers = [];
@@ -509,22 +523,67 @@ const SocialApp = {
     },
 
     // Proste dopasowanie podciągu (case-insensitive) słów kluczowych jednostki wobec tytułu/miejsca/
-    // notatek - jeśli trafi, jednostka jest domyślnie zaznaczona (użytkownik może to zmienić).
+    // notatek - trafienia lądują w sekcji "Zaproponowane" na samym początku (i są domyślnie
+    // zaznaczone), a CAŁA baza jest dodatkowo dostępna niżej, alfabetycznie i z wyszukiwarką - lista
+    // jednostek może z czasem mocno urosnąć, więc płaska checklista przestałaby się skalować.
     renderUnitsChecklist(knownUnits) {
-        this.unitsChecklistContainer.innerHTML = '';
-        if (!knownUnits || knownUnits.length === 0) {
-            this.unitsChecklistContainer.innerHTML = `<p class="info-text">${this.t('Baza jednostek jest jeszcze pusta - możesz dodać wpisy w "Baza fotografów" w nagłówku.')}</p>`;
-            return;
-        }
+        this._knownUnits = knownUnits || [];
 
         const haystack = `${this.evtTitle.value} ${this.evtLocation.value} ${this.evtNotes.value}`.toLowerCase();
+        this._suggestedUnitIdxs = this._knownUnits
+            .map((unit, idx) => ((unit.keywords || []).some((kw) => kw && haystack.includes(kw.toLowerCase())) ? idx : -1))
+            .filter((idx) => idx !== -1);
 
-        knownUnits.forEach((unit, idx) => {
-            const suggested = (unit.keywords || []).some((kw) => kw && haystack.includes(kw.toLowerCase()));
-            const label = document.createElement('label');
-            label.style.cssText = 'display:flex; align-items:center; gap:8px; padding:6px 0;';
-            label.innerHTML = `<input type="checkbox" class="unit-checkbox" data-idx="${idx}" ${suggested ? 'checked' : ''}> ${unit.name}${unit.handle ? ` (@${unit.handle})` : ''}`;
-            this.unitsChecklistContainer.appendChild(label);
+        if (!this._unitsInitialized) {
+            this._suggestedUnitIdxs.forEach((idx) => this._unitSelected.add(idx));
+            this._unitsInitialized = true;
+        }
+
+        this.renderUnitsUI();
+    },
+
+    _renderUnitCheckboxHtml(idx) {
+        const unit = this._knownUnits[idx];
+        const checked = this._unitSelected.has(idx) ? 'checked' : '';
+        return `<label style="display:flex; align-items:center; gap:8px; padding:6px 0;">
+            <input type="checkbox" class="unit-checkbox" data-idx="${idx}" ${checked}> ${unit.name}${unit.handle ? ` (@${unit.handle})` : ''}
+        </label>`;
+    },
+
+    renderUnitsUI() {
+        const knownUnits = this._knownUnits || [];
+
+        if (knownUnits.length === 0) {
+            this.suggestedUnitsContainer.innerHTML = `<p class="info-text">${this.t('Baza jednostek jest jeszcze pusta - dodaj pierwszą poniżej.')}</p>`;
+            this.allUnitsContainer.innerHTML = '';
+        } else {
+            this.suggestedUnitsContainer.innerHTML = this._suggestedUnitIdxs.length
+                ? this._suggestedUnitIdxs.map((idx) => this._renderUnitCheckboxHtml(idx)).join('')
+                : `<p class="info-text">${this.t('Brak sugestii na podstawie treści - wybierz jednostki poniżej.')}</p>`;
+
+            const searchTerm = this.unitSearchInput.value.trim().toLowerCase();
+            const suggestedSet = new Set(this._suggestedUnitIdxs);
+            const remainingIdxs = knownUnits
+                .map((_, idx) => idx)
+                .filter((idx) => !suggestedSet.has(idx))
+                .filter((idx) => {
+                    if (!searchTerm) return true;
+                    const unit = knownUnits[idx];
+                    return unit.name.toLowerCase().includes(searchTerm)
+                        || (unit.keywords || []).some((kw) => kw.toLowerCase().includes(searchTerm));
+                })
+                .sort((a, b) => knownUnits[a].name.localeCompare(knownUnits[b].name, 'pl'));
+
+            this.allUnitsContainer.innerHTML = remainingIdxs.length
+                ? remainingIdxs.map((idx) => this._renderUnitCheckboxHtml(idx)).join('')
+                : `<p class="info-text">${this.t('Brak wyników.')}</p>`;
+        }
+
+        this.tagsContent.querySelectorAll('.unit-checkbox').forEach((cb) => {
+            cb.addEventListener('change', (e) => {
+                const idx = Number(e.target.dataset.idx);
+                if (e.target.checked) this._unitSelected.add(idx); else this._unitSelected.delete(idx);
+            });
         });
     },
 
@@ -545,8 +604,10 @@ const SocialApp = {
             handle: row.noInstagram ? null : (row.handle || null)
         }));
 
-        const selectedIdxs = Array.from(this.unitsChecklistContainer.querySelectorAll('.unit-checkbox:checked')).map((cb) => Number(cb.dataset.idx));
-        const units = selectedIdxs.map((idx) => this._knownUnits[idx]).map((u) => ({ name: u.name, handle: u.handle || null }));
+        const units = Array.from(this._unitSelected)
+            .map((idx) => this._knownUnits[idx])
+            .filter(Boolean)
+            .map((u) => ({ name: u.name, handle: u.handle || null }));
 
         this.state.resolvedTags = { photographers, units };
         this.tagsModal.classList.add('hidden');
@@ -647,15 +708,14 @@ const SocialApp = {
         }
     },
 
-    async addUnitFromModal() {
-        const typedName = this.newUnitName.value.trim();
-        const typedHandle = this.newUnitHandle.value.trim().replace(/^@+/, '');
-        const keywords = this.newUnitKeywords.value.split(',').map((s) => s.trim()).filter(Boolean);
-        if (!typedName) {
-            alert(this.t('Podaj nazwę jednostki.'));
-            return;
-        }
-
+    // Wspólna logika dodawania/aktualizacji jednostki - używana zarówno przez modal "Baza
+    // fotografów" (addUnitFromModal), jak i przez szybkie dodawanie wprost w oknie "Potwierdź
+    // Oznaczenia" (addUnitFromTagsModal). Wykrywa duplikaty PO NAZWIE (dokładne dopasowanie) oraz
+    // PO ZNACZENIU (przez Gemini.matchUnitName - różne nazwy/skróty tej samej jednostki, np. "RUSS"
+    // vs "Rada Uczelniana Samorządu Studenckiego" vs "Samorząd UWM"), i w razie podobieństwa pyta
+    // użytkownika przez resolveDbConflict, co zrobić. Zwraca finalny zapisany wpis
+    // {name, handle, keywords}, albo null jeśli operację przerwano (dokładny duplikat lub błąd zapisu).
+    async resolveUnitEntry(typedName, typedHandle, keywords) {
         let known = [];
         try {
             known = await PhotoDb.getUnits();
@@ -667,34 +727,89 @@ const SocialApp = {
 
         if (exact && (exact.handle || '') === typedHandle) {
             alert(this.t('Ta jednostka jest już na liście.'));
-            return;
+            return null;
+        }
+
+        let match = exact || null;
+        if (!match && known.length > 0) {
+            try {
+                const { match: fuzzyName } = await Gemini.matchUnitName(typedName, known);
+                if (fuzzyName) match = known.find((u) => u.name === fuzzyName) || null;
+            } catch (error) {
+                console.warn('[PhotoDb] Dopasowanie nazwy jednostki nie powiodło się:', error.message);
+            }
         }
 
         let finalName = typedName;
         let finalHandle = typedHandle;
         let finalKeywords = keywords;
-        if (exact) {
+
+        if (match) {
             const action = await this.resolveDbConflict(
-                `${this.t('Znaleziono podobny wpis na liście:')} "${exact.name}"${exact.handle ? ` (@${exact.handle})` : ''}. ${this.t('Co chcesz zrobić?')}`,
+                `${this.t('Znaleziono podobny wpis na liście:')} "${match.name}"${match.handle ? ` (@${match.handle})` : ''}. ${this.t('Co chcesz zrobić?')}`,
                 this.t('To ten sam wpis'),
                 this.t('Dodaj jako nowy wpis')
             );
             if (action === 'update' || action === 'same') {
-                finalName = exact.name;
-                if (!typedHandle) finalHandle = exact.handle || '';
-                if (keywords.length === 0) finalKeywords = exact.keywords || [];
+                finalName = match.name;
+                if (!typedHandle) finalHandle = match.handle || '';
+                if (keywords.length === 0) finalKeywords = match.keywords || [];
             }
         }
 
         try {
             await PhotoDb.upsertUnit({ name: finalName, handle: finalHandle, keywords: finalKeywords });
-            this.newUnitName.value = '';
-            this.newUnitHandle.value = '';
-            this.newUnitKeywords.value = '';
-            this.showToast(`${this.t('dodano')} ${finalHandle ? '@' + finalHandle : finalName}`);
+            return { name: finalName, handle: finalHandle, keywords: finalKeywords };
         } catch (error) {
             alert(this.t('Nie udało się zapisać:') + ' ' + error.message);
+            return null;
         }
+    },
+
+    async addUnitFromModal() {
+        const typedName = this.newUnitName.value.trim();
+        const typedHandle = this.newUnitHandle.value.trim().replace(/^@+/, '');
+        const keywords = this.newUnitKeywords.value.split(',').map((s) => s.trim()).filter(Boolean);
+        if (!typedName) {
+            alert(this.t('Podaj nazwę jednostki.'));
+            return;
+        }
+
+        const saved = await this.resolveUnitEntry(typedName, typedHandle, keywords);
+        if (!saved) return;
+
+        this.newUnitName.value = '';
+        this.newUnitHandle.value = '';
+        this.newUnitKeywords.value = '';
+        this.showToast(`${this.t('dodano')} ${saved.handle ? '@' + saved.handle : saved.name}`);
+    },
+
+    // Dodawanie jednostki wprost w oknie "Potwierdź Oznaczenia" (bez potrzeby przełączania się na
+    // osobny modal "Baza fotografów") - po zapisie nowa/zaktualizowana jednostka od razu trafia do
+    // lokalnej listy `_knownUnits` i zostaje automatycznie zaznaczona (skoro użytkownik właśnie ją
+    // dopisał, najpewniej ma być oznaczona w TYM poście).
+    async addUnitFromTagsModal() {
+        const typedName = this.newTagUnitName.value.trim();
+        const typedHandle = this.newTagUnitHandle.value.trim().replace(/^@+/, '');
+        const keywords = this.newTagUnitKeywords.value.split(',').map((s) => s.trim()).filter(Boolean);
+        if (!typedName) {
+            alert(this.t('Podaj nazwę jednostki.'));
+            return;
+        }
+
+        const saved = await this.resolveUnitEntry(typedName, typedHandle, keywords);
+        if (!saved) return;
+
+        const existingIdx = this._knownUnits.findIndex((u) => u.name.toLowerCase() === saved.name.toLowerCase());
+        const idx = existingIdx >= 0 ? existingIdx : this._knownUnits.push(saved) - 1;
+        if (existingIdx >= 0) this._knownUnits[existingIdx] = saved;
+        this._unitSelected.add(idx);
+
+        this.newTagUnitName.value = '';
+        this.newTagUnitHandle.value = '';
+        this.newTagUnitKeywords.value = '';
+        this.showToast(`${this.t('dodano')} ${saved.handle ? '@' + saved.handle : saved.name}`);
+        this.renderUnitsUI();
     },
 
     // Odpowiednik goToStep3()+generateArticle() z WordPressa, ale bez zdjęć/linków/kategorii -
@@ -829,6 +944,8 @@ const SocialApp = {
         this._notes = null;
         this._resolvedPhotographers = null;
         this._knownUnits = null;
+        this._unitSelected = new Set();
+        this._unitsInitialized = false;
         this.instagramOutput.value = '';
         this.facebookOutput.value = '';
         this.setResultState('loading');
