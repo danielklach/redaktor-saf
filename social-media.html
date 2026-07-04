@@ -45,7 +45,7 @@
             <img src="assets/redaktor-saf-emblem.svg" alt="Redaktor SAFi" class="logo-emblem">
             <span class="logo-text">
                 <span class="logo-line">Redaktor</span>
-                <span class="logo-line">Social Media <span class="logo-version" data-release-date="2026-07-03" data-no-translate>ver. 1.13.0</span></span>
+                <span class="logo-line">Social Media <span class="logo-version" data-release-date="2026-07-04" data-no-translate>ver. 1.13.1</span></span>
             </span>
         </a>
 
@@ -66,8 +66,7 @@
     <main class="container">
         <div class="steps-indicator">
             <div class="step active" data-step="step1"><span class="step-num">1</span><span class="step-label">Szczegóły wydarzenia</span></div>
-            <div class="step" data-step="step2"><span class="step-num">2</span><span class="step-label">Potwierdź oznaczenia</span></div>
-            <div class="step" data-step="step3"><span class="step-num">3</span><span class="step-label">Gotowe podpisy</span></div>
+            <div class="step" data-step="step2"><span class="step-num">2</span><span class="step-label">Gotowe podpisy</span></div>
         </div>
 
         <hr>
@@ -108,26 +107,6 @@
         </section>
 
         <section id="step2" class="step-section">
-            <h2>Potwierdź Oznaczenia</h2>
-            <p class="info-text">Sprawdź i uzupełnij uchwyty na Instagramie dla fotografów (mogły się zmienić od ostatniego razu) oraz zaznacz jednostki, które mają zostać oznaczone w podpisach.</p>
-
-            <div class="form-group">
-                <label><strong>Fotografowie</strong></label>
-                <div id="photographerTagsContainer"></div>
-            </div>
-
-            <div class="form-group">
-                <label><strong>Jednostki do oznaczenia</strong> (zaznacz wszystkie pasujące):</label>
-                <div id="unitsChecklistContainer"></div>
-            </div>
-
-            <div class="actions">
-                <button id="btnBackToStep1FromTags" class="btn-secondary">&larr; Wstecz</button>
-                <button id="btnConfirmTags" class="btn-primary">Dalej: Generuj podpisy &rarr;</button>
-            </div>
-        </section>
-
-        <section id="step3" class="step-section">
             <h2>Gotowe Podpisy</h2>
             <p class="info-text">⚠️ AI to tylko maszyna i potrafi się mylić - zanim opublikujesz posty, <strong>przeczytaj uważnie</strong> oba podpisy i popraw ewentualne błędy lub nienaturalne sformułowania.</p>
 
@@ -162,7 +141,7 @@
             <button type="button" id="btnCopyExternalPromptSocial" class="btn-copy-external-subtle">Wolisz użyć innego AI? Skopiuj gotowy prompt</button>
 
             <div class="actions">
-                <button id="btnBackToStep2" class="btn-secondary">&larr; Wstecz</button>
+                <button id="btnBackToStep1FromResults" class="btn-secondary">&larr; Wstecz</button>
                 <button id="btnRegenerateSocial" class="btn-secondary hidden">Generuj jeszcze raz</button>
                 <button id="btnStartNewSocial" class="btn-primary">🔄 Generuj kolejny wpis</button>
             </div>
@@ -188,19 +167,15 @@
             <div class="intro-steps">
                 <div class="intro-step">
                     <span class="intro-step-num">1</span>
-                    <div><strong>Szczegóły wydarzenia</strong><p>Opisz co, gdzie i kiedy, i kto robił zdjęcia (wpisz dokładnie tak, jak na znaku wodnym Jamnika). Agent AI dopyta Cię o brakujące szczegóły.</p></div>
+                    <div><strong>Szczegóły wydarzenia</strong><p>Opisz co, gdzie i kiedy, i kto robił zdjęcia (wpisz dokładnie tak, jak na znaku wodnym Jamnika). Agent AI dopyta Cię o brakujące szczegóły, a potem poprosi o potwierdzenie nazw na Instagramie fotografów (baza podpowiada, jeśli już ich zna) i zaznaczenie jednostek (np. RUSS, ROA) do oznaczenia.</p></div>
                 </div>
                 <div class="intro-step">
                     <span class="intro-step-num">2</span>
-                    <div><strong>Potwierdź oznaczenia</strong><p>Sprawdź/uzupełnij uchwyty na Instagramie fotografów (baza podpowiada, jeśli już ich zna) i zaznacz jednostki (np. RUSS, ROA) do oznaczenia.</p></div>
-                </div>
-                <div class="intro-step">
-                    <span class="intro-step-num">3</span>
                     <div><strong>Gotowe podpisy</strong><p>Dostaniesz DWA gotowe teksty: krótszy z hashtagami na Instagram (do karuzeli max 20 zdjęć) i dłuższy bez hashtagów na Facebooka (do pełnej galerii).</p></div>
                 </div>
             </div>
 
-            <p class="intro-tip">👥 <strong>Baza fotografów</strong> (przycisk w nagłówku) to wspólna, edytowalna przez cały zespół lista uchwytów na Instagramie - rośnie sama w miarę korzystania z narzędzia, a każdy może też dopisać wpis ręcznie.</p>
+            <p class="intro-tip">👥 <strong>Baza fotografów</strong> (przycisk w nagłówku) to wspólna baza nazw na Instagramie fotografów i jednostek - rośnie sama w miarę korzystania z narzędzia, a każdy może też dopisać wpis ręcznie (ze względu na prywatność sama lista nie jest tam widoczna).</p>
             <p class="intro-tip">📋 <strong>To wydarzenie już gdzieś opisano?</strong> W polu "Wklej treść wcześniejszego artykułu" możesz wkleić tekst zarówno z zewnętrznego portalu (np. olsztyn.com.pl), jak i z WCZEŚNIEJSZEGO wpisu na stronie SAF Jamnik - posłuży WYŁĄCZNIE jako źródło faktów.</p>
             <p class="intro-tip">🧩 <strong>Zdjęcia</strong> wgrywasz osobno, bezpośrednio w aplikacji Instagram/Facebook - ten kreator przygotowuje WYŁĄCZNIE tekst podpisu. I zawsze <strong>przeczytaj tekst</strong> przed publikacją - AI czasem się myli.</p>
 
@@ -213,27 +188,66 @@
     <div id="photoDbModal" class="modal hidden">
         <div class="modal-content">
             <h3>👥 Baza fotografów i jednostek</h3>
-            <p class="info-text">Współdzielona lista - wpisy są widoczne i edytowalne przez cały zespół, i pomagają automatycznie sugerować uchwyty na Instagramie przy generowaniu podpisów.</p>
+            <p class="info-text">Dodaj tu fotografa lub jednostkę i jej nazwę na Instagramie - baza pomoże automatycznie sugerować oznaczenia przy generowaniu podpisów. Ze względu na prywatność lista już dodanych wpisów nie jest tu wyświetlana.</p>
 
-            <h4 style="margin-top: 15px;">Fotografowie</h4>
-            <div id="photoDbPhotographersList"></div>
+            <h4 style="margin-top: 15px;">Dodaj fotografa</h4>
             <div style="display: flex; gap: 8px; flex-wrap: wrap; margin-top: 10px;">
                 <input type="text" id="newPhotographerName" placeholder="Imię i nazwisko" style="flex: 1 1 160px;">
-                <input type="text" id="newPhotographerHandle" placeholder="Uchwyt na Instagramie (bez @, opcjonalnie)" style="flex: 1 1 200px;">
+                <input type="text" id="newPhotographerHandle" placeholder="Nazwa na Instagramie (bez @, opcjonalnie)" style="flex: 1 1 200px;">
                 <button type="button" id="btnAddPhotographer" class="btn-secondary">+ Dodaj</button>
             </div>
 
-            <h4 style="margin-top: 20px;">Jednostki</h4>
-            <div id="photoDbUnitsList"></div>
+            <h4 style="margin-top: 20px;">Dodaj jednostkę</h4>
             <div style="display: flex; gap: 8px; flex-wrap: wrap; margin-top: 10px;">
                 <input type="text" id="newUnitName" placeholder="Nazwa jednostki (np. RUSS)" style="flex: 1 1 140px;">
-                <input type="text" id="newUnitHandle" placeholder="Uchwyt na Instagramie (bez @)" style="flex: 1 1 160px;">
+                <input type="text" id="newUnitHandle" placeholder="Nazwa na Instagramie (bez @)" style="flex: 1 1 160px;">
                 <input type="text" id="newUnitKeywords" placeholder="Słowa kluczowe, oddziel przecinkami" style="flex: 1 1 160px;">
                 <button type="button" id="btnAddUnit" class="btn-secondary">+ Dodaj</button>
             </div>
 
             <div class="modal-actions">
                 <button id="btnClosePhotoDb" class="btn-primary">Zamknij</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="dbConflictModal" class="modal hidden">
+        <div class="modal-content">
+            <h3>🔎 Znaleziono podobny wpis</h3>
+            <p id="dbConflictMessage" class="info-text"></p>
+            <div class="modal-actions" style="justify-content: center;">
+                <button id="btnDbConflictUpdate" class="btn-secondary">Zaaktualizuj</button>
+                <button id="btnDbConflictSamePerson" class="btn-secondary">To ten sam wpis</button>
+                <button id="btnDbConflictNew" class="btn-primary">Dodaj jako nowy wpis</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="tagsModal" class="modal hidden">
+        <div class="modal-content">
+            <h3>🏷️ Potwierdź Oznaczenia</h3>
+            <p class="info-text">Sprawdź i uzupełnij nazwy na Instagramie dla fotografów (mogły się zmienić od ostatniego razu) oraz zaznacz jednostki, które mają zostać oznaczone w podpisach.</p>
+
+            <div id="tagsLoading" class="modal-loading">
+                <div class="modal-spinner"></div>
+                <p id="tagsLoadingLabel" class="progress-label">Sprawdzam bazę fotografów...</p>
+            </div>
+
+            <div id="tagsContent" class="hidden">
+                <div class="form-group">
+                    <label><strong>Fotografowie</strong></label>
+                    <div id="photographerTagsContainer"></div>
+                </div>
+
+                <div class="form-group">
+                    <label><strong>Jednostki do oznaczenia</strong> (zaznacz wszystkie pasujące):</label>
+                    <div id="unitsChecklistContainer"></div>
+                </div>
+            </div>
+
+            <div class="modal-actions">
+                <button id="btnBackToStep1FromTags" class="btn-secondary">&larr; Wstecz</button>
+                <button id="btnConfirmTags" class="btn-primary">Dalej: Generuj podpisy &rarr;</button>
             </div>
         </div>
     </div>
@@ -285,7 +299,7 @@
 
     <div id="toastContainer" class="toast-container"></div>
 
-    <script type="module" src="js/social.js?v=3"></script>
+    <script type="module" src="js/social.js?v=4"></script>
 
     <script>
         if ('serviceWorker' in navigator) {

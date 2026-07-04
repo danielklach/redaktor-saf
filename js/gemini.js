@@ -36,6 +36,19 @@ const AGENCY_LIFE_TAGS = [
     "sprzet-fotograficzny", "zycie-agencji", "saf-jamnik", "wspolnota"
 ];
 
+// Pkt 8 (v1.13.1): odrębny kontekst dla Redaktora Social Media - AGENCY_CONTEXT mówi wprost
+// "piszesz ARTYKUŁ NA STRONĘ INTERNETOWĄ", co jest mylące/nieprawdziwe przy podpisach pod posty
+// na Instagramie/Facebooku (zwłaszcza w prompcie kopiowanym do zewnętrznego AI - użytkownik to
+// zauważył). Ta wersja zachowuje to samo rozróżnienie ról (autor podpisu ≠ fotograf), ale poprawnie
+// opisuje medium.
+const SOCIAL_AGENCY_CONTEXT = `KONTEKST DZIAŁANIA:
+Piszesz podpisy pod POSTY NA INSTAGRAMIE I FACEBOOKU Studenckiej Agencji Fotograficznej "Jamnik" (SAF Jamnik), działającej przy Uniwersytecie Warmińsko-Mazurskim w Olsztynie. SAF Jamnik to zespół studentów-fotografów dokumentujących wydarzenia sportowe, kulturalne i naukowe na uczelni oraz w Olsztynie. To NIE jest artykuł na stronę internetową - social media to szybki, nieformalny kanał, krótszy i bardziej bezpośredni niż dłuższe relacje na blogu agencji.
+
+WAŻNE ROZRÓŻNIENIE RÓL: osoba piszącą ten podpis NIE musi być tą samą osobą, która robiła zdjęcia na wydarzeniu - to bardzo często dwie różne osoby. Dlatego:
+- Nie zakładaj i nie pisz w pierwszej osobie liczby pojedynczej, że to Ty (autor podpisu) osobiście fotografowałeś/aś wydarzenie, chyba że notatki wprost to potwierdzają.
+- Gdy piszesz o fotografowaniu, odnoś się do "naszych fotografów z SAF Jamnik" jako zespołu/agencji, a nie do siebie jako autora podpisu.
+- Możesz pisać w imieniu redakcji/agencji w liczbie mnogiej ("byliśmy na miejscu", "nasza ekipa", "redakcja SAF Jamnik"), ale nie utożsamiaj automatycznie roli piszącego z rolą fotografującego.`;
+
 export const Gemini = {
     // Dynamiczny wywiad AI na podstawie wpisanych danych - zwraca TABLICĘ pytań (JSON),
     // żeby dało się je łatwo i niezawodnie ponumerować w interfejsie (pkt 2).
@@ -482,7 +495,7 @@ Jeśli żadna naprawdę nie pasuje (to prawdopodobnie nowa osoba), zwróć {"mat
         }
 
         const describe = (list) => list.map((t) => t.handle
-            ? `${t.name} (uchwyt na Instagramie: @${String(t.handle).replace(/^@/, '')})`
+            ? `${t.name} (nazwa na Instagramie: @${String(t.handle).replace(/^@/, '')})`
             : `${t.name} (BEZ Instagrama - użyj wyłącznie imienia/nazwy, nigdy @)`
         ).join('; ');
 
@@ -490,7 +503,7 @@ Jeśli żadna naprawdę nie pasuje (to prawdopodobnie nowa osoba), zwróć {"mat
         if (photographers.length) parts.push(`Fotografowie do oznaczenia: ${describe(photographers)}.`);
         if (units.length) parts.push(`Jednostki do oznaczenia: ${describe(units)}.`);
 
-        return `${parts.join(' ')} Na Instagramie użyj uchwytu w formie @uchwyt tam, gdzie podano, w przeciwnym razie zwykłego imienia/nazwy (NIGDY nie wymyślaj uchwytu, którego nie podano); na Facebooku ZAWSZE zwykłego imienia/nazwy (BEZ @) - Facebook nie używa tej samej konwencji wzmianek co Instagram. Wpleć credity naturalnie (np. "Fot. ...", wzmianka o organizatorze), a nie jak sztywny spis na końcu.`;
+        return `${parts.join(' ')} Na Instagramie użyj nazwy w formie @nazwa tam, gdzie podano, w przeciwnym razie zwykłego imienia/nazwy (NIGDY nie wymyślaj nazwy na Instagramie, której nie podano); na Facebooku ZAWSZE zwykłego imienia/nazwy (BEZ @) - Facebook nie używa tej samej konwencji wzmianek co Instagram. Wpleć credity naturalnie (np. "Fot. ...", wzmianka o organizatorze), a nie jak sztywny spis na końcu.`;
     },
 
     // Redaktor Social Media (v1.12.0): z tych samych notatek co artykuł WordPressowy, ale w
@@ -501,8 +514,6 @@ Jeśli żadna naprawdę nie pasuje (to prawdopodobnie nowa osoba), zwróć {"mat
     // dawały spójny styl. Przykładowy post (FEST MUZA) to prawdziwy, lubiany przez użytkownika wpis
     // SAF Jamnik - dołączony WYŁĄCZNIE jako wzór tonu/emoji, nie treści.
     _socialCaptionRequirements(tags) {
-        const hashtagPool = EXISTING_TAGS.map(t => `#${t}`).join(' ');
-
         return `0. STYL - piszcie KREATYWNIE, z humorem i osobowością, jak żywy człowiek prowadzący social media agencji studenckiej - NIE sztywno ani korporacyjnie. Używajcie emoji NATURALNIE w treści (nie tylko na końcu), tam gdzie ożywiają zdanie. Poniżej przykładowy, udany post tej samej agencji - WYŁĄCZNIE jako wzór STYLU i tonu, NIE kopiuj jego treści, tematu ani struktury:
 "FEST MUZA za nami! 🔥
 
@@ -513,17 +524,15 @@ Ale od czego jest dobra muzyka! Mimo ulewy byliśmy na miejscu z aparatami, a ze
 Łapcie świeże kadry z wczorajszych koncertów! 📸 Wielkie brawa dla wszystkich grających! 🏆👏
 
 #festmuza #mokolsztyn #safjamnik"
-1. PODPIS NA INSTAGRAM - krótki, angażujący, dynamiczny (ok. 4-8 zdań). Post na Instagramie pokazuje ograniczoną liczbę zdjęć (do ok. 20 w karuzeli), więc zakończ zdaniem zachęcającym do obejrzenia WYBRANYCH zdjęć (np. w stylu "Zapraszamy do obejrzenia wybranych zdjęć z wydarzenia!"). Na samym końcu dodaj 5-10 pasujących hashtagów (format #tag, po polsku, bez spacji w środku tagu) - najpierw spośród: ${hashtagPool}. Nowe hashtagi twórz TYLKO, gdy naprawdę żaden z powyższych nie pasuje.
-2. PODPIS NA FACEBOOK - trochę dłuższy i bardziej opisowy niż wersja na Instagram (ale nadal zwięzły - to social media, nie artykuł blogowy), BEZ ŻADNYCH hashtagów. Post na Facebooku łączy się z PEŁNĄ galerią zdjęć, więc zakończ zdaniem zachęcającym do obejrzenia OBSZERNIEJSZEGO materiału (np. w stylu "Zapraszamy do obejrzenia obszerniejszego materiału w naszej galerii!").
+1. PODPIS NA INSTAGRAM - krótki, angażujący, dynamiczny (ok. 4-8 zdań). Post na Instagramie pokazuje ograniczoną liczbę zdjęć (do ok. 20 w karuzeli), więc zakończ zdaniem zachęcającym do obejrzenia WYBRANYCH zdjęć (np. w stylu "Zapraszamy do obejrzenia wybranych zdjęć z wydarzenia!"). Na samym końcu dodaj 5-10 hashtagów (format #tag, po polsku, bez spacji w środku tagu) - WYMYŚL JE SAM na podstawie FAKTYCZNEJ treści notatek (nazwa wydarzenia, miejsce, temat, kategoria) - hashtagi mogą być dowolne, NIE ma tu ustalonej listy do wyboru. KRYTYCZNE: nie myl podobnie brzmiących, ale INNYCH wydarzeń/miejsc - użyj konkretnego hashtaga (np. nazwy cyklicznej imprezy typu "#kortowiada") TYLKO, jeśli notatki NAPRAWDĘ dotyczą TEGO konkretnego wydarzenia, a nie tylko podobnej lokalizacji czy tematu.
+2. PODPIS NA FACEBOOK - trochę dłuższy i bardziej opisowy niż wersja na Instagram (ale nadal zwięzły - to social media, nie artykuł blogowy), BEZ ŻADNYCH hashtagów. Post na Facebooku łączy się z PEŁNĄ galerią zdjęć, więc zakończ zdaniem zachęcającym do obejrzenia OBSZERNIEJSZEGO materiału (np. w stylu "Zapraszamy do obejrzenia obszerniejszego materiału w naszej galerii!"). Na SAMYM KOŃCU dodaj JESZCZE JEDNO zdanie odsyłające do bardziej skondensowanej galerii na naszym Instagramie (@saf.jamnik) ORAZ do strony jamnik.uwm.edu.pl po najświeższe materiały - ZA KAŻDYM RAZEM sformułuj to zdanie INACZEJ (innymi słowami/kolejnością/tonem), żeby nie powtarzał się identyczny szablon w każdym poście; poniżej TYLKO przykład sensu, którego NIE wolno kopiować dosłownie: "Po bardziej skondensowany materiał zapraszamy na nasz Instagram @saf.jamnik, a po świeżości z naszych działań na jamnik.uwm.edu.pl!".
 3. Oba podpisy MUSZĄ być po polsku, niezależnie od tego, w jakim języku są notatki poniżej.
 4. Myślniki: WYŁĄCZNIE zwykły znak "-" (dywiz) - NIGDY długiej kreski "–" ani pauzy "—".
 5. OZNACZENIA - ${this._buildTagCreditsNote(tags)}`;
     },
 
     async generateSocialCaptions(notes, tags, options = {}) {
-        const prompt = `${AGENCY_CONTEXT}
-
-Piszesz podpisy pod posty na Instagramie i Facebooku dla SAF Jamnik, na podstawie tych samych notatek, z których redakcja przygotowuje też artykuł na WordPressa - ale styl social media jest INNY: krótszy, bardziej bezpośredni i mniej formalny niż artykuł blogowy.
+        const prompt = `${SOCIAL_AGENCY_CONTEXT}
 
 ODPOWIEDZ WYŁĄCZNIE CZYSTYM, SUROWYM KODEM JSON w formacie:
 {"instagram": "podpis na Instagram", "facebook": "podpis na Facebook"}
@@ -549,9 +558,7 @@ ${notes}`;
     // JSON-a każe modelowi zwrócić gotowe podpisy wprost w czytelnym tekście (nie ma tu żadnego
     // etapu przetwarzania po stronie aplikacji).
     buildExternalSocialPrompt(notes, tags) {
-        return `${AGENCY_CONTEXT}
-
-Piszesz podpisy pod posty na Instagramie i Facebooku dla SAF Jamnik, na podstawie notatek poniżej - styl social media: krótszy, bardziej bezpośredni i mniej formalny niż artykuł blogowy.
+        return `${SOCIAL_AGENCY_CONTEXT}
 
 WYMAGANIA:
 ${this._socialCaptionRequirements(tags)}

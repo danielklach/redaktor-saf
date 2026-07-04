@@ -2,7 +2,7 @@ import { Gemini } from './gemini.js';
 import { I18n } from './i18n.js';
 import { PhotoDb } from './photoDb.js';
 
-// Redaktor Social Media (v1.12.0) - odpowiednik trybu automatycznego z głównej aplikacji (patrz
+// Redaktor Social Media (v1.13.1) - odpowiednik trybu automatycznego z głównej aplikacji (patrz
 // js/app.js), ale znacznie okrojony: bez zdjęć/Compressor/Gutenberg (IG/FB przyjmują zdjęcia w
 // dowolnym formacie wprost z telefonu - ten krok jest tu całkowicie zbędny) i bez kroku "finalNotes"
 // - wywiad AI od razu prowadzi do gotowego wyniku: DWA teksty (Instagram/Facebook).
@@ -29,16 +29,20 @@ const KNOWN_DYNAMIC_STRINGS = [
     'Sprawdzam bazę fotografów...',
     'Nie podano żadnych fotografów.',
     'Baza jednostek jest jeszcze pusta - możesz dodać wpisy w "Baza fotografów" w nagłówku.',
-    'uchwyt na Instagramie (bez @)',
+    'nazwa na Instagramie (bez @)',
     'Brak Instagrama',
-    'Wczytywanie...',
-    'Nie udało się wczytać listy:',
-    'Baza jest jeszcze pusta.',
-    'brak Instagrama',
-    'Dodano do bazy!',
     'Podaj imię i nazwisko.',
     'Nie udało się zapisać:',
-    'Podaj nazwę jednostki.'
+    'Podaj nazwę jednostki.',
+    'Ta osoba jest już na liście.',
+    'Ta jednostka jest już na liście.',
+    'Znaleziono podobny wpis na liście:',
+    'Co chcesz zrobić?',
+    'To jest ta sama osoba',
+    'Dodaj nową osobę',
+    'To ten sam wpis',
+    'Dodaj jako nowy wpis',
+    'dodano'
 ];
 
 const SocialApp = {
@@ -83,8 +87,6 @@ const SocialApp = {
 
         this.btnShowPhotoDb = document.getElementById('btnShowPhotoDb');
         this.photoDbModal = document.getElementById('photoDbModal');
-        this.photoDbPhotographersList = document.getElementById('photoDbPhotographersList');
-        this.photoDbUnitsList = document.getElementById('photoDbUnitsList');
         this.newPhotographerName = document.getElementById('newPhotographerName');
         this.newPhotographerHandle = document.getElementById('newPhotographerHandle');
         this.btnAddPhotographer = document.getElementById('btnAddPhotographer');
@@ -93,6 +95,12 @@ const SocialApp = {
         this.newUnitKeywords = document.getElementById('newUnitKeywords');
         this.btnAddUnit = document.getElementById('btnAddUnit');
         this.btnClosePhotoDb = document.getElementById('btnClosePhotoDb');
+
+        this.dbConflictModal = document.getElementById('dbConflictModal');
+        this.dbConflictMessage = document.getElementById('dbConflictMessage');
+        this.btnDbConflictUpdate = document.getElementById('btnDbConflictUpdate');
+        this.btnDbConflictSamePerson = document.getElementById('btnDbConflictSamePerson');
+        this.btnDbConflictNew = document.getElementById('btnDbConflictNew');
 
         this.btnLangSwitch = document.getElementById('btnLangSwitch');
         this.flagEn = this.btnLangSwitch.querySelector('.flag-en');
@@ -107,6 +115,10 @@ const SocialApp = {
         this.evtLocation = document.getElementById('evtLocation');
         this.btnGenerateSocial = document.getElementById('btnGenerateSocial');
 
+        this.tagsModal = document.getElementById('tagsModal');
+        this.tagsLoading = document.getElementById('tagsLoading');
+        this.tagsLoadingLabel = document.getElementById('tagsLoadingLabel');
+        this.tagsContent = document.getElementById('tagsContent');
         this.photographerTagsContainer = document.getElementById('photographerTagsContainer');
         this.unitsChecklistContainer = document.getElementById('unitsChecklistContainer');
         this.btnBackToStep1FromTags = document.getElementById('btnBackToStep1FromTags');
@@ -134,7 +146,7 @@ const SocialApp = {
         this.btnCopyInstagram = document.getElementById('btnCopyInstagram');
         this.btnCopyFacebook = document.getElementById('btnCopyFacebook');
         this.btnCopyExternalPromptSocial = document.getElementById('btnCopyExternalPromptSocial');
-        this.btnBackToStep2 = document.getElementById('btnBackToStep2');
+        this.btnBackToStep1FromResults = document.getElementById('btnBackToStep1FromResults');
         this.btnRegenerateSocial = document.getElementById('btnRegenerateSocial');
         this.btnStartNewSocial = document.getElementById('btnStartNewSocial');
 
@@ -170,6 +182,10 @@ const SocialApp = {
         this.btnAddPhotographer.addEventListener('click', () => this.addPhotographerFromModal());
         this.btnAddUnit.addEventListener('click', () => this.addUnitFromModal());
 
+        this.btnDbConflictUpdate.addEventListener('click', () => this.resolveDbConflictWith('update'));
+        this.btnDbConflictSamePerson.addEventListener('click', () => this.resolveDbConflictWith('same'));
+        this.btnDbConflictNew.addEventListener('click', () => this.resolveDbConflictWith('new'));
+
         this.btnLangSwitch.addEventListener('click', () => this.switchLanguage(this.state.lang === 'pl' ? 'en' : 'pl'));
 
         this.btnGenerateSocial.addEventListener('click', () => this.handleStep1Submit());
@@ -179,12 +195,12 @@ const SocialApp = {
             this.closeModal(false);
         });
 
-        this.btnBackToStep1FromTags.addEventListener('click', () => this.switchStep('step1'));
+        this.btnBackToStep1FromTags.addEventListener('click', () => this.tagsModal.classList.add('hidden'));
         this.btnConfirmTags.addEventListener('click', () => this.confirmTagsAndGenerate());
 
-        this.btnBackToStep2.addEventListener('click', () => {
+        this.btnBackToStep1FromResults.addEventListener('click', () => {
             this._captionsAbortController?.abort();
-            this.switchStep('step2');
+            this.switchStep('step1');
         });
         this.btnRegenerateSocial.addEventListener('click', () => this.generateCaptions());
         this.btnStartNewSocial.addEventListener('click', () => this.startNewPost());
@@ -353,8 +369,8 @@ const SocialApp = {
     },
 
     // W przeciwieństwie do WordPressa (closeModal -> switchStep('step2') na zdjęcia), tutaj nie ma
-    // kroku zdjęć - zamknięcie modala prowadzi do Kroku 2 "Potwierdź oznaczenia" (patrz
-    // showTagsStep), a dopiero STAMTĄD (po potwierdzeniu uchwytów/jednostek) generujemy podpisy.
+    // kroku zdjęć - zamknięcie modala otwiera KOLEJNY modal, "Potwierdź oznaczenia" (patrz
+    // showTagsStep), a dopiero STAMTĄD (po potwierdzeniu nazw/jednostek) generujemy podpisy.
     closeModal(saveData) {
         if (saveData) {
             const answers = [];
@@ -370,14 +386,17 @@ const SocialApp = {
         this.showTagsStep();
     },
 
-    // Krok 2 "Potwierdź oznaczenia": rozdziela pole "Kto robił zdjęcia" na pojedyncze osoby, próbuje
-    // dopasować każdą do bazy (dokładnie, potem przez Gemini.matchPhotographerName dla zdrobnień/
-    // literówek - patrz js/gemini.js) i renderuje edytowalną tabelę uchwytów, oraz checklistę
-    // jednostek z automatycznymi podpowiedziami wg słów kluczowych znalezionych w notatkach.
+    // "Potwierdź oznaczenia" - NIE jest osobnym krokiem, tylko modalem nakładającym się na Krok 1
+    // (tak samo jak #aiModal - patrz closeModal). Rozdziela pole "Kto robił zdjęcia" na pojedyncze
+    // osoby, próbuje dopasować każdą do bazy (dokładnie, potem przez Gemini.matchPhotographerName
+    // dla zdrobnień/literówek - patrz js/gemini.js) i renderuje edytowalną tabelę nazw na Instagramie,
+    // oraz checklistę jednostek z automatycznymi podpowiedziami wg słów kluczowych z notatek.
     async showTagsStep() {
-        this.switchStep('step2');
-        this.photographerTagsContainer.innerHTML = `<p class="info-text">${this.t('Sprawdzam bazę fotografów...')}</p>`;
-        this.unitsChecklistContainer.innerHTML = '';
+        this.tagsModal.classList.remove('hidden');
+        this.tagsLoading.classList.remove('hidden');
+        this.tagsContent.classList.add('hidden');
+        this.btnConfirmTags.disabled = true;
+        this.tagsLoadingLabel.textContent = this.t('Sprawdzam bazę fotografów...');
 
         const typedNames = this.evtPhotographers.value.split(',').map((s) => s.trim()).filter(Boolean);
 
@@ -397,6 +416,10 @@ const SocialApp = {
 
         await this.renderPhotographerTags(typedNames, knownPhotographers);
         this.renderUnitsChecklist(knownUnits);
+
+        this.tagsLoading.classList.add('hidden');
+        this.tagsContent.classList.remove('hidden');
+        this.btnConfirmTags.disabled = false;
     },
 
     async renderPhotographerTags(typedNames, knownPhotographers) {
@@ -433,7 +456,7 @@ const SocialApp = {
                 }
             }
 
-            // Jeśli baza już zna tę osobę i ma zapisane PUSTE pole uchwytu, to wcześniej
+            // Jeśli baza już zna tę osobę i ma zapisane PUSTE pole nazwy na Instagramie, to wcześniej
             // potwierdzone "brak Instagrama" - odznacz pole domyślnie w tym jednym przypadku.
             const confirmedNoHandle = !!exact && !exact.handle;
             rows.push({ typedName, resolvedName, handle, noInstagram: confirmedNoHandle });
@@ -449,8 +472,8 @@ const SocialApp = {
             const wrap = document.createElement('div');
             wrap.style.cssText = 'display:flex; align-items:center; gap:10px; padding:8px 0; border-bottom:1px solid var(--border); flex-wrap:wrap;';
             wrap.innerHTML = `
-                <span style="min-width:160px; font-weight:600;">${row.resolvedName}</span>
-                <input type="text" class="photographer-handle-input" data-idx="${idx}" placeholder="${this.t('uchwyt na Instagramie (bez @)')}" value="${row.handle || ''}" style="flex:1 1 160px;" ${row.noInstagram ? 'disabled' : ''}>
+                <input type="text" class="photographer-name-input" data-idx="${idx}" value="${row.resolvedName}" style="min-width:140px; flex:1 1 140px; font-weight:600;">
+                <input type="text" class="photographer-handle-input" data-idx="${idx}" placeholder="${this.t('nazwa na Instagramie (bez @)')}" value="${row.handle || ''}" style="flex:1 1 160px;" ${row.noInstagram ? 'disabled' : ''}>
                 <label style="display:flex; align-items:center; gap:6px; white-space:nowrap;">
                     <input type="checkbox" class="photographer-no-ig-checkbox" data-idx="${idx}" ${row.noInstagram ? 'checked' : ''}>
                     ${this.t('Brak Instagrama')}
@@ -459,9 +482,16 @@ const SocialApp = {
             this.photographerTagsContainer.appendChild(wrap);
         });
 
+        this.photographerTagsContainer.querySelectorAll('.photographer-name-input').forEach((input) => {
+            input.addEventListener('input', (e) => {
+                this._resolvedPhotographers[Number(e.target.dataset.idx)].resolvedName = e.target.value.trim();
+            });
+        });
         this.photographerTagsContainer.querySelectorAll('.photographer-handle-input').forEach((input) => {
             input.addEventListener('input', (e) => {
-                this._resolvedPhotographers[Number(e.target.dataset.idx)].handle = e.target.value.trim();
+                const stripped = e.target.value.replace(/^@+/, '');
+                if (stripped !== e.target.value) e.target.value = stripped;
+                this._resolvedPhotographers[Number(e.target.dataset.idx)].handle = stripped.trim();
             });
         });
         this.photographerTagsContainer.querySelectorAll('.photographer-no-ig-checkbox').forEach((cb) => {
@@ -519,73 +549,149 @@ const SocialApp = {
         const units = selectedIdxs.map((idx) => this._knownUnits[idx]).map((u) => ({ name: u.name, handle: u.handle || null }));
 
         this.state.resolvedTags = { photographers, units };
-        this.switchStep('step3');
+        this.tagsModal.classList.add('hidden');
+        this.switchStep('step2');
         this.generateCaptions();
     },
 
     // --- "Baza fotografów" (modal dostępny z nagłówka w każdej chwili) ---
+    // Ze względu na prywatność ten modal NIGDY nie wyświetla listy już dodanych osób/jednostek -
+    // pozwala WYŁĄCZNIE dopisywać nowe wpisy. Lista jest pobierana "po cichu" (tylko po to, by
+    // wykryć duplikaty/podobne wpisy), ale nigdy nie trafia do DOM-u.
 
-    async openPhotoDbModal() {
+    openPhotoDbModal() {
         this.photoDbModal.classList.remove('hidden');
-        await this.refreshPhotoDbLists();
     },
 
-    async refreshPhotoDbLists() {
-        this.photoDbPhotographersList.innerHTML = `<p class="info-text">${this.t('Wczytywanie...')}</p>`;
-        this.photoDbUnitsList.innerHTML = `<p class="info-text">${this.t('Wczytywanie...')}</p>`;
+    // Otwiera dbConflictModal i zwraca Promise<'update'|'same'|'new'>, rozwiązywany kliknięciem
+    // jednego z trzech przycisków (wiązanie w bindEvents -> resolveDbConflictWith).
+    resolveDbConflict(message, sameLabel, newLabel) {
+        this.dbConflictMessage.textContent = message;
+        this.btnDbConflictSamePerson.textContent = sameLabel;
+        this.btnDbConflictNew.textContent = newLabel;
+        this.dbConflictModal.classList.remove('hidden');
+        return new Promise((resolve) => { this._dbConflictResolve = resolve; });
+    },
 
-        try {
-            const photographers = await PhotoDb.getPhotographers();
-            this.photoDbPhotographersList.innerHTML = photographers.length
-                ? photographers.map((p) => `<div style="padding:4px 0;">${p.name}${p.handle ? ` - @${p.handle}` : ` (${this.t('brak Instagrama')})`}</div>`).join('')
-                : `<p class="info-text">${this.t('Baza jest jeszcze pusta.')}</p>`;
-        } catch (error) {
-            this.photoDbPhotographersList.innerHTML = `<p class="info-text">${this.t('Nie udało się wczytać listy:')} ${error.message}</p>`;
-        }
-
-        try {
-            const units = await PhotoDb.getUnits();
-            this.photoDbUnitsList.innerHTML = units.length
-                ? units.map((u) => `<div style="padding:4px 0;">${u.name}${u.handle ? ` - @${u.handle}` : ''}${(u.keywords || []).length ? ` <span style="color:var(--text-muted); font-size:0.85rem;">(${u.keywords.join(', ')})</span>` : ''}</div>`).join('')
-                : `<p class="info-text">${this.t('Baza jest jeszcze pusta.')}</p>`;
-        } catch (error) {
-            this.photoDbUnitsList.innerHTML = `<p class="info-text">${this.t('Nie udało się wczytać listy:')} ${error.message}</p>`;
-        }
+    resolveDbConflictWith(action) {
+        this.dbConflictModal.classList.add('hidden');
+        this._dbConflictResolve?.(action);
+        this._dbConflictResolve = null;
     },
 
     async addPhotographerFromModal() {
-        const name = this.newPhotographerName.value.trim();
-        const handle = this.newPhotographerHandle.value.trim().replace(/^@/, '');
-        if (!name) {
+        const typedName = this.newPhotographerName.value.trim();
+        const typedHandle = this.newPhotographerHandle.value.trim().replace(/^@+/, '');
+        if (!typedName) {
             alert(this.t('Podaj imię i nazwisko.'));
             return;
         }
+
+        let known = [];
         try {
-            await PhotoDb.upsertPhotographer({ name, handle });
+            known = await PhotoDb.getPhotographers();
+        } catch (error) {
+            console.warn('[PhotoDb] Nie udało się pobrać listy fotografów (dodaję bez sprawdzania duplikatów):', error.message);
+        }
+
+        const exact = known.find((p) =>
+            p.name.toLowerCase() === typedName.toLowerCase()
+            || (p.altNames || []).some((alt) => alt.toLowerCase() === typedName.toLowerCase())
+        );
+
+        if (exact && (exact.handle || '') === typedHandle) {
+            alert(this.t('Ta osoba jest już na liście.'));
+            return;
+        }
+
+        let match = exact || null;
+        if (!match && known.length > 0) {
+            try {
+                const { match: fuzzyName } = await Gemini.matchPhotographerName(typedName, known.map((p) => p.name));
+                if (fuzzyName) match = known.find((p) => p.name === fuzzyName) || null;
+            } catch (error) {
+                console.warn('[PhotoDb] Dopasowanie nazwiska nie powiodło się:', error.message);
+            }
+        }
+
+        let finalName = typedName;
+        let finalHandle = typedHandle;
+        let finalAltNames;
+
+        if (match) {
+            const action = await this.resolveDbConflict(
+                `${this.t('Znaleziono podobny wpis na liście:')} "${match.name}"${match.handle ? ` (@${match.handle})` : ''}. ${this.t('Co chcesz zrobić?')}`,
+                this.t('To jest ta sama osoba'),
+                this.t('Dodaj nową osobę')
+            );
+            if (action === 'update') {
+                finalName = match.name;
+                if (!typedHandle) finalHandle = match.handle || '';
+            } else if (action === 'same') {
+                finalName = match.name;
+                if (!typedHandle) finalHandle = match.handle || '';
+                if (typedName.toLowerCase() !== match.name.toLowerCase()) {
+                    finalAltNames = [...(match.altNames || []), typedName];
+                }
+            }
+            // action === 'new' -> zostaw finalName/finalHandle = typedName/typedHandle (osobny wpis)
+        }
+
+        try {
+            await PhotoDb.upsertPhotographer({ name: finalName, handle: finalHandle, altNames: finalAltNames });
             this.newPhotographerName.value = '';
             this.newPhotographerHandle.value = '';
-            this.showToast(this.t('Dodano do bazy!'));
-            await this.refreshPhotoDbLists();
+            this.showToast(`${this.t('dodano')} ${finalHandle ? '@' + finalHandle : finalName}`);
         } catch (error) {
             alert(this.t('Nie udało się zapisać:') + ' ' + error.message);
         }
     },
 
     async addUnitFromModal() {
-        const name = this.newUnitName.value.trim();
-        const handle = this.newUnitHandle.value.trim().replace(/^@/, '');
+        const typedName = this.newUnitName.value.trim();
+        const typedHandle = this.newUnitHandle.value.trim().replace(/^@+/, '');
         const keywords = this.newUnitKeywords.value.split(',').map((s) => s.trim()).filter(Boolean);
-        if (!name) {
+        if (!typedName) {
             alert(this.t('Podaj nazwę jednostki.'));
             return;
         }
+
+        let known = [];
         try {
-            await PhotoDb.upsertUnit({ name, handle, keywords });
+            known = await PhotoDb.getUnits();
+        } catch (error) {
+            console.warn('[PhotoDb] Nie udało się pobrać listy jednostek (dodaję bez sprawdzania duplikatów):', error.message);
+        }
+
+        const exact = known.find((u) => u.name.toLowerCase() === typedName.toLowerCase());
+
+        if (exact && (exact.handle || '') === typedHandle) {
+            alert(this.t('Ta jednostka jest już na liście.'));
+            return;
+        }
+
+        let finalName = typedName;
+        let finalHandle = typedHandle;
+        let finalKeywords = keywords;
+        if (exact) {
+            const action = await this.resolveDbConflict(
+                `${this.t('Znaleziono podobny wpis na liście:')} "${exact.name}"${exact.handle ? ` (@${exact.handle})` : ''}. ${this.t('Co chcesz zrobić?')}`,
+                this.t('To ten sam wpis'),
+                this.t('Dodaj jako nowy wpis')
+            );
+            if (action === 'update' || action === 'same') {
+                finalName = exact.name;
+                if (!typedHandle) finalHandle = exact.handle || '';
+                if (keywords.length === 0) finalKeywords = exact.keywords || [];
+            }
+        }
+
+        try {
+            await PhotoDb.upsertUnit({ name: finalName, handle: finalHandle, keywords: finalKeywords });
             this.newUnitName.value = '';
             this.newUnitHandle.value = '';
             this.newUnitKeywords.value = '';
-            this.showToast(this.t('Dodano do bazy!'));
-            await this.refreshPhotoDbLists();
+            this.showToast(`${this.t('dodano')} ${finalHandle ? '@' + finalHandle : finalName}`);
         } catch (error) {
             alert(this.t('Nie udało się zapisać:') + ' ' + error.message);
         }
@@ -708,6 +814,7 @@ const SocialApp = {
     resetAllFormState() {
         this._interviewAbortController?.abort();
         this._captionsAbortController?.abort();
+        this.tagsModal.classList.add('hidden');
 
         this.evtTitle.value = '';
         this.evtLocation.value = '';

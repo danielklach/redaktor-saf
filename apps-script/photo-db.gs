@@ -2,7 +2,7 @@
  * Redaktor Social Media - baza fotografów i jednostek (v1.13.0)
  *
  * Skrypt PRZYPISANY DO tego Google Dokumentu (kontenerowy Apps Script), który służy jako prosta,
- * współdzielona baza danych "kto to jest -> jaki ma uchwyt na Instagramie". Dokument przechowuje
+ * współdzielona baza danych "kto to jest -> jaka jest jego nazwa na Instagramie". Dokument przechowuje
  * DWIE tabele (natywne tabele Google Docs, żeby admin mógł je wygodnie przeglądać/poprawiać wprost
  * w dokumencie): jedną pod nagłówkiem "Fotografowie", drugą pod nagłówkiem "Jednostki". Obie tabele
  * TWORZĄ SIĘ SAME przy pierwszym użyciu (ensureTable) - nie trzeba niczego ręcznie przygotowywać
@@ -28,11 +28,11 @@ const DOC_ID = '1AXNCEpFeKpu0D-wlJeybXLEfJtn9JGyyAo1nsX3tu2U';
 
 const PHOTOGRAPHER_HEADING = 'Fotografowie';
 const PHOTOGRAPHER_COLUMNS = ['name', 'handle', 'altNames'];
-const PHOTOGRAPHER_HEADER_CELLS = ['Imię i nazwisko', 'Uchwyt na Instagramie', 'Alternatywne pisownie'];
+const PHOTOGRAPHER_HEADER_CELLS = ['Imię i nazwisko', 'Nazwa na Instagramie', 'Alternatywne pisownie'];
 
 const UNIT_HEADING = 'Jednostki';
 const UNIT_COLUMNS = ['name', 'handle', 'keywords'];
-const UNIT_HEADER_CELLS = ['Nazwa jednostki', 'Uchwyt na Instagramie', 'Słowa kluczowe'];
+const UNIT_HEADER_CELLS = ['Nazwa jednostki', 'Nazwa na Instagramie', 'Słowa kluczowe'];
 
 function doGet(e) {
   try {
@@ -71,7 +71,10 @@ function jsonResponse(obj) {
 }
 
 // Znajduje akapit z DOKŁADNIE tym tekstem, a zaraz po nim pierwszą tabelę - albo tworzy oba
-// (nagłówek + tabela z jednym wierszem nagłówkowym), jeśli jeszcze nie istnieją.
+// (nagłówek + tabela z jednym wierszem nagłówkowym), jeśli jeszcze nie istnieją. Jeśli tabela już
+// istnieje, ZAWSZE synchronizuje tekst wiersza nagłówkowego z aktualnym `headerCells` - dzięki temu
+// zmiana nazw kolumn w kodzie (np. "Uchwyt" -> "Nazwa na Instagramie") automatycznie odświeża się
+// w JUŻ ISTNIEJĄCYM dokumencie przy następnym wywołaniu, bez ręcznej edycji przez admina.
 function ensureTable(doc, heading, headerCells) {
   const body = doc.getBody();
   const numChildren = body.getNumChildren();
@@ -81,7 +84,11 @@ function ensureTable(doc, heading, headerCells) {
     if (el.getType() === DocumentApp.ElementType.PARAGRAPH && el.asParagraph().getText().trim() === heading) {
       for (let j = i + 1; j < numChildren; j++) {
         const next = body.getChild(j);
-        if (next.getType() === DocumentApp.ElementType.TABLE) return next.asTable();
+        if (next.getType() === DocumentApp.ElementType.TABLE) {
+          const table = next.asTable();
+          syncHeaderRow(table, headerCells);
+          return table;
+        }
       }
       // Nagłówek jest, ale tabeli po nim brak - dopisz ją zaraz za nim.
       return body.insertTable(i + 1, [headerCells]);
@@ -91,6 +98,16 @@ function ensureTable(doc, heading, headerCells) {
   // Nie ma ani nagłówka, ani tabeli - dopisz oba na końcu dokumentu.
   body.appendParagraph(heading).setHeading(DocumentApp.ParagraphHeading.HEADING2);
   return body.appendTable([headerCells]);
+}
+
+function syncHeaderRow(table, headerCells) {
+  if (table.getNumRows() === 0) return;
+  const headerRow = table.getRow(0);
+  headerCells.forEach((text, c) => {
+    if (headerRow.getNumCells() > c && headerRow.getCell(c).getText() !== text) {
+      headerRow.getCell(c).setText(text);
+    }
+  });
 }
 
 function readTable(doc, heading, keys, headerCells) {
@@ -113,7 +130,7 @@ function readTable(doc, heading, keys, headerCells) {
 }
 
 // Dopisuje NOWY wiersz, albo aktualizuje ISTNIEJĄCY (dopasowanie po pierwszej kolumnie "name",
-// bez rozróżniania wielkości liter) - dzięki temu potwierdzenie/poprawka uchwytu z aplikacji NIE
+// bez rozróżniania wielkości liter) - dzięki temu potwierdzenie/poprawka nazwy z aplikacji NIE
 // tworzy duplikatów tej samej osoby/jednostki.
 function upsertRow(doc, heading, keys, headerCells, data) {
   const table = ensureTable(doc, heading, headerCells);

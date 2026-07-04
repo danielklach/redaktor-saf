@@ -46,7 +46,7 @@ export const PhotoDb = {
     },
 
     // Dopisuje NOWY wpis albo aktualizuje ISTNIEJĄCY (dopasowanie po "name", po stronie Apps
-    // Script) - bezpieczne do wołania nawet dla już znanej osoby (np. samo potwierdzenie uchwytu).
+    // Script) - bezpieczne do wołania nawet dla już znanej osoby (np. samo potwierdzenie nazwy).
     async upsertPhotographer({ name, handle, altNames }) {
         return this._post({ action: 'addPhotographer', name, handle, altNames });
     },
