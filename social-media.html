@@ -1,0 +1,265 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Redaktor Social Media - SAF Jamnik</title>
+
+    <link rel="icon" type="image/svg+xml" href="assets/redaktor-saf-emblem.svg">
+    <link rel="icon" type="image/png" sizes="192x192" href="assets/logo-192.png">
+    <link rel="icon" type="image/png" sizes="512x512" href="assets/logo-512.png">
+
+    <link rel="manifest" href="manifest.json">
+    <meta name="theme-color" content="#121214">
+
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="Redaktor">
+    <link rel="apple-touch-icon" href="assets/logo-192.png">
+
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Quicksand:wght@600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="style.css">
+
+    <!-- Patrz komentarz w index.html - to samo zabezpieczenie przed mignięciem polskiego tekstu,
+         gdy zapisany język to angielski (patrz js/i18n.js + SocialApp.initLanguage). -->
+    <script>
+        (function () {
+            try {
+                if (localStorage.getItem('saf_lang') === 'en') {
+                    document.documentElement.classList.add('lang-loading');
+                }
+            } catch (e) {}
+        })();
+    </script>
+</head>
+<body>
+    <div id="langLoadingOverlay" class="lang-loading-overlay" aria-hidden="true">
+        <div class="lang-loading-spinner"></div>
+        <p class="lang-loading-text" data-no-translate>Preparing English interface, please wait&hellip;</p>
+    </div>
+
+    <header>
+        <a href="./" id="logoHome" class="logo-zone" title="Odśwież stronę">
+            <img src="assets/redaktor-saf-emblem.svg" alt="Redaktor SAFi" class="logo-emblem">
+            <span class="logo-text">
+                <span class="logo-line">Redaktor</span>
+                <span class="logo-line">Social Media <span class="logo-version" data-release-date="2026-07-03" data-no-translate>ver. 1.12.0</span></span>
+            </span>
+        </a>
+
+        <div class="header-actions">
+            <a href="/" class="btn-secondary">📝 Redaktor WordPress</a>
+            <button type="button" id="btnShowIntro" class="btn-secondary">ℹ️ Jak używać?</button>
+            <button type="button" id="btnReportIssue" class="btn-secondary">⚠️ Zgłoś problem</button>
+            <a href="https://m.me/ch/AbYWaMtJi3oRNp3B/" target="_blank" rel="noopener noreferrer" class="btn-secondary">💬 Social Media Team</a>
+            <button type="button" id="btnLangSwitch" class="btn-secondary btn-lang-switch" title="Change interface language" data-no-translate>
+                <svg class="flag-icon flag-en" viewBox="0 0 640 480" aria-hidden="true"><path fill="#012169" d="M0 0h640v480H0z"/><path fill="#FFF" d="m75 0 244 181L562 0h78v62L400 241l240 178v61h-80L320 301 81 480H0v-60l239-178L0 64V0z"/><path fill="#C8102E" d="m424 281 216 159v40L369 281zm-184 20 6 35L54 480H0zM640 0v3L391 191l2-44L590 0zM0 0l239 176h-60L0 42z"/><path fill="#FFF" d="M241 0v480h160V0zM0 160v160h640V160z"/><path fill="#C8102E" d="M0 193v96h640v-96zM273 0v480h96V0z"/></svg>
+                <svg class="flag-icon flag-pl hidden" viewBox="0 0 640 480" aria-hidden="true"><g fill-rule="evenodd"><path fill="#fff" d="M0 0h640v240H0z"/><path fill="#dc143c" d="M0 240h640v240H0z"/></g></svg>
+                <span class="lang-code">EN</span>
+            </button>
+        </div>
+    </header>
+
+    <main class="container">
+        <div class="steps-indicator">
+            <div class="step active" data-step="step1"><span class="step-num">1</span><span class="step-label">Szczegóły wydarzenia</span></div>
+            <div class="step" data-step="step2"><span class="step-num">2</span><span class="step-label">Gotowe podpisy</span></div>
+        </div>
+
+        <hr>
+
+        <section id="step1" class="step-section active">
+            <h2>Szczegóły Wydarzenia</h2>
+
+            <div class="form-group" style="margin-bottom: 25px;">
+                <label for="evtCategory"><strong>Najpierw wybierz kategorię wpisu:</strong></label>
+                <select id="evtCategory">
+                    <option value="" disabled selected>-- wybierz kategorię --</option>
+                    <option value="kultura">Kultura</option>
+                    <option value="nauka">Nauka</option>
+                    <option value="sport">Sport</option>
+                    <option value="zapowiedzi">Zapowiedzi</option>
+                    <option value="zycie">Z życia agencji</option>
+                </select>
+            </div>
+
+            <p id="step1CategoryHint" class="info-text">⬆️ Wybierz kategorię wpisu powyżej, aby zobaczyć resztę formularza.</p>
+
+            <div id="step1FormBody" class="hidden">
+                <div class="grid-2col" id="step1Grid">
+                    <div class="form-group" id="dynamicFields">
+                        <label for="evtTitle">Nazwa wydarzenia:</label>
+                        <input type="text" id="evtTitle" placeholder="np. Koncert Myslovitz…">
+
+                        <label for="evtLocation">Miejsce:</label>
+                        <input type="text" id="evtLocation" placeholder="np. Kortowo, Górka Kortowska">
+
+                        <div class="grid-2col" style="padding:0; margin:0;">
+                            <div>
+                                <label for="evtStart">Data rozpoczęcia:</label>
+                                <input type="datetime-local" id="evtStart">
+                            </div>
+                            <div>
+                                <label for="evtEnd">Data zakończenia:</label>
+                                <input type="datetime-local" id="evtEnd">
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="evtNotes" id="notesLabel">Twoje surowe notatki / spostrzeżenia:</label>
+                        <textarea id="evtNotes" rows="12" placeholder="Opisz przebieg wydarzenia oraz najważniejsze szczegóły, które powinny znaleźć się w podpisach..."></textarea>
+                    </div>
+                </div>
+
+                <div class="form-group" style="margin-top: 20px;">
+                    <label for="evtExternalArticle">Wklej treść zewnętrznego artykułu (opcjonalnie):</label>
+                    <p class="info-text">Jeśli inny portal (np. olsztyn.com.pl) albo Wasz własny artykuł na blogu WordPress już opisał to wydarzenie, wklej tu jego treść - AI wykorzysta ją WYŁĄCZNIE jako źródło faktów, a nie jako wzór stylu (podpisy social media mają zupełnie inny, krótszy styl niż artykuł blogowy).</p>
+                    <textarea id="evtExternalArticle" rows="8" placeholder="Wklej tutaj pełną treść zewnętrznego artykułu opisującego to wydarzenie (opcjonalnie)..."></textarea>
+                </div>
+
+                <div class="actions">
+                    <button id="btnGenerateSocial" class="btn-primary">✨ Generuj podpisy</button>
+                </div>
+            </div>
+        </section>
+
+        <section id="step2" class="step-section">
+            <h2>Gotowe Podpisy</h2>
+            <p class="info-text">⚠️ AI to tylko maszyna i potrafi się mylić - zanim opublikujesz posty, <strong>przeczytaj uważnie</strong> oba podpisy i popraw ewentualne błędy lub nienaturalne sformułowania.</p>
+
+            <div id="socialLoading" class="loading-spinner hidden">
+                <p id="genRetryNotice" class="retry-notice hidden"></p>
+                <div class="progress-wrap"><div class="progress-bar" id="genProgressBar"></div></div>
+                <p id="genProgressLabel" class="progress-label">Inicjalizacja generowania...</p>
+            </div>
+
+            <div id="socialFallback" class="hidden">
+                <p id="socialFallbackMessage" style="margin-bottom: 15px; color: var(--text-muted);"></p>
+                <button id="btnCopyFallbackPrompt" class="btn-primary w-100">Kopiuj kompletny prompt dla zewnętrznego AI</button>
+            </div>
+
+            <div id="socialOutput" class="hidden">
+                <div class="grid-2col">
+                    <div class="form-group">
+                        <label for="instagramOutput">📸 Podpis na Instagram:</label>
+                        <p class="info-text">Krótszy, z hashtagami - pod post z wybranymi zdjęciami (karuzela, max ok. 20).</p>
+                        <textarea id="instagramOutput" rows="12"></textarea>
+                        <button id="btnCopyInstagram" class="btn-secondary" style="margin-top: 8px;">Kopiuj</button>
+                    </div>
+                    <div class="form-group">
+                        <label for="facebookOutput">📘 Podpis na Facebook:</label>
+                        <p class="info-text">Trochę dłuższy, bez hashtagów - pod post z pełną galerią zdjęć.</p>
+                        <textarea id="facebookOutput" rows="12"></textarea>
+                        <button id="btnCopyFacebook" class="btn-secondary" style="margin-top: 8px;">Kopiuj</button>
+                    </div>
+                </div>
+            </div>
+
+            <button type="button" id="btnCopyExternalPromptSocial" class="btn-copy-external-subtle">Wolisz użyć innego AI? Skopiuj gotowy prompt</button>
+
+            <div class="actions">
+                <button id="btnBackToStep1" class="btn-secondary">&larr; Wstecz</button>
+                <button id="btnRegenerateSocial" class="btn-secondary hidden">Generuj jeszcze raz</button>
+                <button id="btnStartNewSocial" class="btn-primary">🔄 Generuj kolejny wpis</button>
+            </div>
+        </section>
+    </main>
+
+    <footer class="site-footer">
+        <p>Admin: Daniel Klach · <a href="mailto:webmaster@klachphoto.com">webmaster@klachphoto.com</a> - w razie pytań, sugestii lub problemów proszę o kontakt.</p>
+        <p>SAF Jamnik © <span id="footerYear"></span> · <a href="https://wa.me/48507584351" target="_blank" rel="noopener noreferrer">💬 WhatsApp</a></p>
+        <p class="footer-meta"><span id="footerVersion"></span> · <a href="/polityka-prywatnosci">Polityka prywatności</a></p>
+    </footer>
+
+    <div id="introModal" class="modal hidden">
+        <div class="modal-content intro-modal-content">
+            <div class="intro-header">
+                <span class="intro-emoji">📱</span>
+                <div>
+                    <h3>Witaj w Redaktorze Social Media!</h3>
+                    <p>Przygotuj w kilka chwil gotowe podpisy pod posty na Instagramie i Facebooku - na podstawie tych samych notatek, co artykuł na WordPressa.</p>
+                </div>
+            </div>
+
+            <div class="intro-steps">
+                <div class="intro-step">
+                    <span class="intro-step-num">1</span>
+                    <div><strong>Szczegóły wydarzenia</strong><p>Opisz co, gdzie i kiedy - możesz też wkleić tekst z innego portalu lub bloga jako źródło faktów. Agent AI dopyta Cię o brakujące szczegóły.</p></div>
+                </div>
+                <div class="intro-step">
+                    <span class="intro-step-num">2</span>
+                    <div><strong>Gotowe podpisy</strong><p>Dostaniesz DWA gotowe teksty: krótszy z hashtagami na Instagram (do karuzeli max 20 zdjęć) i dłuższy bez hashtagów na Facebooka (do pełnej galerii).</p></div>
+                </div>
+            </div>
+
+            <p class="intro-tip">🧩 <strong>Zdjęcia</strong> wgrywasz osobno, bezpośrednio w aplikacji Instagram/Facebook - ten kreator przygotowuje WYŁĄCZNIE tekst podpisu. I zawsze <strong>przeczytaj tekst</strong> przed publikacją - AI czasem się myli.</p>
+
+            <div class="modal-actions">
+                <button id="btnCloseIntro" class="btn-primary">Rozumiem, zaczynajmy!</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="aiModal" class="modal hidden">
+        <div class="modal-content">
+            <h3>🤖 Agent Redakcyjny SAF pyta o szczegóły...</h3>
+
+            <p id="aiRetryNotice" class="retry-notice hidden"></p>
+            <div id="aiProgressWrap" class="progress-wrap hidden"><div class="progress-bar" id="aiProgressBar"></div></div>
+            <p id="aiProgressLabel" class="progress-label hidden"></p>
+
+            <div id="aiQuestionsContainer"></div>
+
+            <div class="modal-actions">
+                <button id="btnSkipModal" class="btn-secondary">Pomiń</button>
+                <button id="btnSubmitModal" class="btn-primary">Zatwierdź i generuj podpisy</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="reportModal" class="modal hidden">
+        <div class="modal-content">
+            <h3>⚠️ Zgłoś problem</h3>
+
+            <div class="form-group">
+                <label for="reportCategory">Co nie działa?</label>
+                <select id="reportCategory">
+                    <option value="Generowanie podpisów przez AI">Generowanie podpisów przez AI</option>
+                    <option value="Interfejs / wygląd strony">Interfejs / wygląd strony</option>
+                    <option value="Inne">Inne</option>
+                </select>
+
+                <label for="reportDescription">Opisz problem:</label>
+                <textarea id="reportDescription" rows="6" placeholder="Opisz dokładnie, co się stało oraz jakie czynności wykonywałeś/aś tuż przed wystąpieniem problemu..."></textarea>
+            </div>
+
+            <div class="modal-actions">
+                <button id="btnCancelReport" class="btn-secondary">Anuluj</button>
+                <button id="btnSendReport" class="btn-primary">Wyślij</button>
+            </div>
+
+            <p style="text-align: center; margin-top: 14px;">
+                <a href="#" id="btnReportFallback" style="font-size: 0.75rem; color: var(--text-muted); text-decoration: underline;">Formularz usterki nie działa?</a>
+            </p>
+            <p id="reportFallbackEmail" class="hidden" style="text-align: center; margin-top: 6px; font-size: 0.85rem;">Napisz bezpośrednio na: <strong>webmaster@klachphoto.com</strong></p>
+        </div>
+    </div>
+
+    <div id="toastContainer" class="toast-container"></div>
+
+    <script type="module" src="js/social.js?v=1"></script>
+
+    <script>
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', () => {
+                navigator.serviceWorker.register('sw.js')
+                    .then((reg) => console.log('[PWA] Service Worker zarejestrowany, zakres:', reg.scope))
+                    .catch((err) => console.error('[PWA] Rejestracja Service Workera nie powiodła się:', err));
+            });
+        }
+    </script>
+</body>
+</html>

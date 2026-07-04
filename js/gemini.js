@@ -413,6 +413,72 @@ ${numbered || '(brak akapitów tekstowych - w artykule jest tylko tabela)'}${tab
 ${this._externalOutputFormatSpec(images, links)}`;
     },
 
+    // Redaktor Social Media (v1.12.0): z tych samych notatek co artykuł WordPressowy, ale w
+    // zupełnie innym, krótszym stylu, generuje DWA gotowe podpisy - pod Instagram (limit ok. 20
+    // zdjęć w karuzeli, więc "wybrane zdjęcia" + hashtagi) i pod Facebooka (pełna galeria, więc
+    // "obszerniejszy materiał", bez hashtagów). Współdzielone WYMAGANIA z buildSocialCaptionsPrompt
+    // (używanym też w external-prompt fallbacku), żeby oba warianty (wbudowane AI / zewnętrzny czat)
+    // dawały spójny styl.
+    _socialCaptionRequirements(category) {
+        const isAgencyLife = category === 'zycie';
+        const hashtagPool = (isAgencyLife ? AGENCY_LIFE_TAGS : EXISTING_TAGS).map(t => `#${t}`).join(' ');
+
+        return `1. PODPIS NA INSTAGRAM - krótki, angażujący, dynamiczny (ok. 4-8 zdań). Post na Instagramie pokazuje ograniczoną liczbę zdjęć (do ok. 20 w karuzeli), więc zakończ zdaniem zachęcającym do obejrzenia WYBRANYCH zdjęć (np. w stylu "Zapraszamy do obejrzenia wybranych zdjęć z wydarzenia!"). Na samym końcu dodaj 5-10 pasujących hashtagów (format #tag, po polsku, bez spacji w środku tagu) - najpierw spośród: ${hashtagPool}. Nowe hashtagi twórz TYLKO, gdy naprawdę żaden z powyższych nie pasuje.
+2. PODPIS NA FACEBOOK - trochę dłuższy i bardziej opisowy niż wersja na Instagram (ale nadal zwięzły - to social media, nie artykuł blogowy), BEZ ŻADNYCH hashtagów. Post na Facebooku łączy się z PEŁNĄ galerią zdjęć, więc zakończ zdaniem zachęcającym do obejrzenia OBSZERNIEJSZEGO materiału (np. w stylu "Zapraszamy do obejrzenia obszerniejszego materiału w naszej galerii!").
+3. Oba podpisy MUSZĄ być po polsku, niezależnie od tego, w jakim języku są notatki poniżej.
+4. Myślniki: wyłącznie zwykły znak "-", nigdy "–" ani "—".`;
+    },
+
+    async generateSocialCaptions(category, notes, options = {}) {
+        const prompt = `${AGENCY_CONTEXT}
+
+Piszesz podpisy pod posty na Instagramie i Facebooku dla SAF Jamnik, na podstawie tych samych notatek, z których redakcja przygotowuje też artykuł na WordPressa - ale styl social media jest INNY: krótszy, bardziej bezpośredni i mniej formalny niż artykuł blogowy.
+
+ODPOWIEDZ WYŁĄCZNIE CZYSTYM, SUROWYM KODEM JSON w formacie:
+{"instagram": "podpis na Instagram", "facebook": "podpis na Facebook"}
+Bez markdownu, bez wstępów, bez komentarzy poza obiektem JSON.
+
+WYMAGANIA:
+${this._socialCaptionRequirements(category)}
+
+Kategoria wydarzenia: ${category.toUpperCase()}
+Notatki i zebrane informacje o wydarzeniu:
+${notes}`;
+
+        const raw = await this.callGeminiRaw(prompt, {
+            temperature: 0.85,
+            thinkingConfig: { thinkingBudget: 512 }
+        }, options);
+
+        const jsonMatch = raw.match(/\{[\s\S]*\}/);
+        const parsed = JSON.parse(jsonMatch ? jsonMatch[0] : raw);
+        return { instagram: parsed.instagram || '', facebook: parsed.facebook || '' };
+    },
+
+    // Odpowiednik generateSocialCaptions do RĘCZNEGO wklejenia w zewnętrznym czacie AI - zamiast
+    // JSON-a każe modelowi zwrócić gotowe podpisy wprost w czytelnym tekście (nie ma tu żadnego
+    // etapu przetwarzania po stronie aplikacji).
+    buildExternalSocialPrompt(category, notes) {
+        return `${AGENCY_CONTEXT}
+
+Piszesz podpisy pod posty na Instagramie i Facebooku dla SAF Jamnik, na podstawie notatek poniżej - styl social media: krótszy, bardziej bezpośredni i mniej formalny niż artykuł blogowy.
+
+WYMAGANIA:
+${this._socialCaptionRequirements(category)}
+
+ODPOWIEDZ WYŁĄCZNIE w poniższym formacie (bez potrójnych apostrofów/code fence, bez wstępu ani komentarzy):
+
+INSTAGRAM:
+(tu podpis na Instagram, z hashtagami na końcu)
+
+FACEBOOK:
+(tu podpis na Facebook, bez hashtagów)
+
+Kategoria wydarzenia: ${category.toUpperCase()}
+Notatki i zebrane informacje o wydarzeniu:
+${notes}`;
+    },
+
     // Pkt 11 (przełącznik języka interfejsu): zbiorcze tłumaczenie listy polskich tekstów UI na
     // angielski, w JEDNYM wywołaniu (żeby nie mnożyć kosztu/czasu na każdy pojedynczy string).
     // Wymusza DOKŁADNIE tyle samo elementów w odpowiedzi co na wejściu (wynik jest mapowany

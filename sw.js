@@ -2,7 +2,7 @@
 // wpisy w cache'u zostały jawnie skasowane w evencie "activate" (patrz niżej). Samo Network First
 // już samo w sobie zapewnia świeże pliki przy każdym ładowaniu online - ta wersja to dodatkowa
 // siatka bezpieczeństwa, np. gdyby trzeba było wymusić czystkę po zmianie listy PRECACHE_URLS.
-const CACHE_VERSION = 'v4';
+const CACHE_VERSION = 'v5';
 const CACHE_NAME = `redaktor-safi-${CACHE_VERSION}`;
 
 // Kluczowe pliki statyczne cache'owane przy instalacji - aplikacja ma z nich korzystać
@@ -10,9 +10,11 @@ const CACHE_NAME = `redaktor-safi-${CACHE_VERSION}`;
 const PRECACHE_URLS = [
     './',
     './index.html',
+    './social-media.html',
     './style.css',
     './manifest.json',
     './js/app.js',
+    './js/social.js',
     './js/compressor.js',
     './js/gemini.js',
     './js/gutenberg.js',

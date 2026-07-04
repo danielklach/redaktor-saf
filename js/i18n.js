@@ -93,10 +93,20 @@ export const I18n = {
     },
 
     // Samodzielne zastosowanie angielskiego na CAŁEJ bieżącej stronie - używane przez podstrony
-    // bez własnego "App" (np. polityka prywatności). Jeśli cache nie jest jeszcze pełny, dotłumaczy
-    // brakujące teksty (rzuci błąd, jeśli się nie uda - wołający łapie wyjątek).
+    // bez własnego "App" (np. polityka prywatności) ORAZ przy starcie strony, gdy zapisany język to
+    // już angielski (patrz App.initLanguage). Jeśli cache nie jest jeszcze pełny, dotłumaczy brakujące
+    // teksty - ale w RAZIE BŁĘDU (np. jeden nowy string, a sieć akurat zawiodła) i tak stosuje
+    // WSZYSTKO, co JUŻ jest w cache'u (fail-open), zamiast zostawiać całą stronę po polsku tylko
+    // dlatego, że zabrakło tłumaczenia jednego drobnego elementu - i dopiero potem rzuca błąd dalej,
+    // żeby wołający mógł to zalogować/zgłosić.
     async applyEnglish(extraStrings = []) {
-        const cache = await this.ensureReady(extraStrings);
+        let cache;
+        try {
+            cache = await this.ensureReady(extraStrings);
+        } catch (error) {
+            this.applyNodes(this.collectNodes(), this.getCache());
+            throw error;
+        }
         this.applyNodes(this.collectNodes(), cache);
     }
 };

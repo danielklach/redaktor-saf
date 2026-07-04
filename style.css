@@ -115,7 +115,7 @@ html.lang-loading .lang-loading-overlay { display: flex; }
     .logo-line { font-size: 1.05rem; }
     .mode-switcher-wrap { width: 100%; margin-bottom: 8px; }
     .header-actions { width: 100%; }
-    .header-actions button { flex: 1 1 auto; font-size: 0.78rem; padding: 8px 10px; text-align: center; justify-content: center; }
+    .header-actions button, .header-actions a.btn-secondary { flex: 1 1 auto; font-size: 0.78rem; padding: 8px 10px; text-align: center; justify-content: center; }
 
     .steps-indicator { gap: 6px; }
     .step { flex-direction: row; padding: 8px 6px; border-radius: 6px; }
@@ -219,18 +219,19 @@ input[type="month"]::-webkit-calendar-picker-indicator {
 .w-100 { width: 100%; }
 
 /* Wspólne style na klasach (nie na elemencie "button"), żeby przycisk-link <a class="btn-secondary">
-   (np. "Strefa Członka" w nagłówku) wyglądał IDENTYCZNIE jak zwykłe przyciski <button>.
-   line-height MUSI być jawnie ustawiony: <a> dziedziczy line-height:1.5 z <body>, a <button> ma
-   domyślnie inną wartość z arkusza przeglądarki - bez tego "Strefa Członka" wychodziła wyższa
-   niż pozostałe przyciski, mimo identycznego paddingu i font-size. */
+   (np. dawniej "Strefa Członka", dziś linki nawigacyjne w nagłówku) wyglądał IDENTYCZNIE jak zwykłe
+   przyciski <button>. Zarówno line-height, JAK I font-size MUSZĄ być jawnie ustawione: przeglądarki
+   nadają <button> inny DOMYŚLNY font-size niż zwykłemu tekstowi/<a> (np. Chrome: ~13.3px vs 16px) -
+   a skoro line-height jest tu bezjednostkowy (1.2), automatycznie przelicza się z font-size, więc
+   różnica w foncie i tak psuła wysokość, nawet z jawnym line-height. */
 button, .btn-primary, .btn-secondary, .btn-success, .btn-download {
     padding: 10px 20px; font-weight: 600; border-radius: 6px; cursor: pointer; border: none;
     transition: transform 0.15s ease, box-shadow 0.15s ease, background 0.15s ease;
-    display: inline-block; line-height: 1.2; vertical-align: middle; box-sizing: border-box;
+    display: inline-block; font-size: 0.95rem; line-height: 1.2; vertical-align: middle; box-sizing: border-box;
 }
 .btn-primary { background: var(--primary); color: #000; }
 .btn-primary:hover { background: var(--primary-hover); }
-.btn-secondary { background: #2e2e38; color: var(--text-color); }
+.btn-secondary { background: #2e2e38; color: var(--text-color); text-decoration: none; }
 .btn-secondary:hover { background: #3e3e4a; }
 .btn-success { background: var(--success); color: #fff; }
 .btn-success:hover { opacity: 0.9; }
