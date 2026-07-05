@@ -50,7 +50,7 @@
             <img src="assets/redaktor-saf-emblem.svg" alt="Redaktor SAFi" class="logo-emblem">
             <span class="logo-text">
                 <span class="logo-line">Redaktor</span>
-                <span class="logo-line">SAFi <span class="logo-version" data-release-date="2026-07-04" data-no-translate>ver. 1.14.0</span></span>
+                <span class="logo-line">SAFi <span class="logo-version" data-no-translate></span></span>
             </span>
         </a>
     </header>
@@ -139,6 +139,9 @@
          tego samego modułu i cache'u tłumaczeń co główna aplikacja (patrz js/i18n.js). -->
     <script type="module">
         import { I18n } from './js/i18n.js';
+        import { applyVersion } from './js/version.js';
+
+        applyVersion();
 
         (async function () {
             if (localStorage.getItem('saf_lang') !== 'en') return;

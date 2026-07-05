@@ -288,6 +288,41 @@ button:disabled { background: #2e2e38; color: var(--text-muted); cursor: not-all
 #semiAdviceList { padding-left: 20px; margin-top: 10px; }
 #semiAdviceList li { margin-bottom: 8px; color: var(--text-color); line-height: 1.4; }
 
+/* "Jednostki do oznaczenia" w #tagsModal (social-media.html) - celowo ZWARTE: krótka etykieta
+   sekcji + "chipsy" dla sugestii (rosną tylko wszerz, nie wysokość, bez względu na ich liczbę) +
+   niska, przewijana tabela dla pełnej, alfabetycznej listy z wyszukiwarką. Ma to zajmować mniej
+   (albo tyle samo) miejsca co sekcja fotografów obok (#photographerTagsContainer), więc CAŁA lista
+   jednostek NIE dostaje własnego dużego, rozlewającego się układu. */
+.unit-section-label { color: var(--text-muted); font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.04em; margin-bottom: 6px; }
+
+.unit-suggested-chips { display: flex; flex-wrap: wrap; gap: 8px; }
+.unit-chip {
+    display: flex; align-items: center; gap: 6px;
+    background: var(--card-bg); border: 1px solid var(--border); border-radius: 20px;
+    padding: 6px 12px; font-size: 0.85rem; cursor: pointer; user-select: none;
+    transition: border-color 0.15s, background-color 0.15s;
+}
+.unit-chip:has(input:checked) { border-color: var(--primary); background: rgba(220, 160, 50, 0.12); }
+.unit-chip input { width: 15px; height: 15px; flex: 0 0 auto; accent-color: var(--primary); cursor: pointer; }
+
+.unit-table-wrap { border: 1px solid var(--border); border-radius: 8px; overflow: hidden; margin-top: 8px; }
+.unit-table-head {
+    display: flex; align-items: center; gap: 10px; padding: 6px 12px;
+    font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.04em;
+    color: var(--text-muted); background: #16161a; border-bottom: 1px solid var(--border);
+}
+.unit-table-head-spacer { width: 15px; flex: 0 0 auto; }
+.unit-table-body { max-height: 130px; overflow-y: auto; }
+.unit-table-row {
+    display: flex; align-items: center; gap: 10px; padding: 7px 12px; font-size: 0.85rem;
+    border-bottom: 1px solid var(--border); cursor: pointer; transition: background-color 0.15s;
+}
+.unit-table-row:last-child { border-bottom: none; }
+.unit-table-row:hover { background: rgba(255, 255, 255, 0.03); }
+.unit-table-row input { width: 15px; height: 15px; flex: 0 0 auto; accent-color: var(--primary); cursor: pointer; }
+.unit-table-name { flex: 1; }
+.unit-table-handle { color: var(--text-muted); font-size: 0.8rem; }
+
 @media (max-width: 640px) {
     .modal-content { padding: 20px; }
     .modal-actions { justify-content: stretch; }

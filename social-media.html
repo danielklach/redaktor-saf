@@ -44,8 +44,8 @@
         <a href="./" id="logoHome" class="logo-zone" title="Odśwież stronę">
             <img src="assets/redaktor-saf-emblem.svg" alt="Redaktor SAFi" class="logo-emblem">
             <span class="logo-text">
-                <span class="logo-line">Redaktor</span>
-                <span class="logo-line">Social Media <span class="logo-version" data-release-date="2026-07-04" data-no-translate>ver. 1.14.0</span></span>
+                <span class="logo-line">Redaktor SAFi</span>
+                <span class="logo-line">Social Media Edition <span class="logo-version" data-no-translate></span></span>
             </span>
         </a>
 
@@ -242,12 +242,19 @@
                 <div class="form-group">
                     <label><strong>Jednostki do oznaczenia</strong></label>
 
-                    <p class="info-text" style="margin-bottom: 6px;">Zaproponowane na podstawie treści:</p>
-                    <div id="suggestedUnitsContainer"></div>
+                    <p class="unit-section-label">Zaproponowane na podstawie treści</p>
+                    <div id="suggestedUnitsContainer" class="unit-suggested-chips"></div>
 
-                    <p class="info-text" style="margin: 14px 0 6px;">Wszystkie jednostki:</p>
+                    <p class="unit-section-label" style="margin-top: 14px;">Wszystkie jednostki</p>
                     <input type="text" id="unitSearchInput" placeholder="Szukaj po nazwie lub słowie kluczowym...">
-                    <div id="allUnitsContainer" style="max-height: 180px; overflow-y: auto; margin-top: 8px;"></div>
+                    <div class="unit-table-wrap">
+                        <div class="unit-table-head">
+                            <span class="unit-table-head-spacer"></span>
+                            <span class="unit-table-name">Nazwa</span>
+                            <span>Instagram</span>
+                        </div>
+                        <div id="allUnitsContainer" class="unit-table-body"></div>
+                    </div>
 
                     <div style="display: flex; gap: 8px; flex-wrap: wrap; margin-top: 14px;">
                         <input type="text" id="newTagUnitName" placeholder="Nazwa nowej jednostki (np. RUSS)" style="flex: 1 1 140px;">
@@ -312,7 +319,7 @@
 
     <div id="toastContainer" class="toast-container"></div>
 
-    <script type="module" src="js/social.js?v=5"></script>
+    <script type="module" src="js/social.js?v=6"></script>
 
     <script>
         if ('serviceWorker' in navigator) {

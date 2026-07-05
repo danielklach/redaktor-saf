@@ -10,7 +10,10 @@ const GEMINI_MODELS = ["gemini-3.5-flash", "gemini-2.5-flash", "gemini-2.0-flash
 // front-end: js/gemini.js -> callGeminiRaw, flaga "useOverloadFallback"). Celowo NIE z serii
 // "Pro" (znacznie droższa) - to nadal tania rodzina Flash, tylko historycznie rzadziej
 // przeciążona niż najnowszy model domyślny z GEMINI_MODELS[0].
-const OVERLOAD_FALLBACK_MODEL = "gemini-1.5-flash-latest";
+// UWAGA: aliasy z końcówką "-latest" Google potrafi wycofać bez ostrzeżenia (tak stało się z
+// "gemini-1.5-flash-latest" - stąd błąd "is not found for API version v1beta") - używaj
+// KONKRETNEJ, stabilnej nazwy modelu (bez "-latest"), tak jak reszta wpisów w GEMINI_MODELS.
+const OVERLOAD_FALLBACK_MODEL = "gemini-2.0-flash";
 
 export default {
     async fetch(request, env) {

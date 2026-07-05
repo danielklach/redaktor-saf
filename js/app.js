@@ -3,6 +3,7 @@ import { Gemini } from './gemini.js';
 import { Gutenberg } from './gutenberg.js';
 import { getRememberedHandle, rememberHandle, verifyPermission } from './dirHandleStore.js';
 import { I18n } from './i18n.js';
+import { applyVersion } from './version.js';
 
 // Domena WordPressa - w ustawieniach Mediów odznaczone jest "Porządkuj wysyłane pliki w
 // katalogi z numerami miesięcy i lat", więc pliki trafiają bezpośrednio do /wp-content/uploads/
@@ -124,6 +125,7 @@ const App = {
     },
 
     init() {
+        applyVersion();
         this.cacheDOM();
         this.bindEvents();
         this.handleCategoryChange();

@@ -1,8 +1,9 @@
 import { Gemini } from './gemini.js';
 import { I18n } from './i18n.js';
 import { PhotoDb } from './photoDb.js';
+import { applyVersion } from './version.js';
 
-// Redaktor Social Media (v1.14.0) - odpowiednik trybu automatycznego z głównej aplikacji (patrz
+// Redaktor Social Media (v1.14.1) - odpowiednik trybu automatycznego z głównej aplikacji (patrz
 // js/app.js), ale znacznie okrojony: bez zdjęć/Compressor/Gutenberg (IG/FB przyjmują zdjęcia w
 // dowolnym formacie wprost z telefonu - ten krok jest tu całkowicie zbędny) i bez kroku "finalNotes"
 // - wywiad AI od razu prowadzi do gotowego wyniku: DWA teksty (Instagram/Facebook).
@@ -58,6 +59,7 @@ const SocialApp = {
     },
 
     init() {
+        applyVersion();
         this.cacheDOM();
         this.bindEvents();
         this.switchStep('step1');
@@ -542,11 +544,25 @@ const SocialApp = {
         this.renderUnitsUI();
     },
 
-    _renderUnitCheckboxHtml(idx) {
+    // Sugestie renderujemy jako "chipsy" (rosną tylko wszerz, zawijają się do nowego wiersza w
+    // razie potrzeby) - w przeciwieństwie do pełnej listy poniżej NIE mają rosnąć w wysokość wraz
+    // z liczbą trafień, żeby ta sekcja nie zdominowała miejsca kosztem fotografów obok.
+    _renderUnitChipHtml(idx) {
         const unit = this._knownUnits[idx];
         const checked = this._unitSelected.has(idx) ? 'checked' : '';
-        return `<label style="display:flex; align-items:center; gap:8px; padding:6px 0;">
-            <input type="checkbox" class="unit-checkbox" data-idx="${idx}" ${checked}> ${unit.name}${unit.handle ? ` (@${unit.handle})` : ''}
+        return `<label class="unit-chip">
+            <input type="checkbox" class="unit-checkbox" data-idx="${idx}" ${checked}>
+            ${unit.name}${unit.handle ? `<span class="unit-table-handle">@${unit.handle}</span>` : ''}
+        </label>`;
+    },
+
+    _renderUnitRowHtml(idx) {
+        const unit = this._knownUnits[idx];
+        const checked = this._unitSelected.has(idx) ? 'checked' : '';
+        return `<label class="unit-table-row">
+            <input type="checkbox" class="unit-checkbox" data-idx="${idx}" ${checked}>
+            <span class="unit-table-name">${unit.name}</span>
+            ${unit.handle ? `<span class="unit-table-handle">@${unit.handle}</span>` : ''}
         </label>`;
     },
 
@@ -558,7 +574,7 @@ const SocialApp = {
             this.allUnitsContainer.innerHTML = '';
         } else {
             this.suggestedUnitsContainer.innerHTML = this._suggestedUnitIdxs.length
-                ? this._suggestedUnitIdxs.map((idx) => this._renderUnitCheckboxHtml(idx)).join('')
+                ? this._suggestedUnitIdxs.map((idx) => this._renderUnitChipHtml(idx)).join('')
                 : `<p class="info-text">${this.t('Brak sugestii na podstawie treści - wybierz jednostki poniżej.')}</p>`;
 
             const searchTerm = this.unitSearchInput.value.trim().toLowerCase();
@@ -575,7 +591,7 @@ const SocialApp = {
                 .sort((a, b) => knownUnits[a].name.localeCompare(knownUnits[b].name, 'pl'));
 
             this.allUnitsContainer.innerHTML = remainingIdxs.length
-                ? remainingIdxs.map((idx) => this._renderUnitCheckboxHtml(idx)).join('')
+                ? remainingIdxs.map((idx) => this._renderUnitRowHtml(idx)).join('')
                 : `<p class="info-text">${this.t('Brak wyników.')}</p>`;
         }
 
